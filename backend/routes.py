@@ -893,7 +893,7 @@ def submit_attendance():
         if samaneras:
             parts += ['\n🔰 សាមណេរ', '─' * 15, fmt_group(samaneras)]
         parts += [
-            f'\n{'═' * 15}',
+            '\n' + '═' * 15,
             f'📊 សរុបចំនួន : {len(rows)} នាក់',
             f'   ❌ អវត្តមាន : {absent_count} នាក់',
             f'   📋 ច្បាប់    : {permission_count} នាក់',
