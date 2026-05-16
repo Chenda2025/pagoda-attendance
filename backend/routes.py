@@ -886,7 +886,7 @@ def submit_attendance():
         parts = [
             f'🏛 វត្តនិរោធរង្សី',
             f'📋 ព័ត៌មានថ្វាយបង្គំប្រចាំថ្ងៃ — {d_fmt}',
-            f'{'═' * 15}',
+            '═' * 15,
         ]
         if bhikkhus:
             parts += ['\n📿 ភិក្ខុ', '─' * 15, fmt_group(bhikkhus)]
