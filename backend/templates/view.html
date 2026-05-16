@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="km">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>មើលទិន្នន័យព្រះសង្ឃ</title>
+    <link rel="icon" type="image/jpeg" href="/static/logo.jpg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&family=Kantumruy+Pro:wght@300;400;500;600;700&family=Siemreap&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/view.css">
+</head>
+
+<body>
+    <div class="page-wrapper">
+
+        <!-- Page Header -->
+        <div class="page-header">
+            <a href="/" class="btn-back">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+                ត្រឡប់ក្រោយ
+            </a>
+            <img src="/static/logo.jpg" alt="logo" class="header-logo">
+            <h1 class="page-title">ទិន្នន័យព្រះសង្ឃ — វត្តនិរោធរង្សី</h1>
+            <a href="/layout" class="btn-layout">
+                <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="3" width="7" height="7"></rect>
+                    <rect x="14" y="3" width="7" height="7"></rect>
+                    <rect x="14" y="14" width="7" height="7"></rect>
+                    <rect x="3" y="14" width="7" height="7"></rect>
+                </svg>
+                ប្លង់អាសនៈ
+            </a>
+            <!-- Export dropdown -->
+            <div class="export-dropdown" id="export-dropdown">
+                <button type="button" class="btn-export-trigger" id="btn-export-trigger">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    នាំចេញ
+                    <svg class="chevron-icon" xmlns="http://www.w3.org/2000/svg" width="13" height="13"
+                        viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                </button>
+                <div class="export-menu" id="export-menu">
+                    <button class="export-item" onclick="exportData('docx')" type="button">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                            stroke="#2b6cb0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="16" y1="13" x2="8" y2="13"></line>
+                            <line x1="16" y1="17" x2="8" y2="17"></line>
+                        </svg>
+                        Word (.docx)
+                    </button>
+                    <button class="export-item" onclick="exportData('excel')" type="button">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                            stroke="#276749" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+                            <line x1="3" y1="9" x2="21" y2="9"></line>
+                            <line x1="3" y1="15" x2="21" y2="15"></line>
+                            <line x1="9" y1="3" x2="9" y2="21"></line>
+                            <line x1="15" y1="3" x2="15" y2="21"></line>
+                        </svg>
+                        Excel (.xlsx)
+                    </button>
+                    <button class="export-item" onclick="exportData('pdf')" type="button">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                            stroke="#c53030" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="12" y1="18" x2="12" y2="12"></line>
+                            <line x1="9" y1="15" x2="15" y2="15"></line>
+                        </svg>
+                        PDF
+                    </button>
+                </div>
+            </div>
+
+            <button type="button" class="btn-check-trigger" id="check-trigger-btn">
+                <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                    <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                </svg>
+                ពិនិត្យ Trigger
+            </button>
+        </div>
+
+        <!-- Filter Panel -->
+        <div class="filter-card">
+            <div class="filter-card-header">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                </svg>
+                <span>តម្រងទិន្នន័យ</span>
+            </div>
+
+            <!-- Name search -->
+            <div class="name-search-row">
+                <div class="name-search-group">
+                    <label class="filter-label">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                        ស្វែងរកតាមឈ្មោះ
+                    </label>
+                    <div class="autocomplete-wrapper">
+                        <input type="text" id="name-search" class="name-input"
+                            placeholder="បញ្ចូលឈ្មោះព្រះសង្ឃ...">
+                        <div id="autocomplete-list" class="autocomplete-list"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dropdown filters -->
+            <div class="dropdowns-grid">
+                <div class="dropdown-group">
+                    <label class="filter-label">ចំនួនវស្សា</label>
+                    <div id="dd-vassa" class="searchable-dropdown"></div>
+                </div>
+                <div class="dropdown-group">
+                    <label class="filter-label">សាមណេរ / ភិក្ខុ</label>
+                    <div id="dd-type" class="searchable-dropdown"></div>
+                </div>
+                <div class="dropdown-group">
+                    <label class="filter-label">ស្នាក់នៅកុដិ</label>
+                    <div id="dd-residence" class="searchable-dropdown"></div>
+                </div>
+                <div class="dropdown-group">
+                    <label class="filter-label">តួនាទីក្នុងវត្ត</label>
+                    <div id="dd-position" class="searchable-dropdown"></div>
+                </div>
+                <div class="dropdown-group">
+                    <label class="filter-label">កម្រិតសិក្សា</label>
+                    <div id="dd-education" class="searchable-dropdown"></div>
+                </div>
+                <div class="dropdown-group">
+                    <label class="filter-label">សិក្សាថ្នាក់</label>
+                    <div id="dd-year" class="searchable-dropdown"></div>
+                </div>
+            </div>
+
+            <!-- Filter status bar -->
+            <div class="filter-statusbar">
+                <span id="result-count" class="result-count">កំពុងផ្ទុក...</span>
+                <button type="button" class="btn-reset" onclick="resetFilters()">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="1 4 1 10 7 10"></polyline>
+                        <path d="M3.51 15a9 9 0 1 0 .49-4"></path>
+                    </svg>
+                    សម្អាតតម្រង
+                </button>
+            </div>
+        </div>
+
+        <!-- Data Table -->
+        <div class="table-card">
+            <div id="loading-state" class="loading-state">
+                <div class="spinner"></div>
+                <span>កំពុងផ្ទុកទិន្នន័យ...</span>
+            </div>
+
+            <div id="table-wrapper" style="display:none">
+                <div class="table-scroll">
+                    <table class="data-table" id="view-table">
+                        <thead>
+                            <tr>
+                                <th class="col-num">#</th>
+                                <th>ឈ្មោះ</th>
+                                <th class="col-center">វស្សា</th>
+                                <th>ប្រភេទ</th>
+                                <th>ស្នាក់នៅ</th>
+                                <th>តួនាទី</th>
+                                <th>កម្រិតសិក្សា</th>
+                                <th class="col-center">ថ្នាក់</th>
+                                <th class="col-date">ថ្ងៃបញ្ចូល</th>
+                                <th class="col-actions">សកម្មភាព</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-body"></tbody>
+                    </table>
+                </div>
+                <div id="view-pagination"></div>
+            </div>
+
+            <div id="no-data-state" class="no-data-state" style="display:none">
+                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none"
+                    stroke="#ccc" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+                <p>រកមិនឃើញទិន្នន័យ</p>
+                <span>សូមប្រើតម្រងផ្សេង ឬ <button class="link-btn" onclick="resetFilters()">សម្អាតតម្រង</button></span>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ========== EDIT MODAL ========== -->
+    <div id="edit-modal" class="modal-overlay">
+        <div class="modal-box">
+            <div class="modal-header">
+                <div class="modal-title-row">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                    </svg>
+                    <h2 class="modal-title">កែប្រែទិន្នន័យព្រះសង្ឃ</h2>
+                </div>
+                <button class="modal-close" id="edit-close-btn" type="button">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+
+            <form id="edit-form" class="modal-form" novalidate>
+                <input type="hidden" id="edit-id">
+
+                <!-- Row 1: fullname -->
+                <div class="modal-row">
+                    <div class="modal-group modal-full">
+                        <label class="modal-label">នាមត្រកូល និង នាម <span class="req">*</span></label>
+                        <input type="text" id="edit-fullname" class="modal-input" placeholder="បញ្ចូលនាម..." required>
+                    </div>
+                </div>
+
+                <!-- Row 2: vassa + type -->
+                <div class="modal-row">
+                    <div class="modal-group">
+                        <label class="modal-label">ចំនួនវស្សា <span class="req">*</span></label>
+                        <input type="number" id="edit-vassa" class="modal-input" min="0" required>
+                    </div>
+                    <div class="modal-group">
+                        <label class="modal-label">សាមណេរ / ភិក្ខុ <span class="req">*</span></label>
+                        <select id="edit-type" class="modal-select">
+                            <option value="សាមណេរ">សាមណេរ</option>
+                            <option value="ភិក្ខុ">ភិក្ខុ</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Row 3: residence + position -->
+                <div class="modal-row">
+                    <div class="modal-group">
+                        <label class="modal-label">ស្នាក់នៅកុដិ <span class="req">*</span></label>
+                        <select id="edit-residence" class="modal-select">
+                            <option value="កុដិលេខ១">កុដិលេខ១</option>
+                            <option value="កុដិលេខ២_ជាន់ក្រោម">កុដិលេខ២ ជាន់ក្រោម</option>
+                            <option value="កុដិលេខ២_ជាន់លើ">កុដិលេខ២ ជាន់លើ</option>
+                            <option value="កុដិលេខ៤">កុដិលេខ៤</option>
+                            <option value="កុដិធំ_ជាន់ទី១">កុដិធំ ជាន់ទី១</option>
+                            <option value="កុដិធំ_ជាន់ទី២">កុដិធំ ជាន់ទី២</option>
+                            <option value="កុដិធំ_ជាន់ទី៣">កុដិធំ ជាន់ទី៣</option>
+                            <option value="កុដិហោត្រៃ">កុដិហោត្រៃ</option>
+                            <option value="សាលាបាលីចាស់">កុដិសាលាបាលីចាស់</option>
+                            <option value="សាលាពុទ្ធិក">សាលាពុទ្ធិក</option>
+                        </select>
+                    </div>
+                    <div class="modal-group">
+                        <label class="modal-label">តួនាទីក្នុងវត្ត <span class="req">*</span></label>
+                        <select id="edit-position" class="modal-select">
+                            <option value="ព្រះសង្ឃធម្មតា">ព្រះសង្ឃធម្មតា</option>
+                            <option value="ព្រះគ្រូសូត្រស្តាំ">ព្រះគ្រូសូត្រស្តាំ</option>
+                            <option value="ព្រះគ្រូសូត្រឆ្វេង">ព្រះគ្រូសូត្រឆ្វេង</option>
+                            <option value="ព្រះគ្រូវិន័យធរ">ព្រះគ្រូវិន័យធរ</option>
+                            <option value="ព្រះគ្រូលេខា">ព្រះគ្រូលេខា</option>
+                            <option value="ព្រះគ្រូប្រធានការក">ព្រះគ្រូប្រធានការក</option>
+                            <option value="ព្រះគ្រូអនុប្រធានការកទី១">ព្រះគ្រូអនុប្រធានការកទី១</option>
+                            <option value="ព្រះគ្រូអនុប្រធានការកទី២">ព្រះគ្រូអនុប្រធានការកទី២</option>
+                            <option value="មេកុដិ">មេកុដិ</option>
+                            <option value="អនុកុដិ">អនុកុដិ</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Row 4: education + year -->
+                <div class="modal-row">
+                    <div class="modal-group">
+                        <label class="modal-label">កម្រិតសិក្សា <span class="req">*</span></label>
+                        <select id="edit-education" class="modal-select">
+                            <option value="បឋមសិក្សា">បឋមសិក្សា</option>
+                            <option value="អនុវិទ្យាល័យ">អនុវិទ្យាល័យ</option>
+                            <option value="វិទ្យាល័យ">វិទ្យាល័យ</option>
+                            <option value="មហាវិទ្យាល័យ">មហាវិទ្យាល័យ</option>
+                        </select>
+                    </div>
+                    <div class="modal-group">
+                        <label class="modal-label">សិក្សាថ្នាក់ <span class="req">*</span></label>
+                        <select id="edit-year" class="modal-select">
+                            <option value="ឆ្នាំទី១">ឆ្នាំទី ១</option>
+                            <option value="ឆ្នាំទី២">ឆ្នាំទី ២</option>
+                            <option value="ឆ្នាំទី៣">ឆ្នាំទី ៣</option>
+                            <option value="ឆ្នាំទី៤">ឆ្នាំទី ៤</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    
+                    <button type="button" class="btn-modal-cancel" id="edit-cancel-btn">បោះបង់</button>
+                    <button type="submit" class="btn-modal-save" id="edit-save-btn">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                        <span id="save-btn-text">រក្សាទុក</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ========== DELETE CONFIRM MODAL ========== -->
+    <div id="delete-modal" class="modal-overlay">
+        <div class="modal-box modal-box-sm">
+            <div class="delete-icon-wrap">
+                <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none"
+                    stroke="#ff4757" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+                    <path d="M10 11v6"></path>
+                    <path d="M14 11v6"></path>
+                    <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path>
+                </svg>
+            </div>
+            <h3 class="delete-title">លុបទិន្នន័យ?</h3>
+            <p class="delete-msg" id="delete-msg"></p>
+            <div class="modal-footer">
+                <button type="button" class="btn-modal-cancel" id="delete-cancel-btn">បោះបង់</button>
+                <button type="button" class="btn-modal-delete" id="delete-confirm-btn">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+                    </svg>
+                    <span id="delete-btn-text">លុបចេញ</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== CHECK TRIGGER MODAL ========== -->
+    <div id="check-modal" class="modal-overlay">
+        <div class="modal-box modal-box-check">
+            <div class="modal-header">
+                <div class="modal-title-row">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                        <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                    </svg>
+                    <h2 class="modal-title">ពិនិត្យស្ថានភាព Trigger</h2>
+                </div>
+                <button class="modal-close" id="check-close-btn" type="button">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="check-body" id="check-body">
+                <!-- filled by JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast notification -->
+    <div id="toast" class="toast"></div>
+
+    <script src="/static/js/view.js"></script>
+</body>
+
+</html>

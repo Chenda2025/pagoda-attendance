@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="km">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>របាយការណ៍វត្តមាន — វត្តនិរោធរង្សី</title>
+    <link rel="icon" type="image/jpeg" href="/static/logo.jpg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&family=Kantumruy+Pro:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/report.css">
+</head>
+
+<body>
+    <div class="page-wrapper">
+
+        <!-- Header -->
+        <div class="page-header no-print">
+            <a href="/layout" class="btn-back">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+                ត្រឡប់ក្រោយ
+            </a>
+            <img src="/static/logo.jpg" alt="logo" class="header-logo">
+            <h1 class="page-title">របាយការណ៍វត្តមាន ១៥ ថ្ងៃ — វត្តនិរោធរង្សី</h1>
+            <div class="header-actions">
+                <!-- Export dropdown -->
+                <div class="rpt-export-dropdown" id="rpt-export-dropdown">
+                    <button type="button" class="btn-rpt-export-trigger" id="btn-rpt-export-trigger">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                        នាំចេញ
+                        <svg class="rpt-chevron" xmlns="http://www.w3.org/2000/svg" width="13" height="13"
+                            viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="6 9 12 15 18 9"></polyline>
+                        </svg>
+                    </button>
+                    <div class="rpt-export-menu" id="rpt-export-menu">
+                        <button class="rpt-export-item" id="btn-export-docx" type="button">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                                stroke="#2b6cb0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                                <line x1="16" y1="13" x2="8" y2="13"></line>
+                                <line x1="16" y1="17" x2="8" y2="17"></line>
+                            </svg>
+                            Word (.docx)
+                        </button>
+                        <button class="rpt-export-item" id="btn-export-pdf" type="button">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                                stroke="#c53030" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                                <line x1="12" y1="18" x2="12" y2="12"></line>
+                                <line x1="9" y1="15" x2="15" y2="15"></line>
+                            </svg>
+                            PDF
+                        </button>
+                    </div>
+                </div>
+                <button class="btn-send-tg" id="btn-send-tg">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="22" y1="2" x2="11" y2="13"></line>
+                        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                    </svg>
+                    បញ្ជូន Telegram
+                </button>
+                <button class="btn-print" onclick="window.print()">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                        <rect x="6" y="14" width="12" height="8"></rect>
+                    </svg>
+                    បោះពុម្ព
+                </button>
+                <a href="/logout" class="btn-logout">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                        <polyline points="16 17 21 12 16 7"/>
+                        <line x1="21" y1="12" x2="9" y2="12"/>
+                    </svg>
+                    ចាកចេញ
+                </a>
+            </div>
+        </div>
+
+        <!-- Filter Panel -->
+        <div class="filter-panel no-print">
+            <div class="filter-row">
+
+                <!-- Date -->
+                <div class="filter-item">
+                    <label class="filter-label">ថ្ងៃបញ្ចប់</label>
+                    <input type="date" id="f-date" class="filter-input">
+                </div>
+
+                <!-- Monk type -->
+                <div class="filter-item">
+                    <label class="filter-label">ប្រភេទ</label>
+                    <div class="rpt-dropdown" id="f-monk-type"></div>
+                </div>
+
+                <!-- Kuti -->
+                <div class="filter-item">
+                    <label class="filter-label">ស្នាក់នៅកុដិ</label>
+                    <div class="rpt-dropdown" id="f-kuti"></div>
+                </div>
+
+                <!-- Education level -->
+                <div class="filter-item">
+                    <label class="filter-label">កម្រិតសិក្សា</label>
+                    <div class="rpt-dropdown" id="f-edu"></div>
+                </div>
+
+                <!-- Academic year -->
+                <div class="filter-item">
+                    <label class="filter-label">សិក្សាថ្នាក់</label>
+                    <div class="rpt-dropdown" id="f-acad"></div>
+                </div>
+
+                <!-- Name search -->
+                <div class="filter-item filter-item-name">
+                    <label class="filter-label">ស្វែងរកឈ្មោះ</label>
+                    <div class="name-search-wrap">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                        <input type="text" id="f-name" class="filter-input name-input" placeholder="អក្សរដំបូង...">
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="filter-row filter-actions-row">
+                <!-- Violation filter -->
+                <div class="filter-item">
+                    <label class="filter-label">បង្ហាញ</label>
+                    <div class="rpt-dropdown" id="f-violation"></div>
+                </div>
+
+                <div class="filter-btns">
+                    <button class="btn-clear-filters" id="btn-clear-filters">សម្អាតតម្រង</button>
+                    <button class="btn-generate" id="btn-generate">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="1 4 1 10 7 10"></polyline>
+                            <path d="M3.51 15a9 9 0 1 0 .49-4"></path>
+                        </svg>
+                        បង្ហាញរបាយការណ៍
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Date range banner -->
+        <div id="date-range-banner" class="date-range-banner" style="display:none"></div>
+
+        <!-- Legend -->
+        <div class="legend no-print">
+            <div class="legend-item legend-absent">
+                <span class="legend-dot"></span> អវត្តមាន ≥ ២ ដង (លើសដែន)
+            </div>
+            <div class="legend-item legend-permission">
+                <span class="legend-dot"></span> ច្បាប់ ≥ ៣ ដង (លើសដែន)
+            </div>
+            <div class="legend-item legend-clean">
+                <span class="legend-dot"></span> ប្រក្រតី
+            </div>
+        </div>
+
+        <!-- Loading -->
+        <div id="loading-state" class="loading-state" style="display:none">
+            <div class="spinner"></div>
+            <span>កំពុងផ្ទុក...</span>
+        </div>
+
+        <!-- Report content -->
+        <div id="report-content" style="display:none">
+
+            <!-- Summary cards -->
+            <div class="summary-cards no-print">
+                <div class="summary-card">
+                    <div class="summary-num" id="sum-total">—</div>
+                    <div class="summary-label">ព្រះសង្ឃ</div>
+                </div>
+                <div class="summary-card card-absent">
+                    <div class="summary-num" id="sum-absent-viol">—</div>
+                    <div class="summary-label">លើសអវត្តមាន</div>
+                </div>
+                <div class="summary-card card-permission">
+                    <div class="summary-num" id="sum-perm-viol">—</div>
+                    <div class="summary-label">លើសច្បាប់</div>
+                </div>
+                <div class="summary-card card-clean">
+                    <div class="summary-num" id="sum-clean">—</div>
+                    <div class="summary-label">ប្រក្រតី</div>
+                </div>
+            </div>
+
+            <!-- Bhikkhu section -->
+            <div id="section-bhikkhu" class="report-section">
+                <div class="section-header bhikkhu-header">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                    </svg>
+                    <span>ផ្នែកទី ១ — ភិក្ខុ</span>
+                    <span class="section-count" id="count-bhikkhu"></span>
+                </div>
+                <div class="table-wrap">
+                    <table class="report-table">
+                        <thead><tr>
+                            <th>#</th><th>ឈ្មោះ</th><th>តួនាទី</th><th>វស្សា</th>
+                            <th>ស្នាក់នៅ</th><th>ការសិក្សា</th>
+                            <th>❌ អវត្តមាន</th><th>📋 ច្បាប់</th><th>ថ្ងៃ</th><th>ស្ថានភាព</th><th class="col-actions-r">សកម្មភាព</th>
+                        </tr></thead>
+                        <tbody id="tbody-bhikkhu"></tbody>
+                    </table>
+                </div>
+                <div id="pagin-bhikkhu"></div>
+            </div>
+
+            <!-- Samanera section -->
+            <div id="section-samanera" class="report-section">
+                <div class="section-header samanera-header">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="8" r="7"></circle>
+                        <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline>
+                    </svg>
+                    <span>ផ្នែកទី ២ — សាមណេរ</span>
+                    <span class="section-count" id="count-samanera"></span>
+                </div>
+                <div class="table-wrap">
+                    <table class="report-table">
+                        <thead><tr>
+                            <th>#</th><th>ឈ្មោះ</th><th>តួនាទី</th><th>វស្សា</th>
+                            <th>ស្នាក់នៅ</th><th>ការសិក្សា</th>
+                            <th>❌ អវត្តមាន</th><th>📋 ច្បាប់</th><th>ថ្ងៃ</th><th>ស្ថានភាព</th><th class="col-actions-r">សកម្មភាព</th>
+                        </tr></thead>
+                        <tbody id="tbody-samanera"></tbody>
+                    </table>
+                </div>
+                <div id="pagin-samanera"></div>
+            </div>
+        </div>
+
+        <!-- Empty state -->
+        <div id="empty-state" class="empty-state" style="display:none">
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none"
+                stroke="#cbd5e0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+            <p id="empty-msg">មិនមានទិន្នន័យក្នុងចន្លោះ ១៥ ថ្ងៃនេះទេ</p>
+        </div>
+
+    </div>
+
+    <div id="toast" class="report-toast"></div>
+
+    <!-- ========== ATTENDANCE EDIT MODAL ========== -->
+    <div id="r-attend-modal" class="r-modal-overlay">
+        <div class="r-modal-box">
+            <div class="r-modal-header">
+                <div class="r-modal-title-row">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                        <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
+                        <line x1="3" y1="10" x2="21" y2="10"/>
+                    </svg>
+                    <h2 class="r-modal-title" id="r-attend-title">វត្តមាន</h2>
+                </div>
+                <button class="r-modal-close" id="r-attend-close" type="button">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="r-attend-body">
+                <!-- Loading -->
+                <div id="r-attend-loading" class="r-attend-loading" style="display:none">
+                    <div class="spinner"></div>
+                    <span>កំពុងផ្ទុក...</span>
+                </div>
+
+                <!-- Record list -->
+                <div id="r-attend-list"></div>
+
+                <!-- Add new record -->
+                <div class="r-attend-add-section">
+                    <div class="r-attend-add-title">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                        </svg>
+                        បន្ថែមថ្ងៃថ្មី
+                    </div>
+                    <div class="r-attend-add-row">
+                        <input type="date" id="r-add-date" class="r-modal-input r-add-date-input">
+                        <select id="r-add-status" class="r-modal-select r-add-status-select">
+                            <option value="absent">❌ អវត្តមាន</option>
+                            <option value="permission">📋 ច្បាប់</option>
+                        </select>
+                        <button type="button" id="r-attend-add-btn" class="btn-r-save r-btn-add">
+                            + បន្ថែម
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== DELETE MODAL ========== -->
+    <div id="r-delete-modal" class="r-modal-overlay">
+        <div class="r-modal-box r-modal-sm">
+            <div class="r-delete-icon-wrap">
+                <svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 24 24" fill="none"
+                    stroke="#e53e3e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="3 6 5 6 21 6"/>
+                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                    <path d="M10 11v6"/><path d="M14 11v6"/>
+                    <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                </svg>
+            </div>
+            <h3 class="r-delete-title">លុបទិន្នន័យ?</h3>
+            <p class="r-delete-msg" id="r-delete-msg"></p>
+            <div class="r-modal-footer">
+                <button type="button" class="btn-r-cancel" id="r-delete-cancel">បោះបង់</button>
+                <button type="button" class="btn-r-delete" id="r-delete-confirm">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="3 6 5 6 21 6"/>
+                        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                    </svg>
+                    <span id="r-delete-text">លុបចេញ</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/report.js"></script>
+</body>
+</html>

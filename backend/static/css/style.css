@@ -1,0 +1,346 @@
+/* Reset and Base Styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Kantumruy Pro', 'Battambang', 'Siemreap', sans-serif, 'Moul';
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    padding: 20px;
+    color: #333;
+}
+
+/* Container */
+.container {
+    max-width: 2100px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* Forms Container - Grid Layout */
+#forms-container {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+}
+
+/* Title */
+#title {
+    color: #fff;
+    font-size: 40px;
+    text-align: center;
+    margin-bottom: 30px;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+
+    font-family: Moul;
+}
+
+/* Form Card */
+.form-card {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+    padding: 24px;
+    animation: slideIn 0.3s ease-out;
+    position: relative;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Form Header */
+.form-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid #f0f0f0;
+}
+
+.form-number {
+    font-size: 20px;
+    font-weight: bold;
+    color: #667eea;
+}
+
+.btn-remove {
+    background: #ff4757;
+    color: #fff;
+    border: none;
+    border-radius: 50%;
+    width: 36px;
+    height: 36px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+
+.btn-remove:hover {
+    background: #ff6b81;
+    transform: scale(1.1);
+}
+
+/* Form Groups */
+.form-row {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.form-group {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.form-group.full-width {
+    flex-basis: 100%;
+}
+
+.form-group label {
+    font-size: 16px;
+    font-weight: 600;
+    color: #555;
+    margin-bottom: 6px;
+}
+
+.required {
+    color: #ff4757;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+    padding: 12px 16px;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: 'Kantumruy Pro', 'Battambang', 'Siemreap', sans-serif;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+    background: #fafafa;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    background: #fff;
+}
+
+.form-group input::placeholder,
+.form-group textarea::placeholder {
+    color: #aaa;
+}
+
+/* Action Buttons */
+.action-buttons {
+    display: flex;
+    gap: 16px;
+    margin-top: 20px;
+    justify-content: center;
+}
+
+.btn-view {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 28px;
+    border: none;
+    border-radius: 10px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-family: 'Kantumruy Pro', 'Battambang', 'Siemreap', sans-serif;
+    background: linear-gradient(135deg, #f7971e 0%, #ffd200 100%);
+    color: #333;
+    text-decoration: none;
+}
+
+.btn-view:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(255, 210, 0, 0.4);
+}
+
+.btn-add,
+.btn-submit {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 28px;
+    border: none;
+    border-radius: 10px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-family: 'Kantumruy Pro', 'Battambang', 'Siemreap', sans-serif;
+}
+
+
+.btn-clear {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 28px;
+    border: none;
+    border-radius: 10px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-family: 'Kantumruy Pro', 'Battambang', 'Siemreap', sans-serif;
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    color: #fff;
+}
+
+.btn-clear:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(245, 87, 108, 0.4);
+}
+
+.btn-add {
+    background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+    color: #fff;
+}
+
+.btn-add:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(17, 153, 142, 0.4);
+}
+
+.btn-submit {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #fff;
+}
+
+.btn-submit:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+/* Success Message */
+.success-message {
+    background: #d4edda;
+    color: #155724;
+    padding: 16px 24px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 20px;
+    animation: slideIn 0.3s ease-out;
+    border: 1px solid #c3e6cb;
+}
+
+/* Responsive Design */
+
+/* Laptop (≤ 1280px) */
+@media (max-width: 1280px) {
+    .container { padding: 16px; }
+    #title { font-size: 30px; }
+}
+
+/* Tablet landscape / small laptop (≤ 1024px) */
+@media (max-width: 1024px) {
+    #forms-container { grid-template-columns: 1fr; }
+    body { padding: 16px; }
+    #title { font-size: 26px; }
+    .form-card { padding: 20px; }
+}
+
+/* Tablet portrait (≤ 768px) */
+@media (max-width: 768px) {
+    body { padding: 12px; }
+    #title { font-size: 22px; }
+    .container { padding: 12px; }
+    .form-card { padding: 18px; }
+    .form-row { flex-direction: column; gap: 12px; }
+    .action-buttons { flex-wrap: wrap; gap: 8px; }
+    .btn-add, .btn-submit, .btn-clear { flex: 1 1 auto; justify-content: center; }
+}
+
+@media (max-width: 600px) {
+    body {
+        padding: 10px;
+    }
+    
+    #title {
+        font-size: 24px;
+    }
+    
+    .container {
+        max-width: 100%;
+    }
+    
+    .form-card {
+        padding: 16px;
+    }
+    
+    .form-row {
+        flex-direction: column;
+        gap: 12px;
+    }
+    
+    .action-buttons {
+        flex-direction: column;
+    }
+    
+    .btn-add,
+    .btn-submit,
+    .btn-clear {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+/* Fade out animation for removed forms */
+@keyframes fadeOut {
+    from {
+        opacity: 1;
+        transform: translateX(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateX(100px);
+    }
+}
+
+.form-card.removing {
+    animation: fadeOut 0.3s ease-out forwards;
+}
+
+/* Duplicate alert */
+.dup-alert {
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    border-left: 4px solid #e85d04;
+    color: #7d4e00;
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin-bottom: 14px;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.5;
+}
+
+.form-card.has-duplicate {
+    border: 2px solid #e85d04;
+    box-shadow: 0 0 0 3px rgba(232, 93, 4, 0.18), 0 10px 40px rgba(0,0,0,0.15);
+}
