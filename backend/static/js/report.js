@@ -4,7 +4,7 @@ const ABSENT_LIMIT = 2;
 const PERM_LIMIT   = 3;
 
 let allData     = [];
-let _reportType = 'biweekly';
+let _reportType = 'daily';
 
 const PAGE_SIZE   = 20;
 let _pages        = { bhikkhu: 1, samanera: 1 };
@@ -16,10 +16,10 @@ const _rddState = {};
 
 const _rddConfig = {
     'f-report-type': {
-        allText: 'ប្រចាំ ១៥ ថ្ងៃ',
+        allText: 'ប្រចាំថ្ងៃ',
         opts: [
-            ['biweekly',  'ប្រចាំ ១៥ ថ្ងៃ'],
             ['daily',     'ប្រចាំថ្ងៃ'],
+            ['biweekly',  'ប្រចាំ ១៥ ថ្ងៃ'],
             ['monthly',   'ប្រចាំខែ'],
             ['annual',    'ប្រចាំឆ្នាំ'],
             ['triennial', 'ប្រចាំ ៣ ឆ្នាំ'],
@@ -262,7 +262,7 @@ function _updateThead(type) {
 
 async function loadReport() {
     const filters = getFilters();
-    _reportType   = getRdd('f-report-type') || 'biweekly';
+    _reportType   = getRdd('f-report-type') || 'daily';
 
     showLoading(true);
     document.getElementById('report-content').style.display = 'none';
