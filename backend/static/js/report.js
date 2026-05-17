@@ -212,6 +212,17 @@ function buildQueryString(filters) {
 
 // ============ LOAD ============
 
+function _applyClientFilters(monks, filters) {
+    return monks.filter(m => {
+        if (filters.monk_type       && m.monk_type       !== filters.monk_type)                              return false;
+        if (filters.kuti            && m.residence        !== filters.kuti.replace(/_/g, ' '))               return false;
+        if (filters.education_level && m.education_level  !== filters.education_level)                       return false;
+        if (filters.academic_year   && m.academic_year    !== filters.academic_year)                         return false;
+        if (filters.name            && !m.fullname.toLowerCase().includes(filters.name.toLowerCase()))       return false;
+        return true;
+    });
+}
+
 function _updateBanner(start, end, label) {
     const banner = document.getElementById('date-range-banner');
     banner.innerHTML = `📅 ចន្លោះ: <strong>${fmtDate(start)}</strong> — <strong>${fmtDate(end)}</strong> &nbsp;|&nbsp; ${label}`;
@@ -276,28 +287,28 @@ async function loadReport() {
             const res = await fetch(`/api/attendance/daily-report?date=${filters.date || todayISO()}`);
             json = await res.json();
             if (!json.success) throw new Error(json.message);
-            allData = _normalizeMonks(json.records, 'daily', json);
+            allData = _applyClientFilters(_normalizeMonks(json.records, 'daily', json), filters);
             _updateBanner(json.date, json.date, 'ប្រចាំថ្ងៃ');
 
         } else if (_reportType === 'monthly') {
             const res = await fetch(`/api/reports/monthly?year=${d.getFullYear()}&month=${d.getMonth() + 1}`);
             json = await res.json();
             if (!json.success) throw new Error(json.message);
-            allData = _normalizeMonks(json.monks, 'monthly', json);
+            allData = _applyClientFilters(_normalizeMonks(json.monks, 'monthly', json), filters);
             _updateBanner(json.period_start, json.period_end, 'ប្រចាំខែ');
 
         } else if (_reportType === 'annual') {
             const res = await fetch(`/api/reports/annual?year=${d.getFullYear()}`);
             json = await res.json();
             if (!json.success) throw new Error(json.message);
-            allData = _normalizeMonks(json.monks, 'annual', json);
+            allData = _applyClientFilters(_normalizeMonks(json.monks, 'annual', json), filters);
             _updateBanner(json.period_start, json.period_end, 'ប្រចាំឆ្នាំ');
 
         } else if (_reportType === 'triennial') {
             const res = await fetch(`/api/reports/triennial?start_year=${d.getFullYear() - 2}`);
             json = await res.json();
             if (!json.success) throw new Error(json.message);
-            allData = _normalizeMonks(json.monks, 'triennial', json);
+            allData = _applyClientFilters(_normalizeMonks(json.monks, 'triennial', json), filters);
             _updateBanner(json.period_start, json.period_end, 'ប្រចាំ ៣ ឆ្នាំ');
 
         } else {
