@@ -390,11 +390,24 @@ def report():
     return render_template('report.html')
 
 
+def _get_block_dates(date_str):
+    """Return the fixed 15-day block containing the given date.
+    Days  1-15 → 1st–15th of the month.
+    Days 16-31 → 16th–last day of the month."""
+    import calendar
+    d = _date.fromisoformat(date_str)
+    if d.day <= 15:
+        start = _date(d.year, d.month, 1)
+        end   = _date(d.year, d.month, 15)
+    else:
+        start = _date(d.year, d.month, 16)
+        end   = _date(d.year, d.month, calendar.monthrange(d.year, d.month)[1])
+    return start, end
+
+
 def _fetch_report_rows(args):
-    from datetime import timedelta
     date_str   = (args.get('date') or _date.today().isoformat())
-    end_date   = _date.fromisoformat(date_str)
-    start_date = end_date - timedelta(days=14)
+    start_date, end_date = _get_block_dates(date_str)
 
     monk_type  = (args.get('monk_type')       or '').strip()
     kuti       = (args.get('kuti')            or '').strip()
@@ -428,8 +441,8 @@ def _fetch_report_rows(args):
         {where_sql}
         GROUP BY m.id, m.fullname, m.monk_type, m.position, m.vassa_years,
                  m.residence, m.education_level, m.academic_year
-        HAVING COUNT(CASE WHEN a.status = 'absent'     THEN 1 END) > 0
-            OR COUNT(CASE WHEN a.status = 'permission' THEN 1 END) > 0
+        HAVING COUNT(CASE WHEN a.status = 'absent'     THEN 1 END) >= 2
+            OR COUNT(CASE WHEN a.status = 'permission' THEN 1 END) >= 3
         ORDER BY m.monk_type,
                  COUNT(CASE WHEN a.status = 'absent'     THEN 1 END) DESC,
                  COUNT(CASE WHEN a.status = 'permission' THEN 1 END) DESC,
@@ -1427,10 +1440,10 @@ DISC_PERM_MIN   = 3   # permissions > 2 (i.e. >= 3)
 
 
 def _do_compile_period(conn, cur, period_start):
-    """Aggregate the 15-day block starting at period_start into attendance_summaries
+    """Aggregate the fixed 15-day block containing period_start into attendance_summaries
     and advance the period_tracker.  Returns (row_count, period_end)."""
     from datetime import timedelta
-    period_end = period_start + timedelta(days=14)
+    _, period_end = _get_block_dates(period_start.isoformat())
     cur.execute("""
         SELECT monk_id,
                COALESCE(SUM(CASE WHEN status = 'absent'     THEN 1 ELSE 0 END), 0),
@@ -1473,7 +1486,7 @@ def _summary_query(cur, start_str, end_str):
         GROUP BY m.id, m.fullname, m.monk_type, m.position,
                  m.vassa_years, m.residence, m.education_level, m.academic_year
         HAVING SUM(s.total_absences)    >= %s
-           AND SUM(s.total_permissions) >= %s
+            OR SUM(s.total_permissions) >= %s
         ORDER BY m.monk_type,
                  SUM(s.total_absences)    DESC,
                  SUM(s.total_permissions) DESC
@@ -1560,13 +1573,13 @@ def compile_period_endpoint():
         count, period_end = _do_compile_period(conn, cur, period_start)
         conn.commit()
         cur.close()
-        from datetime import timedelta
+        from datetime import timedelta as _td
         return jsonify({
-            'success':          True,
-            'compiled':         count,
-            'period_start':     period_start.isoformat(),
-            'period_end':       period_end.isoformat(),
-            'next_period_start': (period_end + timedelta(days=1)).isoformat(),
+            'success':           True,
+            'compiled':          count,
+            'period_start':      period_start.isoformat(),
+            'period_end':        period_end.isoformat(),
+            'next_period_start': (period_end + _td(days=1)).isoformat(),
         })
     except Exception as e:
         if conn: conn.rollback()
@@ -1608,22 +1621,18 @@ def list_periods():
 
 @main_bp.route('/api/reports/biweekly', methods=['GET'])
 def report_biweekly():
-    """Bi-weekly report from summaries for a specific period_start.
-    Filter: absences >= 2 AND permissions >= 3."""
-    period_start_str = request.args.get('period_start', '')
-    if not period_start_str:
-        return jsonify({'success': False, 'message': 'period_start required'}), 400
+    """Bi-weekly report from summaries for a specific date (auto-block-snapped).
+    Filter: absences >= 2 OR permissions >= 3."""
+    date_str = request.args.get('period_start') or request.args.get('date', _date.today().isoformat())
     try:
-        from datetime import date as _dt, timedelta
-        period_start = _dt.fromisoformat(period_start_str)
-        period_end   = period_start + timedelta(days=14)
+        period_start, period_end = _get_block_dates(date_str)
         conn = connect_db()
         cur  = conn.cursor()
-        rows = _summary_query(cur, period_start_str, period_end.isoformat())
+        rows = _summary_query(cur, period_start.isoformat(), period_end.isoformat())
         cur.close(); conn.close()
         return jsonify({
             'success':      True,
-            'period_start': period_start_str,
+            'period_start': period_start.isoformat(),
             'period_end':   period_end.isoformat(),
             'monks':        _rows_to_monks(rows),
         })

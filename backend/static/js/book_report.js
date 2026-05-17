@@ -111,7 +111,7 @@ function buildDailyTable(records, dateStr) {
 }
 
 function buildSummaryTable(monks) {
-  if (!monks.length) return emptyHTML('គ្មានព្រះសង្ឃដែលលើសដែន (អវត្តមាន > ១ AND ច្បាប់ > ២)');
+  if (!monks.length) return emptyHTML('គ្មានព្រះសង្ឃដែលលើសដែន (អវត្តមាន > ១ ឬ ច្បាប់ > ២)');
   const rows = monks.map((m, i) => {
     const cls = rowClass(m.total_absences, m.total_permissions);
     const edu = [m.education_level, m.academic_year].filter(Boolean).join(' ');
@@ -148,14 +148,13 @@ async function buildDailyPage(container) {
   const date = document.getElementById('ctx-date').value || new Date().toISOString().slice(0, 10);
   container.innerHTML = `
     <div class="page-header">
-      <div class="page-tier-label">TIER 1 · ប្រចាំថ្ងៃ</div>
+      
       <div class="page-heading">របាយការណ៍ប្រចាំថ្ងៃ</div>
       <div class="page-subheading">ថ្ងៃទី ${fmt(date)}</div>
     </div>
     <div class="page-ctrl">
       <label>ថ្ងៃ:</label>
-      <input type="date" id="daily-date" value="${date}">
-      <button class="btn-load" onclick="reloadDaily()">ផ្ទុក</button>
+      <input type="date" id="daily-date" value="${date}" onchange="reloadDaily()">
     </div>
     <div id="daily-body">${loadingHTML()}</div>`;
   await fetchDailyData(date);
@@ -185,14 +184,12 @@ async function buildBiweeklyPage(container) {
   // Try to find the nearest compiled period
   container.innerHTML = `
     <div class="page-header">
-      <div class="page-tier-label">TIER 2 · ប្រចាំកន្លះខែ</div>
       <div class="page-heading">របាយការណ៍ ១៥ ថ្ងៃ</div>
-      <div class="page-subheading">ផ្ទុកដោយ period_start</div>
+      <div class="page-subheading" id="bw-range">ថ្ងៃ ១–១៥ ឬ ១៦–ចុងខែ (auto)</div>
     </div>
     <div class="page-ctrl">
-      <label>ចំណុចចាប់ផ្ដើម:</label>
-      <input type="date" id="bw-period" value="${dateStr}">
-      <button class="btn-load" onclick="reloadBiweekly()">ផ្ទុក</button>
+      <label>ដំណាក់ (ជ្រើសថ្ងៃ):</label>
+      <input type="date" id="bw-period" value="${dateStr}" onchange="reloadBiweekly()">
     </div>
     <div id="bw-body">${loadingHTML()}</div>`;
   await fetchBiweeklyData(dateStr);
@@ -206,7 +203,7 @@ async function fetchBiweeklyData(periodStart) {
     const res  = await fetch(`/api/reports/biweekly?period_start=${periodStart}`);
     const data = await res.json();
     if (!data.success) throw new Error(data.message);
-    const hdr = document.querySelector('#page-right .page-subheading');
+    const hdr = document.getElementById('bw-range');
     if (hdr) hdr.textContent = `${fmt(data.period_start)} → ${fmt(data.period_end)}`;
     body.innerHTML = buildSummaryTable(data.monks);
   } catch (e) {
@@ -226,7 +223,7 @@ async function buildMonthlyPage(container) {
   const yr  = now.getFullYear(), mo = now.getMonth() + 1;
   container.innerHTML = `
     <div class="page-header">
-      <div class="page-tier-label">TIER 3 · ប្រចាំខែ</div>
+      
       <div class="page-heading">របាយការណ៍ប្រចាំខែ</div>
       <div class="page-subheading" id="monthly-range">—</div>
     </div>
@@ -269,7 +266,6 @@ async function buildAnnualPage(container) {
   const yr = new Date().getFullYear();
   container.innerHTML = `
     <div class="page-header">
-      <div class="page-tier-label">TIER 4 · ប្រចាំឆ្នាំ</div>
       <div class="page-heading">របាយការណ៍ប្រចាំឆ្នាំ</div>
       <div class="page-subheading" id="annual-range">—</div>
     </div>
@@ -309,8 +305,8 @@ async function buildTriennialPage(container) {
   const startYr = new Date().getFullYear() - 2;
   container.innerHTML = `
     <div class="page-header">
-      <div class="page-tier-label">TIER 5 · ប្រចាំ ៣ ឆ្នាំ</div>
-      <div class="page-heading">台帳 — ៣ ឆ្នាំ (Master Ledger)</div>
+
+      <div class="page-heading">របាយការណ៍ប្រចាំ ៣ ឆ្នាំ</div>
       <div class="page-subheading" id="tri-range">—</div>
     </div>
     <div class="page-ctrl">

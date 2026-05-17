@@ -214,8 +214,10 @@ async function loadReport() {
 
         allData = json.monks;
 
-        const banner = document.getElementById('date-range-banner');
-        banner.innerHTML = `📅 ចន្លោះ: <strong>${fmtDate(json.start_date)}</strong> — <strong>${fmtDate(json.end_date)}</strong> &nbsp;|&nbsp; ១៥ ថ្ងៃ`;
+        const banner  = document.getElementById('date-range-banner');
+        const isFirst = new Date(json.start_date).getDate() === 1;
+        const half    = isFirst ? 'ដំណាក់ទី ១ (ថ្ងៃ ១–១៥)' : 'ដំណាក់ទី ២ (ថ្ងៃ ១៦–ចុងខែ)';
+        banner.innerHTML = `📅 <strong>${fmtDate(json.start_date)}</strong> — <strong>${fmtDate(json.end_date)}</strong> &nbsp;|&nbsp; ${half}`;
         banner.style.display = 'flex';
 
         if (!allData.length) {
@@ -614,8 +616,8 @@ async function executeDelete() {
 
 // ============ UTILITIES ============
 
-function isAbsViol(m) { return m.absent_count     >= ABSENT_LIMIT; }
-function isPrmViol(m) { return m.permission_count >= PERM_LIMIT;   }
+function isAbsViol(m) { return m.absent_count     > 1; }
+function isPrmViol(m) { return m.permission_count > 2; }
 
 function fmtDate(iso) {
     const [y, mo, d] = iso.split('-');
