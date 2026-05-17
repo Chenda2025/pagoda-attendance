@@ -2080,11 +2080,12 @@ def unified_export():
             fname    = f"report_{report_type}_{period_start}.docx"
             mimetype = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 
+        caption = (
+            f"📋 របាយការណ៍វត្តមាន ({type_label}) — {subtitle}\n"
+            f"📊 សរុប {len(monks)} នាក់  |  ❌ {av}  |  📋 {pv}"
+        )
+
         if action == 'telegram':
-            caption = (
-                f"📋 របាយការណ៍វត្តមាន ({type_label}) — {subtitle}\n"
-                f"📊 សរុប {len(monks)} នាក់  |  ❌ {av}  |  📋 {pv}"
-            )
             tg = req.post(
                 f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendDocument',
                 data={'chat_id': TELEGRAM_CHAT_ID, 'caption': caption},
@@ -2093,6 +2094,34 @@ def unified_export():
             ).json()
             if not tg.get('ok'):
                 return jsonify({'success': False, 'message': f"Telegram: {tg.get('description')}"}), 500
+            return jsonify({'success': True, 'total': len(monks)})
+
+        if action == 'telegram-both':
+            from weasyprint import HTML as _HTML
+            docx_buf  = _make_export_docx(monks, type_label, subtitle, report_type)
+            docx_name = f"report_{report_type}_{period_start}.docx"
+            pdf_buf   = io.BytesIO(
+                _HTML(string=_make_export_html(monks, type_label, subtitle, report_type)).write_pdf()
+            )
+            pdf_name  = f"report_{report_type}_{period_start}.pdf"
+            tg1 = req.post(
+                f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendDocument',
+                data={'chat_id': TELEGRAM_CHAT_ID, 'caption': caption},
+                files={'document': (docx_name, docx_buf,
+                                    'application/vnd.openxmlformats-officedocument.wordprocessingml.document')},
+                timeout=25
+            ).json()
+            if not tg1.get('ok'):
+                return jsonify({'success': False, 'message': f"Telegram (Word): {tg1.get('description')}"}), 500
+            tg2 = req.post(
+                f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendDocument',
+                data={'chat_id': TELEGRAM_CHAT_ID,
+                      'caption': f"📄 PDF — {type_label} — {subtitle}"},
+                files={'document': (pdf_name, pdf_buf, 'application/pdf')},
+                timeout=30
+            ).json()
+            if not tg2.get('ok'):
+                return jsonify({'success': False, 'message': f"Telegram (PDF): {tg2.get('description')}"}), 500
             return jsonify({'success': True, 'total': len(monks)})
 
         return send_file(buf, mimetype=mimetype, as_attachment=True, download_name=fname)

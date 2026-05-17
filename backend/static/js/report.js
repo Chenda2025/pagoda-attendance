@@ -507,7 +507,7 @@ async function exportReport(action, fmt = 'docx') {
     const type    = _reportType;
     const filters = getFilters();
     const isPdf   = fmt === 'pdf';
-    const isTg    = action === 'telegram';
+    const isTg    = action === 'telegram' || action === 'telegram-both';
 
     let btn;
     if (isTg)       btn = document.getElementById('btn-send-tg');
