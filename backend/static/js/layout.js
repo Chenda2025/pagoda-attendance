@@ -299,18 +299,16 @@ function initPopover() {
                     // Permission ceiling hit — lock Permission button completely
                     permBtn.disabled = true;
                     permBtn.style.opacity = '0.35';
-                    permBtn.title = 'ច្បាប់គ្រប់ចំនួន — មិនអាចដាក់បន្ថែមទៀតទេ';
+                    permBtn.title = 'ច្បាប់គ្រប់ចំនួន';
                     alert(
                         `⚠️ ${monkName}\n\n` +
-                        `ឈ្មោះនេះបានគ្រប់ចំនួនច្បាប់ (${MAX_PERM} ដង) ហើយ!\n` +
-                        `សូមប្រើប្រាស់ប៊ូតុង "អវត្តមាន" តែប៉ុណ្ណោះ។`
+                        `ច្បាប់ ${MAX_PERM}\n`
                     );
                 } else if (absentMaxed) {
                     // Absence ceiling hit but Permission still available — warn only, keep Permission enabled
                     alert(
                         `⚠️ ${monkName}\n\n` +
-                        `ឈ្មោះនេះបានគ្រប់ចំនួនអវត្តមាន (${MAX_ABSENT} ដង) ហើយ!\n` +
-                        `ប៉ុន្តែនៅអាចដាក់ច្បាប់បាន — ប៊ូតុង "ច្បាប់" នៅតែអាចប្រើបាន។`
+                        `អវត្តមាន ${MAX_ABSENT}\n` 
                     );
                 }
             } catch { /* network error — allow normal interaction */ }
