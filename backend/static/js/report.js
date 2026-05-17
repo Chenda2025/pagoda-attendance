@@ -3,7 +3,8 @@
 const ABSENT_LIMIT = 2;
 const PERM_LIMIT   = 3;
 
-let allData = [];
+let allData     = [];
+let _reportType = 'biweekly';
 
 const PAGE_SIZE   = 20;
 let _pages        = { bhikkhu: 1, samanera: 1 };
@@ -14,6 +15,16 @@ let _filteredData = { bhikkhus: [], samaneras: [] };
 const _rddState = {};
 
 const _rddConfig = {
+    'f-report-type': {
+        allText: 'ប្រចាំ ១៥ ថ្ងៃ',
+        opts: [
+            ['biweekly',  'ប្រចាំ ១៥ ថ្ងៃ'],
+            ['daily',     'ប្រចាំថ្ងៃ'],
+            ['monthly',   'ប្រចាំខែ'],
+            ['annual',    'ប្រចាំឆ្នាំ'],
+            ['triennial', 'ប្រចាំ ៣ ឆ្នាំ'],
+        ]
+    },
     'f-monk-type': {
         allText: 'ទាំងអស់',
         opts: [
@@ -201,22 +212,101 @@ function buildQueryString(filters) {
 
 // ============ LOAD ============
 
+function _updateBanner(start, end, label) {
+    const banner = document.getElementById('date-range-banner');
+    banner.innerHTML = `📅 ចន្លោះ: <strong>${fmtDate(start)}</strong> — <strong>${fmtDate(end)}</strong> &nbsp;|&nbsp; ${label}`;
+    banner.style.display = 'flex';
+}
+
+function _normalizeMonks(monks, type, json) {
+    if (type === 'daily') {
+        return monks.map(m => ({
+            ...m,
+            absent_count:     m.status === 'absent'     ? 1 : 0,
+            permission_count: m.status === 'permission' ? 1 : 0,
+            absent_dates:     m.status === 'absent'     ? fmtDate(json.date) : '',
+            perm_dates:       m.status === 'permission' ? fmtDate(json.date) : '',
+        }));
+    }
+    return monks.map(m => ({
+        ...m,
+        absent_count:     m.total_absences,
+        permission_count: m.total_permissions,
+        absent_dates:     '',
+        perm_dates:       m.range_start ? `${fmtDate(m.range_start)} → ${fmtDate(m.range_end)}` : '',
+    }));
+}
+
+const _THEAD = {
+    biweekly:
+        '<th>#</th><th>ឈ្មោះ</th><th>តួនាទី</th><th>វស្សា</th>' +
+        '<th>ស្នាក់នៅ</th><th>ការសិក្សា</th>' +
+        '<th>❌ អវត្តមាន</th><th>📋 ច្បាប់</th><th>ថ្ងៃ</th><th>ស្ថានភាព</th><th class="col-actions-r">សកម្មភាព</th>',
+    daily:
+        '<th>#</th><th>ឈ្មោះ</th><th>ប្រភេទ</th><th>តួនាទី</th><th>វស្សា</th>' +
+        '<th>ស្នាក់នៅ</th><th>ស្ថានភាព</th>',
+    summary:
+        '<th>#</th><th>ឈ្មោះ</th><th>ប្រភេទ</th><th>តួនាទី</th><th>វស្សា</th>' +
+        '<th>❌ អវត្តមាន</th><th>📋 ច្បាប់</th><th>ចន្លោះ</th><th>ស្ថានភាព</th>',
+};
+
+function _updateThead(type) {
+    const cols = type === 'biweekly' ? _THEAD.biweekly
+               : type === 'daily'   ? _THEAD.daily
+               : _THEAD.summary;
+    ['thead-bhikkhu', 'thead-samanera'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = `<tr>${cols}</tr>`;
+    });
+}
+
 async function loadReport() {
     const filters = getFilters();
+    _reportType   = getRdd('f-report-type') || 'biweekly';
+
     showLoading(true);
     document.getElementById('report-content').style.display = 'none';
     document.getElementById('empty-state').style.display    = 'none';
 
     try {
-        const res  = await fetch(`/api/attendance/report?${buildQueryString(filters)}`);
-        const json = await res.json();
-        if (!json.success) throw new Error(json.message);
+        let json;
+        const d = new Date(filters.date || todayISO());
 
-        allData = json.monks;
+        if (_reportType === 'daily') {
+            const res = await fetch(`/api/attendance/daily-report?date=${filters.date || todayISO()}`);
+            json = await res.json();
+            if (!json.success) throw new Error(json.message);
+            allData = _normalizeMonks(json.records, 'daily', json);
+            _updateBanner(json.date, json.date, 'ប្រចាំថ្ងៃ');
 
-        const banner = document.getElementById('date-range-banner');
-        banner.innerHTML = `📅 ចន្លោះ: <strong>${fmtDate(json.start_date)}</strong> — <strong>${fmtDate(json.end_date)}</strong> &nbsp;|&nbsp; ១៥ ថ្ងៃ`;
-        banner.style.display = 'flex';
+        } else if (_reportType === 'monthly') {
+            const res = await fetch(`/api/reports/monthly?year=${d.getFullYear()}&month=${d.getMonth() + 1}`);
+            json = await res.json();
+            if (!json.success) throw new Error(json.message);
+            allData = _normalizeMonks(json.monks, 'monthly', json);
+            _updateBanner(json.period_start, json.period_end, 'ប្រចាំខែ');
+
+        } else if (_reportType === 'annual') {
+            const res = await fetch(`/api/reports/annual?year=${d.getFullYear()}`);
+            json = await res.json();
+            if (!json.success) throw new Error(json.message);
+            allData = _normalizeMonks(json.monks, 'annual', json);
+            _updateBanner(json.period_start, json.period_end, 'ប្រចាំឆ្នាំ');
+
+        } else if (_reportType === 'triennial') {
+            const res = await fetch(`/api/reports/triennial?start_year=${d.getFullYear() - 2}`);
+            json = await res.json();
+            if (!json.success) throw new Error(json.message);
+            allData = _normalizeMonks(json.monks, 'triennial', json);
+            _updateBanner(json.period_start, json.period_end, 'ប្រចាំ ៣ ឆ្នាំ');
+
+        } else {
+            const res = await fetch(`/api/attendance/report?${buildQueryString(filters)}`);
+            json = await res.json();
+            if (!json.success) throw new Error(json.message);
+            allData = json.monks;
+            _updateBanner(json.start_date, json.end_date, '១៥ ថ្ងៃ');
+        }
 
         if (!allData.length) {
             document.getElementById('empty-state').style.display = 'block';
@@ -247,6 +337,7 @@ function renderReport(monks, violationFilter) {
 }
 
 function _drawSections(bhikkhus, samaneras, summaryMonks) {
+    _updateThead(_reportType);
     renderSection('tbody-bhikkhu',  'count-bhikkhu',  'pagin-bhikkhu',  bhikkhus,  'bhikkhu');
     renderSection('tbody-samanera', 'count-samanera', 'pagin-samanera', samaneras, 'samanera');
     if (summaryMonks) renderSummary(summaryMonks);
@@ -299,7 +390,40 @@ function renderSection(tbodyId, countId, paginId, monks, section) {
                 ? `<span class="badge badge-warning">⚠ លើសច្បាប់</span>`
                 : `<span class="badge badge-ok">✓ ប្រក្រតី</span>`;
         const edu = [m.education_level, m.academic_year].filter(Boolean).join(' — ');
+        const num = `<td class="col-num">${start + i + 1}</td>`;
+        const name = `<td><div class="monk-name">${escHtml(m.fullname)}</div></td>`;
 
+        if (_reportType === 'daily') {
+            const statusBadge = m.absent_count
+                ? `<span class="badge badge-danger">❌ អវត្តមាន</span>`
+                : `<span class="badge badge-warning">📋 ច្បាប់</span>`;
+            return `<tr class="${rowCls}">
+                ${num}${name}
+                <td class="col-center">${escHtml(m.monk_type)}</td>
+                <td class="col-pos">${escHtml(m.position)}</td>
+                <td class="col-center">${m.vassa_years} ឆ្នាំ</td>
+                <td class="col-kuti">${escHtml(m.residence)}</td>
+                <td>${statusBadge}</td>
+            </tr>`;
+        }
+
+        if (_reportType === 'monthly' || _reportType === 'annual' || _reportType === 'triennial') {
+            const rangeHtml = m.perm_dates
+                ? `<span class="date-perm" style="font-size:10px">${escHtml(m.perm_dates)}</span>`
+                : '—';
+            return `<tr class="${rowCls}">
+                ${num}${name}
+                <td class="col-center">${escHtml(m.monk_type)}</td>
+                <td class="col-pos">${escHtml(m.position)}</td>
+                <td class="col-center">${m.vassa_years} ឆ្នាំ</td>
+                <td class="col-center col-absent" style="${abViol?'color:#c53030;font-weight:700':''}">${m.absent_count     || '—'}</td>
+                <td class="col-center col-perm"   style="${prViol?'color:#c05621;font-weight:700':''}">${m.permission_count || '—'}</td>
+                <td class="col-dates">${rangeHtml}</td>
+                <td>${badge}</td>
+            </tr>`;
+        }
+
+        // biweekly (default)
         const dateParts = [];
         if (m.absent_dates) dateParts.push(`<span class="date-absent">❌ ${escHtml(m.absent_dates)}</span>`);
         if (m.perm_dates)   dateParts.push(`<span class="date-perm">📋 ${escHtml(m.perm_dates)}</span>`);
@@ -307,8 +431,7 @@ function renderSection(tbodyId, countId, paginId, monks, section) {
 
         return `
             <tr class="${rowCls}">
-                <td class="col-num">${start + i + 1}</td>
-                <td><div class="monk-name">${escHtml(m.fullname)}</div></td>
+                ${num}${name}
                 <td class="col-pos">${escHtml(m.position)}</td>
                 <td class="col-center">${m.vassa_years} ឆ្នាំ</td>
                 <td class="col-kuti">${escHtml(m.residence)}</td>

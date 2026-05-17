@@ -107,9 +107,15 @@
         <div class="filter-panel no-print">
             <div class="filter-row">
 
+                <!-- Report type -->
+                <div class="filter-item">
+                    <label class="filter-label">ប្រភេទរបាយការណ៍</label>
+                    <div class="rpt-dropdown" id="f-report-type"></div>
+                </div>
+
                 <!-- Date -->
                 <div class="filter-item">
-                    <label class="filter-label">ថ្ងៃបញ្ចប់</label>
+                    <label class="filter-label">ថ្ងៃ / ខែ / ឆ្នាំ</label>
                     <input type="date" id="f-date" class="filter-input">
                 </div>
 
@@ -230,7 +236,7 @@
                 </div>
                 <div class="table-wrap">
                     <table class="report-table">
-                        <thead><tr>
+                        <thead id="thead-bhikkhu"><tr>
                             <th>#</th><th>ឈ្មោះ</th><th>តួនាទី</th><th>វស្សា</th>
                             <th>ស្នាក់នៅ</th><th>ការសិក្សា</th>
                             <th>❌ អវត្តមាន</th><th>📋 ច្បាប់</th><th>ថ្ងៃ</th><th>ស្ថានភាព</th><th class="col-actions-r">សកម្មភាព</th>
@@ -254,7 +260,7 @@
                 </div>
                 <div class="table-wrap">
                     <table class="report-table">
-                        <thead><tr>
+                        <thead id="thead-samanera"><tr>
                             <th>#</th><th>ឈ្មោះ</th><th>តួនាទី</th><th>វស្សា</th>
                             <th>ស្នាក់នៅ</th><th>ការសិក្សា</th>
                             <th>❌ អវត្តមាន</th><th>📋 ច្បាប់</th><th>ថ្ងៃ</th><th>ស្ថានភាព</th><th class="col-actions-r">សកម្មភាព</th>
