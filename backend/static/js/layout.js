@@ -251,6 +251,9 @@ function initPopover() {
     const clearBtn  = popover.querySelector('.att-btn-clear');
     let activeMonkId = null;
 
+    const MAX_ABSENT = 2;
+    const MAX_PERM   = 2;
+
     function positionPopover(cell) {
         const rect = cell.getBoundingClientRect();
         const pw = 200;
@@ -265,9 +268,10 @@ function initPopover() {
     function resetButtons() {
         absentBtn.disabled = false;
         absentBtn.style.opacity = '';
+        absentBtn.title = '';
         permBtn.disabled = false;
         permBtn.style.opacity = '';
-        permBtn.dataset.limitReached = '';
+        permBtn.title = '';
     }
 
     document.addEventListener('click', async e => {
@@ -275,32 +279,39 @@ function initPopover() {
         if (cell) {
             e.stopPropagation();
             activeMonkId = parseInt(cell.dataset.monkId);
+            const monkName = cell.dataset.monkName;
 
-            nameEl.textContent = cell.dataset.monkName;
+            nameEl.textContent = monkName;
             clearBtn.style.display = attendanceMap.has(activeMonkId) ? 'block' : 'none';
             resetButtons();
             positionPopover(cell);
             popover.style.display = 'block';
 
-            // Fetch 15-day history and enforce limits
             try {
                 const res  = await fetch(`/api/attendance/history/${activeMonkId}`);
                 const hist = await res.json();
                 if (!hist.success) return;
 
-                // Condition A: 1 absence reached → block Permission
-                if (hist.absent_count >= 1) {
-                    alert(
-                        `⚠️ ${cell.dataset.monkName}\n\n` +
-                        `ឈ្មោះនេះគ្រប់ចំនួនអវត្តមាន!\n`
-                    );
+                const absentMaxed = hist.absent_count >= MAX_ABSENT;
+                const permMaxed   = hist.permission_count >= MAX_PERM;
+
+                if (permMaxed) {
+                    // Permission ceiling hit — lock Permission button completely
                     permBtn.disabled = true;
                     permBtn.style.opacity = '0.35';
-                }
-
-                // Condition B: 2 permissions reached → flag for conversion on click
-                if (hist.permission_count >= 2) {
-                    permBtn.dataset.limitReached = 'true';
+                    permBtn.title = 'ច្បាប់គ្រប់ចំនួន — មិនអាចដាក់បន្ថែមទៀតទេ';
+                    alert(
+                        `⚠️ ${monkName}\n\n` +
+                        `ឈ្មោះនេះបានគ្រប់ចំនួនច្បាប់ (${MAX_PERM} ដង) ហើយ!\n` +
+                        `សូមប្រើប្រាស់ប៊ូតុង "អវត្តមាន" តែប៉ុណ្ណោះ។`
+                    );
+                } else if (absentMaxed) {
+                    // Absence ceiling hit but Permission still available — warn only, keep Permission enabled
+                    alert(
+                        `⚠️ ${monkName}\n\n` +
+                        `ឈ្មោះនេះបានគ្រប់ចំនួនអវត្តមាន (${MAX_ABSENT} ដង) ហើយ!\n` +
+                        `ប៉ុន្តែនៅអាចដាក់ច្បាប់បាន — ប៊ូតុង "ច្បាប់" នៅតែអាចប្រើបាន។`
+                    );
                 }
             } catch { /* network error — allow normal interaction */ }
             return;
@@ -314,18 +325,8 @@ function initPopover() {
     });
 
     permBtn.addEventListener('click', async () => {
-        if (permBtn.dataset.limitReached === 'true') {
-            // Condition B: 3rd permission → alert + auto-convert to absent
-            alert(
-                `⚠️ ${nameEl.textContent}\n\n` +
-                `ឈ្មោះនេះគ្រប់ចំនួនច្បាប់ហើយ!\n`
-            );
-            popover.style.display = 'none';
-            await setAttendance(activeMonkId, 'absent');
-        } else {
-            popover.style.display = 'none';
-            await setAttendance(activeMonkId, 'permission');
-        }
+        popover.style.display = 'none';
+        await setAttendance(activeMonkId, 'permission');
     });
 
     clearBtn.addEventListener('click', async () => {
