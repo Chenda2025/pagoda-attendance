@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="km">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>សៀវភៅរបាយការណ៌អវត្តមាន — វត្តនិរោធរង្សី</title>
+  <link rel="icon" type="image/jpeg" href="/static/logo.jpg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&family=Kantumruy+Pro:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/book_report.css">
+</head>
+<body>
+
+  <!-- ===== TOP BAR ===== -->
+  <nav class="topbar">
+    <a href="/report" class="btn-back-link">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2.5">
+        <polyline points="15 18 9 12 15 6"/>
+      </svg>
+      ត្រឡប់ក្រោយ
+    </a>
+    <img src="/static/logo.jpg" alt="logo" class="topbar-logo">
+    <span class="topbar-title">សៀវភៅរបាយការណ៌អវត្តមាន — វត្តនិរោធរង្សី</span>
+    <div class="topbar-actions">
+      <button class="btn-flat-toggle" id="btn-flat-toggle">☰ ទិដ្ឋភាពតារាង</button>
+      <button class="btn-compile" id="btn-compile">⚙ ប្រមូលកំណត់ ១៥ ថ្ងៃ</button>
+      <a href="/logout" class="btn-back-link">ចាកចេញ</a>
+    </div>
+  </nav>
+
+  <!-- ===== CONTEXT BAR ===== -->
+  <div class="context-bar">
+    <span class="ctx-label">ថ្ងៃយោង:</span>
+    <input type="date" id="ctx-date" class="ctx-input">
+    <span class="ctx-sep">|</span>
+    <span class="ctx-period-info" id="ctx-period-info">—</span>
+  </div>
+
+  <!-- ===================================================================
+       3D BOOK STAGE
+  ==================================================================== -->
+  <div class="book-stage" id="book-stage">
+    <div>
+
+      <!-- The book container -->
+      <div class="book-container">
+        <div class="book-wrap" id="book-wrap">
+
+          <!-- Left edge click zone -->
+          <div class="edge-click left-edge" id="left-edge" title="ទំព័រមុន"></div>
+
+          <!-- Left page half -->
+          <div class="book-half left">
+            <div class="book-page" id="page-left"></div>
+          </div>
+
+          <!-- Spine -->
+          <div class="book-spine"></div>
+
+          <!-- Right page half -->
+          <div class="book-half right">
+            <div class="book-page" id="page-right"></div>
+          </div>
+
+          <!-- Right edge click zone -->
+          <div class="edge-click right-edge" id="right-edge" title="ទំព័របន្ទាប់"></div>
+
+          <!-- ===== COVER SPREAD (shown at spread 0) ===== -->
+          <div class="cover-spread" id="cover-spread" style="display:flex">
+
+            <!-- Left cover half -->
+            <div class="cover-half cover-left">
+              <div class="cover-border"></div>
+              <img src="/static/logo.jpg" alt="logo" class="cover-logo">
+              <div class="cover-title-km">
+                សៀវភៅ<br>របាយការណ៌អវត្តមាន
+              </div>
+              <div class="cover-ornament">✦ ✦ ✦</div>
+              <div class="cover-subtitle">
+                វត្តនិរោធរង្សី<br>
+                <span style="font-size:10px;opacity:0.6">Wat Niroth Rangsay</span>
+              </div>
+            </div>
+
+            <!-- Right cover half (info panel) -->
+            <div class="cover-half cover-right">
+              <div class="cover-border"></div>
+              <div style="font-size:30px;color:rgba(200,150,12,0.4);margin-bottom:16px">📚</div>
+              <div class="cover-subtitle" style="font-size:13px;color:rgba(200,150,12,0.85);font-weight:700;margin-bottom:10px">
+                ទំព័ររបស់សៀវភៅ
+              </div>
+              <div class="cover-subtitle" style="text-align:left;line-height:2.2">
+                <span style="color:rgba(200,150,12,0.6)">📄</span> ទំព័រ ១-២ · ប្រចាំថ្ងៃ + ១៥ ថ្ងៃ<br>
+                <span style="color:rgba(200,150,12,0.6)">📄</span> ទំព័រ ៣-៤ · ប្រចាំខែ + ប្រចាំឆ្នាំ<br>
+                <span style="color:rgba(200,150,12,0.6)">📄</span> ទំព័រ ៥ &nbsp;&nbsp;&nbsp;· ប្រចាំ ៣ ឆ្នាំ
+              </div>
+              <div class="cover-period-info" id="cover-period-info" style="margin-top:18px">
+                —
+              </div>
+              <div class="cover-ornament" style="margin-top:auto;font-size:18px">— ☸ —</div>
+            </div>
+
+          </div>
+          <!-- /cover-spread -->
+
+          <!-- ===== TURNING PAGE (3D flip overlay) ===== -->
+          <div class="turning-page" id="turning-page">
+            <div class="tp-face tp-front" id="tp-front"></div>
+            <div class="tp-face tp-back"  id="tp-back"></div>
+          </div>
+
+        </div><!-- /book-wrap -->
+      </div><!-- /book-container -->
+
+      <!-- Page navigation -->
+      <div class="book-nav">
+        <button class="btn-page-nav" id="btn-prev" disabled title="ទំព័រមុន">‹</button>
+        <span class="page-counter" id="page-counter">ពេលបើក</span>
+        <button class="btn-page-nav" id="btn-next" title="ទំព័របន្ទាប់">›</button>
+      </div>
+
+    </div>
+  </div>
+  <!-- /book-stage -->
+
+  <!-- ===================================================================
+       FLAT TABLE VIEW (mobile / toggle)
+  ==================================================================== -->
+  <div class="flat-view" id="flat-view">
+
+    <!-- TIER 1: Daily -->
+    <div class="flat-section">
+      <div class="flat-section-header">
+        <span style="font-size:18px">📄</span>
+        <span class="flat-section-title">TIER 1 — របាយការណ៍ប្រចាំថ្ងៃ</span>
+      </div>
+      <div class="flat-section-body">
+        <div class="flat-ctrl">
+          <label>ថ្ងៃ:</label>
+          <input type="date" id="flat-daily-date">
+          <button class="btn-load" onclick="flatReloadDaily()">ផ្ទុក</button>
+        </div>
+        <div id="flat-daily-body"></div>
+      </div>
+    </div>
+
+    <!-- TIER 2: Bi-Weekly -->
+    <div class="flat-section">
+      <div class="flat-section-header">
+        <span style="font-size:18px">📋</span>
+        <span class="flat-section-title">TIER 2 — របាយការណ៍ ១៥ ថ្ងៃ</span>
+      </div>
+      <div class="flat-section-body">
+        <div class="flat-ctrl">
+          <label>ចំណុចចាប់ផ្ដើម:</label>
+          <input type="date" id="flat-bw-period">
+          <button class="btn-load" onclick="flatReloadBiweekly()">ផ្ទុក</button>
+        </div>
+        <div id="flat-bw-body"></div>
+      </div>
+    </div>
+
+    <!-- TIER 3: Monthly -->
+    <div class="flat-section">
+      <div class="flat-section-header">
+        <span style="font-size:18px">📅</span>
+        <span class="flat-section-title">TIER 3 — របាយការណ៍ប្រចាំខែ</span>
+      </div>
+      <div class="flat-section-body">
+        <div class="flat-ctrl">
+          <label>ខែ:</label>
+          <select id="flat-mo-mo">
+            <option value="1">មករា</option><option value="2">កុម្ភៈ</option>
+            <option value="3">មីនា</option><option value="4">មេសា</option>
+            <option value="5">ឧសភា</option><option value="6">មិថុនា</option>
+            <option value="7">កក្កដា</option><option value="8">សីហា</option>
+            <option value="9">កញ្ញា</option><option value="10">តុលា</option>
+            <option value="11">វិច្ឆិកា</option><option value="12">ធ្នូ</option>
+          </select>
+          <label>ឆ្នាំ:</label>
+          <input type="number" id="flat-mo-yr" style="width:72px">
+          <button class="btn-load" onclick="flatReloadMonthly()">ផ្ទុក</button>
+        </div>
+        <div id="flat-monthly-body"></div>
+      </div>
+    </div>
+
+    <!-- TIER 4: Annual -->
+    <div class="flat-section">
+      <div class="flat-section-header">
+        <span style="font-size:18px">📊</span>
+        <span class="flat-section-title">TIER 4 — របាយការណ៍ប្រចាំឆ្នាំ</span>
+      </div>
+      <div class="flat-section-body">
+        <div class="flat-ctrl">
+          <label>ឆ្នាំ:</label>
+          <input type="number" id="flat-an-yr" style="width:72px">
+          <button class="btn-load" onclick="flatReloadAnnual()">ផ្ទុក</button>
+        </div>
+        <div id="flat-annual-body"></div>
+      </div>
+    </div>
+
+    <!-- TIER 5: 3-Year -->
+    <div class="flat-section">
+      <div class="flat-section-header">
+        <span style="font-size:18px">📜</span>
+        <span class="flat-section-title">TIER 5 — Master Ledger ប្រចាំ ៣ ឆ្នាំ</span>
+      </div>
+      <div class="flat-section-body">
+        <div class="flat-ctrl">
+          <label>ឆ្នាំចាប់ផ្ដើម:</label>
+          <input type="number" id="flat-tri-yr" style="width:72px">
+          <button class="btn-load" onclick="flatReloadTriennial()">ផ្ទុក</button>
+        </div>
+        <div id="flat-tri-body"></div>
+      </div>
+    </div>
+
+  </div><!-- /flat-view -->
+
+  <div class="book-toast" id="book-toast"></div>
+
+  <script>
+    // Pre-fill flat view date inputs
+    const today = new Date();
+    const iso   = today.toISOString().slice(0, 10);
+    document.addEventListener('DOMContentLoaded', () => {
+      const fd = document.getElementById('flat-daily-date');
+      const fb = document.getElementById('flat-bw-period');
+      const fm = document.getElementById('flat-mo-mo');
+      const fy = document.getElementById('flat-mo-yr');
+      const fa = document.getElementById('flat-an-yr');
+      const ft = document.getElementById('flat-tri-yr');
+      if (fd) fd.value = iso;
+      if (fb) fb.value = iso;
+      if (fm) fm.value = today.getMonth() + 1;
+      if (fy) fy.value = today.getFullYear();
+      if (fa) fa.value = today.getFullYear();
+      if (ft) ft.value = today.getFullYear() - 2;
+    });
+  </script>
+  <script src="/static/js/book_report.js"></script>
+</body>
+</html>

@@ -16,7 +16,7 @@ USERS = {
 # URL prefixes each role may access (startswith matching)
 _ROLE_PATHS = {
     'user1': ('/layout', '/api/monks', '/api/attendance', '/api/export-layout', '/api/check'),
-    'user2': ('/report', '/api/attendance', '/api/monks/'),
+    'user2': ('/report', '/api/attendance', '/api/monks/', '/api/reports'),
 }
 
 def _allowed(role, path):
@@ -1414,5 +1414,301 @@ def export_layout_pdf():
 
     except ImportError:
         return jsonify({'success': False, 'message': 'WeasyPrint មិនទាន់ install — សូម run: pip install weasyprint'}), 500
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+# ================================================================
+# MULTI-TIER REPORTING SYSTEM
+# ================================================================
+
+DISC_ABSENT_MIN = 2   # absences  > 1  (i.e. >= 2)
+DISC_PERM_MIN   = 3   # permissions > 2 (i.e. >= 3)
+
+
+def _do_compile_period(conn, cur, period_start):
+    """Aggregate the 15-day block starting at period_start into attendance_summaries
+    and advance the period_tracker.  Returns (row_count, period_end)."""
+    from datetime import timedelta
+    period_end = period_start + timedelta(days=14)
+    cur.execute("""
+        SELECT monk_id,
+               COALESCE(SUM(CASE WHEN status = 'absent'     THEN 1 ELSE 0 END), 0),
+               COALESCE(SUM(CASE WHEN status = 'permission' THEN 1 ELSE 0 END), 0)
+        FROM attendance_tbl
+        WHERE date >= %s AND date <= %s
+        GROUP BY monk_id
+    """, (period_start.isoformat(), period_end.isoformat()))
+    rows = cur.fetchall()
+    for monk_id, absences, permissions in rows:
+        cur.execute("""
+            INSERT INTO attendance_summaries
+                (monk_id, period_start, period_end, total_absences, total_permissions)
+            VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (monk_id, period_start) DO UPDATE
+                SET total_absences    = EXCLUDED.total_absences,
+                    total_permissions = EXCLUDED.total_permissions
+        """, (monk_id, period_start, period_end, int(absences), int(permissions)))
+    new_start = period_end + timedelta(days=1)
+    cur.execute("""
+        UPDATE period_tracker
+        SET current_period_start = %s, last_compiled_at = NOW()
+        WHERE id = 1
+    """, (new_start,))
+    return len(rows), period_end
+
+
+def _summary_query(cur, start_str, end_str):
+    """Aggregate summaries between two dates; apply disciplinary filter."""
+    cur.execute("""
+        SELECT m.id, m.fullname, m.monk_type, m.position, m.vassa_years,
+               m.residence, m.education_level, m.academic_year,
+               SUM(s.total_absences)    AS tot_abs,
+               SUM(s.total_permissions) AS tot_perm,
+               MIN(s.period_start)      AS range_start,
+               MAX(s.period_end)        AS range_end
+        FROM attendance_summaries s
+        JOIN monk_tbl m ON m.id = s.monk_id
+        WHERE s.period_start >= %s AND s.period_end <= %s
+        GROUP BY m.id, m.fullname, m.monk_type, m.position,
+                 m.vassa_years, m.residence, m.education_level, m.academic_year
+        HAVING SUM(s.total_absences)    >= %s
+           AND SUM(s.total_permissions) >= %s
+        ORDER BY m.monk_type,
+                 SUM(s.total_absences)    DESC,
+                 SUM(s.total_permissions) DESC
+    """, (start_str, end_str, DISC_ABSENT_MIN, DISC_PERM_MIN))
+    return cur.fetchall()
+
+
+def _rows_to_monks(rows):
+    return [{
+        'id':                 r[0],
+        'fullname':           r[1],
+        'monk_type':          r[2],
+        'position':           r[3],
+        'vassa_years':        r[4],
+        'residence':          (r[5] or '').replace('_', ' '),
+        'education_level':    r[6] or '',
+        'academic_year':      r[7] or '',
+        'total_absences':     int(r[8] or 0),
+        'total_permissions':  int(r[9] or 0),
+        'range_start':        r[10].isoformat() if r[10] else None,
+        'range_end':          r[11].isoformat() if r[11] else None,
+    } for r in rows]
+
+
+# ---- Page routes ------------------------------------------------
+
+@main_bp.route('/report/book')
+def book_report_page():
+    return render_template('book_report.html')
+
+
+# ---- API: daily report -----------------------------------------
+
+@main_bp.route('/api/attendance/daily-report', methods=['GET'])
+def daily_report():
+    """Return today's (or given date's) attendance records — no disciplinary filter."""
+    date_str = request.args.get('date', _date.today().isoformat())
+    try:
+        conn = connect_db()
+        cur  = conn.cursor()
+        cur.execute("""
+            SELECT m.id, m.fullname, m.monk_type, m.position, m.vassa_years,
+                   m.residence, m.education_level, m.academic_year, a.status
+            FROM attendance_tbl a
+            JOIN monk_tbl m ON m.id = a.monk_id
+            WHERE a.date = %s
+            ORDER BY m.monk_type, a.status, m.fullname
+        """, (date_str,))
+        rows = cur.fetchall()
+        cur.close(); conn.close()
+        return jsonify({
+            'success': True,
+            'date': date_str,
+            'records': [{
+                'id':              r[0],
+                'fullname':        r[1],
+                'monk_type':       r[2],
+                'position':        r[3],
+                'vassa_years':     r[4],
+                'residence':       (r[5] or '').replace('_', ' '),
+                'education_level': r[6] or '',
+                'academic_year':   r[7] or '',
+                'status':          r[8],
+            } for r in rows]
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+# ---- API: compile period ----------------------------------------
+
+@main_bp.route('/api/attendance/compile-period', methods=['POST'])
+def compile_period_endpoint():
+    """Compile the current 15-day block into attendance_summaries and advance the tracker."""
+    conn = None
+    try:
+        conn = connect_db()
+        cur  = conn.cursor()
+        cur.execute("SELECT current_period_start FROM period_tracker WHERE id = 1")
+        row = cur.fetchone()
+        if not row:
+            return jsonify({'success': False, 'message': 'Period tracker not initialised'}), 400
+        period_start = row[0]
+        count, period_end = _do_compile_period(conn, cur, period_start)
+        conn.commit()
+        cur.close()
+        from datetime import timedelta
+        return jsonify({
+            'success':          True,
+            'compiled':         count,
+            'period_start':     period_start.isoformat(),
+            'period_end':       period_end.isoformat(),
+            'next_period_start': (period_end + timedelta(days=1)).isoformat(),
+        })
+    except Exception as e:
+        if conn: conn.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 500
+    finally:
+        if conn: conn.close()
+
+
+# ---- API: list compiled periods ---------------------------------
+
+@main_bp.route('/api/reports/periods', methods=['GET'])
+def list_periods():
+    """Return all compiled periods plus current active period info."""
+    try:
+        conn = connect_db()
+        cur  = conn.cursor()
+        cur.execute("""
+            SELECT DISTINCT period_start, period_end
+            FROM attendance_summaries
+            ORDER BY period_start DESC
+            LIMIT 100
+        """)
+        periods = [{'start': r[0].isoformat(), 'end': r[1].isoformat()}
+                   for r in cur.fetchall()]
+        cur.execute("SELECT current_period_start, last_compiled_at FROM period_tracker WHERE id = 1")
+        row = cur.fetchone()
+        cur.close(); conn.close()
+        return jsonify({
+            'success':              True,
+            'compiled_periods':     periods,
+            'current_period_start': row[0].isoformat() if row else None,
+            'last_compiled_at':     row[1].isoformat() if row and row[1] else None,
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+# ---- API: bi-weekly report --------------------------------------
+
+@main_bp.route('/api/reports/biweekly', methods=['GET'])
+def report_biweekly():
+    """Bi-weekly report from summaries for a specific period_start.
+    Filter: absences >= 2 AND permissions >= 3."""
+    period_start_str = request.args.get('period_start', '')
+    if not period_start_str:
+        return jsonify({'success': False, 'message': 'period_start required'}), 400
+    try:
+        from datetime import date as _dt, timedelta
+        period_start = _dt.fromisoformat(period_start_str)
+        period_end   = period_start + timedelta(days=14)
+        conn = connect_db()
+        cur  = conn.cursor()
+        rows = _summary_query(cur, period_start_str, period_end.isoformat())
+        cur.close(); conn.close()
+        return jsonify({
+            'success':      True,
+            'period_start': period_start_str,
+            'period_end':   period_end.isoformat(),
+            'monks':        _rows_to_monks(rows),
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+# ---- API: monthly report ----------------------------------------
+
+@main_bp.route('/api/reports/monthly', methods=['GET'])
+def report_monthly():
+    """Monthly report: aggregate all summaries within a calendar month.
+    Filter: absences >= 2 AND permissions >= 3."""
+    year_str  = request.args.get('year',  str(_date.today().year))
+    month_str = request.args.get('month', str(_date.today().month))
+    try:
+        import calendar
+        year, month = int(year_str), int(month_str)
+        month_start = _date(year, month, 1)
+        month_end   = _date(year, month, calendar.monthrange(year, month)[1])
+        conn = connect_db()
+        cur  = conn.cursor()
+        rows = _summary_query(cur, month_start.isoformat(), month_end.isoformat())
+        cur.close(); conn.close()
+        return jsonify({
+            'success':      True,
+            'year':         year,
+            'month':        month,
+            'period_start': month_start.isoformat(),
+            'period_end':   month_end.isoformat(),
+            'monks':        _rows_to_monks(rows),
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+# ---- API: annual report -----------------------------------------
+
+@main_bp.route('/api/reports/annual', methods=['GET'])
+def report_annual():
+    """Annual report: aggregate all summaries within a calendar year.
+    Filter: absences >= 2 AND permissions >= 3."""
+    year_str = request.args.get('year', str(_date.today().year))
+    try:
+        year       = int(year_str)
+        year_start = _date(year, 1, 1)
+        year_end   = _date(year, 12, 31)
+        conn = connect_db()
+        cur  = conn.cursor()
+        rows = _summary_query(cur, year_start.isoformat(), year_end.isoformat())
+        cur.close(); conn.close()
+        return jsonify({
+            'success':      True,
+            'year':         year,
+            'period_start': year_start.isoformat(),
+            'period_end':   year_end.isoformat(),
+            'monks':        _rows_to_monks(rows),
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+# ---- API: 3-year report -----------------------------------------
+
+@main_bp.route('/api/reports/triennial', methods=['GET'])
+def report_triennial():
+    """3-year report: aggregate all summaries across 3 consecutive years.
+    Filter: absences >= 2 AND permissions >= 3."""
+    start_year_str = request.args.get('start_year', str(_date.today().year - 2))
+    try:
+        start_year   = int(start_year_str)
+        end_year     = start_year + 2
+        period_start = _date(start_year, 1, 1)
+        period_end   = _date(end_year, 12, 31)
+        conn = connect_db()
+        cur  = conn.cursor()
+        rows = _summary_query(cur, period_start.isoformat(), period_end.isoformat())
+        cur.close(); conn.close()
+        return jsonify({
+            'success':      True,
+            'start_year':   start_year,
+            'end_year':     end_year,
+            'period_start': period_start.isoformat(),
+            'period_end':   period_end.isoformat(),
+            'monks':        _rows_to_monks(rows),
+        })
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500

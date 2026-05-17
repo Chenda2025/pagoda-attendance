@@ -175,5 +175,54 @@ def get_all_monks():
 # បើចង់ Test ការបញ្ចូលទិន្នន័យ៖
 # insert_monk('ភិក្ខុ សុខា', ៥, 'ភិក្ខុ', 'កុដិលេខ១', 'ព្រះគ្រូសូត្រស្តាំ', 'វិទ្យាល័យ', 'ឆ្នាំទី២')
 
+def create_summaries_tables():
+    """Create attendance_summaries and period_tracker tables."""
+    conn = None
+    try:
+        conn = connect_db()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS attendance_summaries (
+                id                SERIAL PRIMARY KEY,
+                monk_id           INTEGER NOT NULL REFERENCES monk_tbl(id) ON DELETE CASCADE,
+                period_start      DATE NOT NULL,
+                period_end        DATE NOT NULL,
+                total_absences    INTEGER NOT NULL DEFAULT 0,
+                total_permissions INTEGER NOT NULL DEFAULT 0,
+                created_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (monk_id, period_start)
+            );
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_summaries_monk   ON attendance_summaries(monk_id);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_summaries_period ON attendance_summaries(period_start, period_end);")
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS period_tracker (
+                id                   INTEGER PRIMARY KEY DEFAULT 1,
+                current_period_start DATE NOT NULL,
+                last_compiled_at     TIMESTAMP
+            );
+        """)
+
+        from datetime import date
+        cursor.execute("""
+            INSERT INTO period_tracker (id, current_period_start)
+            VALUES (1, %s)
+            ON CONFLICT (id) DO NOTHING;
+        """, (date.today(),))
+
+        conn.commit()
+        print("Tables 'attendance_summaries' and 'period_tracker' created / verified.")
+        cursor.close()
+    except Exception as e:
+        print(f"Database error creating summaries tables: {e}")
+        if conn:
+            conn.rollback()
+    finally:
+        if conn:
+            conn.close()
+
+
 if __name__ == "__main__":
     create_monks_table()
