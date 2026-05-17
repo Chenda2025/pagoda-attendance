@@ -537,6 +537,97 @@ window.flatReloadMonthly    = () => loadFlatSection('flat-monthly-body',   build
 window.flatReloadAnnual     = () => loadFlatSection('flat-annual-body',    buildFlatAnnual);
 window.flatReloadTriennial  = () => loadFlatSection('flat-tri-body',       buildFlatTriennial);
 
+// ================================================================
+// EXPORT / DOWNLOAD
+// ================================================================
+
+function _buildExportUrl(type, fmt, action) {
+  const ctxDate = document.getElementById('ctx-date')?.value
+               || new Date().toISOString().slice(0, 10);
+  const p = new URLSearchParams({ type, fmt, action });
+
+  if (type === 'daily') {
+    const date = document.getElementById('daily-date')?.value
+              || document.getElementById('flat-daily-date')?.value
+              || ctxDate;
+    p.set('date', date);
+  } else if (type === 'biweekly') {
+    const date = document.getElementById('bw-period')?.value
+              || document.getElementById('flat-bw-period')?.value
+              || ctxDate;
+    p.set('date', date);
+  } else if (type === 'monthly') {
+    const yr = document.getElementById('monthly-yr')?.value
+            || document.getElementById('flat-mo-yr')?.value
+            || new Date().getFullYear();
+    const mo = document.getElementById('monthly-mo')?.value
+            || document.getElementById('flat-mo-mo')?.value
+            || (new Date().getMonth() + 1);
+    p.set('year', yr); p.set('month', mo);
+  } else if (type === 'annual') {
+    const yr = document.getElementById('annual-yr')?.value
+            || document.getElementById('flat-an-yr')?.value
+            || new Date().getFullYear();
+    p.set('year', yr);
+  } else if (type === 'triennial') {
+    const yr = document.getElementById('tri-yr')?.value
+            || document.getElementById('flat-tri-yr')?.value
+            || (new Date().getFullYear() - 2);
+    p.set('start_year', yr);
+  }
+  return `/api/reports/export?${p}`;
+}
+
+async function _doExport(btn, type, fmt, action) {
+  const isTg    = action === 'telegram-both' || action === 'telegram';
+  const origTxt = btn.textContent;
+  btn.disabled  = true;
+  btn.textContent = isTg ? 'កំពុងបញ្ជូន...' : 'កំពុងបង្កើត...';
+
+  try {
+    const url = _buildExportUrl(type, fmt, action);
+    const res = await fetch(url);
+    if (isTg) {
+      const json = await res.json();
+      if (!json.success) throw new Error(json.message);
+      toast(`✓ បានបញ្ជូន ${json.total} នាក់ ទៅ Telegram!`);
+    } else {
+      if (!res.ok) { const j = await res.json(); throw new Error(j.message); }
+      const blob = await res.blob();
+      const ext  = fmt === 'pdf' ? 'pdf' : 'docx';
+      const a    = document.createElement('a');
+      a.href     = URL.createObjectURL(blob);
+      a.download = `report_${type}.${ext}`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      toast(`✓ ឯកសារ ${ext.toUpperCase()} បានដំណើរការ!`);
+    }
+  } catch (e) {
+    toast(`⚠ ${e.message}`, 4000);
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = origTxt;
+  }
+}
+
+// Called from flat section header buttons
+window.flatDownload = function (type, fmt, action = 'download') {
+  const btn = event?.target;
+  if (btn) _doExport(btn, type, fmt, action);
+};
+
+// Topbar book download: exports current spread's primary (left-page) tier
+function bookExport(fmt, action = 'download') {
+  const typeMap = { 0: 'daily', 1: 'daily', 2: 'monthly', 3: 'triennial' };
+  const type    = typeMap[currentSpread] ?? 'daily';
+  const btn     = document.getElementById(
+    action === 'download' && fmt === 'pdf' ? 'bk-dl-pdf'
+    : action !== 'download' ? 'bk-dl-tg'
+    : 'bk-dl-docx'
+  );
+  if (btn) _doExport(btn, type, fmt, action);
+}
+
 function toggleFlatMode() {
   flatMode = !flatMode;
   elFlatView.classList.toggle('visible', flatMode);
@@ -626,6 +717,17 @@ document.addEventListener('DOMContentLoaded', () => {
   elRightEdge?.addEventListener('click',() => flipTo(currentSpread + 1));
   elBtnFlatToggle?.addEventListener('click', toggleFlatMode);
   document.getElementById('btn-compile')?.addEventListener('click', compilePeriod);
+
+  // Download dropdown
+  const dlWrap = document.getElementById('bk-dl-wrap');
+  document.getElementById('btn-bk-dl')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    dlWrap?.classList.toggle('open');
+  });
+  document.addEventListener('click', () => dlWrap?.classList.remove('open'));
+  document.getElementById('bk-dl-docx')?.addEventListener('click', () => { dlWrap?.classList.remove('open'); bookExport('docx', 'download'); });
+  document.getElementById('bk-dl-pdf')?.addEventListener('click',  () => { dlWrap?.classList.remove('open'); bookExport('pdf',  'download'); });
+  document.getElementById('bk-dl-tg')?.addEventListener('click',   () => { dlWrap?.classList.remove('open'); bookExport('docx', 'telegram-both'); });
 
   // Set default context date
   const ctxDate = document.getElementById('ctx-date');

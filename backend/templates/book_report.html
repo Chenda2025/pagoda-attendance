@@ -26,6 +26,39 @@
     <span class="topbar-title">សៀវភៅរបាយការណ៌អវត្តមាន — វត្តនិរោធរង្សី</span>
     <div class="topbar-actions">
       <button class="btn-flat-toggle" id="btn-flat-toggle">☰ ទិដ្ឋភាពតារាង</button>
+      <div class="bk-dl-wrap" id="bk-dl-wrap">
+        <button class="btn-flat-toggle" id="btn-bk-dl">
+          ⬇ ទាញយក
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2.5" style="vertical-align:middle;margin-left:3px">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </button>
+        <div class="bk-dl-menu" id="bk-dl-menu">
+          <button class="bk-dl-item" id="bk-dl-docx">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6ba3d6" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+            </svg>
+            Word (.docx)
+          </button>
+          <button class="bk-dl-item" id="bk-dl-pdf">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#e57373" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/>
+            </svg>
+            PDF
+          </button>
+          <button class="bk-dl-item tg-item" id="bk-dl-tg">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#64b5f6" stroke-width="2">
+              <line x1="22" y1="2" x2="11" y2="13"/>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+            </svg>
+            Telegram (Word + PDF)
+          </button>
+        </div>
+      </div>
       <button class="btn-compile" id="btn-compile">⚙ ប្រមូលកំណត់ ១៥ ថ្ងៃ</button>
       <a href="/logout" class="btn-back-link">ចាកចេញ</a>
     </div>
@@ -136,6 +169,11 @@
       <div class="flat-section-header">
         <span style="font-size:18px">📄</span>
         <span class="flat-section-title">TIER 1 — របាយការណ៍ប្រចាំថ្ងៃ</span>
+        <div class="flat-dl-btns">
+          <button class="flat-dl-btn" onclick="flatDownload('daily','docx')">⬇ Word</button>
+          <button class="flat-dl-btn" onclick="flatDownload('daily','pdf')">⬇ PDF</button>
+          <button class="flat-dl-btn tg" onclick="flatDownload('daily','docx','telegram-both')">✈</button>
+        </div>
       </div>
       <div class="flat-section-body">
         <div class="flat-ctrl">
@@ -152,6 +190,11 @@
       <div class="flat-section-header">
         <span style="font-size:18px">📋</span>
         <span class="flat-section-title">TIER 2 — របាយការណ៍ ១៥ ថ្ងៃ</span>
+        <div class="flat-dl-btns">
+          <button class="flat-dl-btn" onclick="flatDownload('biweekly','docx')">⬇ Word</button>
+          <button class="flat-dl-btn" onclick="flatDownload('biweekly','pdf')">⬇ PDF</button>
+          <button class="flat-dl-btn tg" onclick="flatDownload('biweekly','docx','telegram-both')">✈</button>
+        </div>
       </div>
       <div class="flat-section-body">
         <div class="flat-ctrl">
@@ -168,6 +211,11 @@
       <div class="flat-section-header">
         <span style="font-size:18px">📅</span>
         <span class="flat-section-title">TIER 3 — របាយការណ៍ប្រចាំខែ</span>
+        <div class="flat-dl-btns">
+          <button class="flat-dl-btn" onclick="flatDownload('monthly','docx')">⬇ Word</button>
+          <button class="flat-dl-btn" onclick="flatDownload('monthly','pdf')">⬇ PDF</button>
+          <button class="flat-dl-btn tg" onclick="flatDownload('monthly','docx','telegram-both')">✈</button>
+        </div>
       </div>
       <div class="flat-section-body">
         <div class="flat-ctrl">
@@ -193,6 +241,11 @@
       <div class="flat-section-header">
         <span style="font-size:18px">📊</span>
         <span class="flat-section-title">TIER 4 — របាយការណ៍ប្រចាំឆ្នាំ</span>
+        <div class="flat-dl-btns">
+          <button class="flat-dl-btn" onclick="flatDownload('annual','docx')">⬇ Word</button>
+          <button class="flat-dl-btn" onclick="flatDownload('annual','pdf')">⬇ PDF</button>
+          <button class="flat-dl-btn tg" onclick="flatDownload('annual','docx','telegram-both')">✈</button>
+        </div>
       </div>
       <div class="flat-section-body">
         <div class="flat-ctrl">
@@ -209,6 +262,11 @@
       <div class="flat-section-header">
         <span style="font-size:18px">📜</span>
         <span class="flat-section-title">TIER 5 — Master Ledger ប្រចាំ ៣ ឆ្នាំ</span>
+        <div class="flat-dl-btns">
+          <button class="flat-dl-btn" onclick="flatDownload('triennial','docx')">⬇ Word</button>
+          <button class="flat-dl-btn" onclick="flatDownload('triennial','pdf')">⬇ PDF</button>
+          <button class="flat-dl-btn tg" onclick="flatDownload('triennial','docx','telegram-both')">✈</button>
+        </div>
       </div>
       <div class="flat-section-body">
         <div class="flat-ctrl">

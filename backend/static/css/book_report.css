@@ -107,6 +107,69 @@ body {
 .btn-compile:hover { opacity: 0.85; }
 .btn-compile:disabled { opacity: 0.5; cursor: not-allowed; }
 
+/* ---- Download dropdown ---- */
+.bk-dl-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.bk-dl-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  background: #2a1f12;
+  border: 1px solid var(--cover-accent);
+  border-radius: 8px;
+  min-width: 180px;
+  z-index: 200;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+  overflow: hidden;
+}
+.bk-dl-wrap.open .bk-dl-menu { display: block; }
+.bk-dl-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 14px;
+  background: transparent;
+  border: none;
+  color: rgba(255,235,180,0.85);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s;
+}
+.bk-dl-item:hover { background: rgba(200,150,12,0.15); }
+.bk-dl-item + .bk-dl-item { border-top: 1px solid rgba(200,150,12,0.12); }
+.bk-dl-item.tg-item { color: rgba(130,200,255,0.85); }
+.bk-dl-item.tg-item:hover { background: rgba(80,150,220,0.12); }
+.bk-dl-item:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ---- Flat-view per-section download buttons ---- */
+.flat-dl-btns {
+  display: flex;
+  gap: 5px;
+  margin-left: auto;
+}
+.flat-dl-btn {
+  padding: 3px 9px;
+  border-radius: 4px;
+  border: 1px solid rgba(200,150,12,0.45);
+  background: transparent;
+  color: rgba(200,150,12,0.8);
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.flat-dl-btn:hover { background: rgba(200,150,12,0.18); color: var(--cover-accent); }
+.flat-dl-btn.tg { border-color: rgba(100,180,255,0.4); color: rgba(130,200,255,0.75); }
+.flat-dl-btn.tg:hover { background: rgba(80,150,220,0.12); color: rgba(160,220,255,0.9); }
+.flat-dl-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
 .btn-back-link {
   padding: 6px 12px;
   border-radius: 6px;
