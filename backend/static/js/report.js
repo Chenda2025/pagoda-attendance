@@ -504,9 +504,10 @@ function renderSummary(monks) {
 // ============ EXPORT ============
 
 async function exportReport(action, fmt = 'docx') {
+    const type    = _reportType;
     const filters = getFilters();
-    const isPdf = fmt === 'pdf';
-    const isTg  = action === 'telegram';
+    const isPdf   = fmt === 'pdf';
+    const isTg    = action === 'telegram';
 
     let btn;
     if (isTg)       btn = document.getElementById('btn-send-tg');
@@ -514,21 +515,37 @@ async function exportReport(action, fmt = 'docx') {
     else            btn = document.getElementById('btn-export-docx');
 
     const origHTML = btn.innerHTML;
-    btn.disabled   = true;
+    btn.disabled    = true;
     btn.textContent = isTg ? 'កំពុងបញ្ជូន...' : 'កំពុងបង្កើត...';
 
-    const endpoint = isPdf ? '/api/attendance/export-report-pdf' : '/api/attendance/export-report';
-    const qs = buildQueryString(filters) + `&action=${action}`;
+    const date = filters.date || todayISO();
+    const d    = new Date(date);
+    const p    = new URLSearchParams({ type, fmt, action, date });
+
+    if (type === 'biweekly') {
+        p.set('monk_type',       filters.monk_type);
+        p.set('kuti',            filters.kuti);
+        p.set('education_level', filters.education_level);
+        p.set('academic_year',   filters.academic_year);
+        p.set('name',            filters.name);
+    } else if (type === 'annual') {
+        p.set('year', d.getFullYear());
+    } else if (type === 'monthly') {
+        p.set('year',  d.getFullYear());
+        p.set('month', d.getMonth() + 1);
+    } else if (type === 'triennial') {
+        p.set('start_year', d.getFullYear() - 2);
+    }
 
     try {
-        const res = await fetch(`${endpoint}?${qs}`);
+        const res = await fetch(`/api/reports/export?${p}`);
         if (!isTg) {
             if (!res.ok) { const j = await res.json(); throw new Error(j.message); }
             const blob = await res.blob();
             const ext  = isPdf ? 'pdf' : 'docx';
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
-            a.download = `attendance_report_${filters.date}.${ext}`;
+            a.download = `report_${type}_${date}.${ext}`;
             a.click();
             URL.revokeObjectURL(a.href);
             showToast(isPdf ? 'ឯកសារ PDF បានដំណើរការ!' : 'ឯកសារ Word បានដំណើរការ!', 'success');

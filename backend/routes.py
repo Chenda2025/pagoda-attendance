@@ -1721,3 +1721,383 @@ def report_triennial():
         })
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
+
+
+# ---- Unified export: fetch + normalise data for any report type -
+
+def _fetch_export_data(report_type, args):
+    """Return (monks, type_label, subtitle, period_start_iso, period_end_iso).
+    monks list is normalised: absent_count, permission_count, absent_dates, perm_dates, status."""
+    import calendar as _cal
+
+    if report_type == 'daily':
+        date_str = args.get('date', _date.today().isoformat())
+        conn = connect_db(); cur = conn.cursor()
+        cur.execute("""
+            SELECT m.id, m.fullname, m.monk_type, m.position, m.vassa_years,
+                   m.residence, m.education_level, m.academic_year, a.status
+            FROM attendance_tbl a
+            JOIN monk_tbl m ON m.id = a.monk_id
+            WHERE a.date = %s
+            ORDER BY m.monk_type, a.status, m.fullname
+        """, (date_str,))
+        rows = cur.fetchall(); cur.close(); conn.close()
+        d_fmt = _date.fromisoformat(date_str).strftime('%d/%m/%Y')
+        monks = [{
+            'id': r[0], 'fullname': r[1], 'monk_type': r[2], 'position': r[3],
+            'vassa_years': r[4], 'residence': (r[5] or '').replace('_', ' '),
+            'education_level': r[6] or '', 'academic_year': r[7] or '',
+            'absent_count':     1 if r[8] == 'absent'     else 0,
+            'permission_count': 1 if r[8] == 'permission' else 0,
+            'absent_dates':     d_fmt if r[8] == 'absent'     else '',
+            'perm_dates':       d_fmt if r[8] == 'permission' else '',
+            'status': r[8],
+        } for r in rows]
+        return monks, 'ប្រចាំថ្ងៃ', d_fmt, date_str, date_str
+
+    elif report_type == 'biweekly':
+        monks, start_date, end_date = _fetch_report_rows(args)
+        subtitle = f"{start_date.strftime('%d/%m/%Y')} ដល់ {end_date.strftime('%d/%m/%Y')} (១៥ ថ្ងៃ)"
+        return monks, 'ប្រចាំ ១៥ ថ្ងៃ', subtitle, start_date.isoformat(), end_date.isoformat()
+
+    elif report_type == 'monthly':
+        date_str = args.get('date', _date.today().isoformat())
+        d = _date.fromisoformat(date_str)
+        year  = int(args.get('year',  d.year))
+        month = int(args.get('month', d.month))
+        ps = _date(year, month, 1)
+        pe = _date(year, month, _cal.monthrange(year, month)[1])
+        conn = connect_db(); cur = conn.cursor()
+        rows = _summary_query(cur, ps.isoformat(), pe.isoformat())
+        cur.close(); conn.close()
+        monks = _norm_summary_monks(_rows_to_monks(rows))
+        subtitle = f"{ps.strftime('%d/%m/%Y')} ដល់ {pe.strftime('%d/%m/%Y')}"
+        return monks, 'ប្រចាំខែ', subtitle, ps.isoformat(), pe.isoformat()
+
+    elif report_type == 'annual':
+        date_str = args.get('date', _date.today().isoformat())
+        year = int(args.get('year', _date.fromisoformat(date_str).year))
+        ps = _date(year, 1, 1); pe = _date(year, 12, 31)
+        conn = connect_db(); cur = conn.cursor()
+        rows = _summary_query(cur, ps.isoformat(), pe.isoformat())
+        cur.close(); conn.close()
+        monks = _norm_summary_monks(_rows_to_monks(rows))
+        subtitle = f"{ps.strftime('%d/%m/%Y')} ដល់ {pe.strftime('%d/%m/%Y')}"
+        return monks, 'ប្រចាំឆ្នាំ', subtitle, ps.isoformat(), pe.isoformat()
+
+    else:  # triennial
+        date_str   = args.get('date', _date.today().isoformat())
+        d          = _date.fromisoformat(date_str)
+        start_year = int(args.get('start_year', d.year - 2))
+        ps = _date(start_year, 1, 1); pe = _date(start_year + 2, 12, 31)
+        conn = connect_db(); cur = conn.cursor()
+        rows = _summary_query(cur, ps.isoformat(), pe.isoformat())
+        cur.close(); conn.close()
+        monks = _norm_summary_monks(_rows_to_monks(rows))
+        subtitle = f"{ps.strftime('%d/%m/%Y')} ដល់ {pe.strftime('%d/%m/%Y')}"
+        return monks, 'ប្រចាំ ៣ ឆ្នាំ', subtitle, ps.isoformat(), pe.isoformat()
+
+
+def _norm_summary_monks(monks):
+    """Convert _rows_to_monks shape to unified export shape."""
+    result = []
+    for m in monks:
+        rng = ''
+        if m.get('range_start') and m.get('range_end'):
+            rs  = _date.fromisoformat(m['range_start']).strftime('%d/%m/%Y')
+            re  = _date.fromisoformat(m['range_end']).strftime('%d/%m/%Y')
+            rng = f"{rs} → {re}"
+        result.append({**m,
+            'absent_count':     m['total_absences'],
+            'permission_count': m['total_permissions'],
+            'absent_dates':     '',
+            'perm_dates':       rng,
+            'status':           None,
+        })
+    return result
+
+
+# ---- Unified export: build docx ----------------------------------
+
+def _make_export_docx(monks, type_label, subtitle, report_type):
+    import io
+    from docx import Document
+    from docx.shared import Pt, Cm, RGBColor
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.oxml.ns import qn
+    from docx.oxml import OxmlElement
+
+    def shade(cell, hex_color):
+        tcPr = cell._tc.get_or_add_tcPr()
+        shd  = OxmlElement('w:shd')
+        shd.set(qn('w:val'), 'clear'); shd.set(qn('w:color'), 'auto')
+        shd.set(qn('w:fill'), hex_color); tcPr.append(shd)
+
+    if report_type == 'daily':
+        headers = ['#', 'ឈ្មោះ', 'ប្រភេទ', 'តួនាទី', 'វស្សា', 'ស្នាក់នៅ', 'ស្ថានភាព']
+        widths  = [0.5, 3.0, 1.5, 2.5, 1.0, 2.0, 2.0]
+    elif report_type == 'biweekly':
+        headers = ['#', 'ឈ្មោះ', 'តួនាទី', 'វស្សា', 'ស្នាក់នៅ', 'ការសិក្សា', '❌', '📋', 'ថ្ងៃ', 'ស្ថានភាព']
+        widths  = [0.5, 3.0, 2.5, 1.0, 2.0, 1.6, 0.7, 0.7, 2.8, 1.8]
+    else:
+        headers = ['#', 'ឈ្មោះ', 'ប្រភេទ', 'តួនាទី', 'វស្សា', '❌', '📋', 'ចន្លោះ', 'ស្ថានភាព']
+        widths  = [0.5, 3.0, 1.5, 2.5, 1.0, 0.7, 0.7, 3.5, 1.8]
+
+    def add_table(doc, section_monks):
+        tbl = doc.add_table(rows=1, cols=len(headers))
+        tbl.style = 'Table Grid'
+        for i, (h, w) in enumerate(zip(headers, widths)):
+            cell = tbl.rows[0].cells[i]; cell.width = Cm(w)
+            shade(cell, 'F7FAFC')
+            p = cell.paragraphs[0]; p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            run = p.add_run(h); run.bold = True
+            run.font.size = Pt(8.5); run.font.color.rgb = RGBColor(0x71, 0x80, 0x96)
+
+        for idx, m in enumerate(section_monks, 1):
+            ab = m['absent_count']     >= DISC_ABSENT_MIN
+            pr = m['permission_count'] >= DISC_PERM_MIN
+            bg = 'FFF5F5' if ab else ('FFFAF0' if pr else 'FFFFFF')
+            status_text = '⚠ លើសអវត្តមាន' if ab else ('⚠ លើសច្បាប់' if pr else '✓ ប្រក្រតី')
+            row = tbl.add_row()
+
+            if report_type == 'daily':
+                s = '❌ អវត្តមាន' if m.get('status') == 'absent' else '📋 ច្បាប់'
+                vals    = [str(idx), m['fullname'], m['monk_type'], m['position'],
+                           f"{m['vassa_years']} ឆ្នាំ", m['residence'], s]
+                centers = {0, 2, 4, 6}
+                abs_col = perm_col = -1
+            elif report_type == 'biweekly':
+                edu    = f"{m['education_level']} {m['academic_year']}".strip()
+                dp     = []
+                if m['absent_dates']: dp.append(f"❌ {m['absent_dates']}")
+                if m['perm_dates']:   dp.append(f"📋 {m['perm_dates']}")
+                vals    = [str(idx), m['fullname'], m['position'], f"{m['vassa_years']} ឆ្នាំ",
+                           m['residence'], edu,
+                           str(m['absent_count'])     if m['absent_count']     else '—',
+                           str(m['permission_count']) if m['permission_count'] else '—',
+                           '\n'.join(dp) if dp else '—', status_text]
+                centers = {0, 3, 6, 7}; abs_col, perm_col = 6, 7
+            else:
+                vals    = [str(idx), m['fullname'], m['monk_type'], m['position'],
+                           f"{m['vassa_years']} ឆ្នាំ",
+                           str(m['absent_count'])     if m['absent_count']     else '—',
+                           str(m['permission_count']) if m['permission_count'] else '—',
+                           m['perm_dates'] or '—', status_text]
+                centers = {0, 2, 4, 5, 6}; abs_col, perm_col = 5, 6
+
+            for j, (val, w) in enumerate(zip(vals, widths)):
+                cell = row.cells[j]; cell.width = Cm(w)
+                shade(cell, bg)
+                p = cell.paragraphs[0]
+                p.alignment = WD_ALIGN_PARAGRAPH.CENTER if j in centers else WD_ALIGN_PARAGRAPH.LEFT
+                run = p.add_run(val); run.font.size = Pt(8.5)
+                if j == 1:            run.bold = True
+                if ab and j == abs_col:  run.font.color.rgb = RGBColor(0xC5, 0x30, 0x30)
+                if pr and j == perm_col: run.font.color.rgb = RGBColor(0xC0, 0x56, 0x21)
+
+    doc = Document()
+    sec = doc.sections[0]
+    sec.left_margin = sec.right_margin = Cm(1.5)
+    sec.top_margin  = sec.bottom_margin = Cm(1.5)
+    t = doc.add_heading(f'វត្តនិរោធរង្សី — របាយការណ៍វត្តមាន ({type_label})', 0)
+    t.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    sub = doc.add_paragraph(f"ចន្លោះ: {subtitle}")
+    sub.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    sub.runs[0].font.size = Pt(10)
+    sub.runs[0].font.color.rgb = RGBColor(0x71, 0x80, 0x96)
+    doc.add_paragraph()
+
+    bhikkhus  = [m for m in monks if m['monk_type'] == 'ភិក្ខុ']
+    samaneras = [m for m in monks if m['monk_type'] == 'សាមណេរ']
+    if bhikkhus:
+        h1 = doc.add_heading('ផ្នែកទី ១ — ភិក្ខុ', 1)
+        h1.runs[0].font.color.rgb = RGBColor(0x8A, 0x61, 0x00)
+        add_table(doc, bhikkhus); doc.add_paragraph()
+    if samaneras:
+        h2 = doc.add_heading('ផ្នែកទី ២ — សាមណេរ', 1)
+        h2.runs[0].font.color.rgb = RGBColor(0x1B, 0x5E, 0x20)
+        add_table(doc, samaneras); doc.add_paragraph()
+
+    av = sum(1 for m in monks if m['absent_count']     >= DISC_ABSENT_MIN)
+    pv = sum(1 for m in monks if m['permission_count'] >= DISC_PERM_MIN)
+    sp = doc.add_paragraph(
+        f"📊 សរុប {len(monks)} នាក់  |  ❌ លើសអវត្តមាន: {av} នាក់  |  📋 លើសច្បាប់: {pv} នាក់"
+    )
+    sp.runs[0].font.size = Pt(10); sp.runs[0].bold = True
+
+    buf = io.BytesIO(); doc.save(buf); buf.seek(0)
+    return buf
+
+
+# ---- Unified export: build HTML for PDF --------------------------
+
+def _make_export_html(monks, type_label, subtitle, report_type):
+    import html as _h
+
+    if report_type == 'daily':
+        thead = ('<th>#</th><th>ឈ្មោះ</th><th>ប្រភេទ</th><th>តួនាទី</th>'
+                 '<th>វស្សា</th><th>ស្នាក់នៅ</th><th>ស្ថានភាព</th>')
+    elif report_type == 'biweekly':
+        thead = ('<th>#</th><th>ឈ្មោះ</th><th>តួនាទី</th><th>វស្សា</th><th>ស្នាក់នៅ</th>'
+                 '<th>ការសិក្សា</th><th>❌</th><th>📋</th><th>ថ្ងៃ</th><th>ស្ថានភាព</th>')
+    else:
+        thead = ('<th>#</th><th>ឈ្មោះ</th><th>ប្រភេទ</th><th>តួនាទី</th>'
+                 '<th>វស្សា</th><th>❌</th><th>📋</th><th>ចន្លោះ</th><th>ស្ថានភាព</th>')
+
+    def row_html(m, idx):
+        ab = m['absent_count']     >= DISC_ABSENT_MIN
+        pr = m['permission_count'] >= DISC_PERM_MIN
+        bg = '#fff5f5' if ab else ('#fffaf0' if pr else '#ffffff')
+        badge = ('<span class="badge-danger">⚠ លើសអវត្តមាន</span>' if ab else
+                 '<span class="badge-warning">⚠ លើសច្បាប់</span>' if pr else
+                 '<span class="badge-ok">✓ ប្រក្រតី</span>')
+        n  = f'<td class="num">{idx}</td>'
+        nm = f'<td><strong>{_h.escape(m["fullname"])}</strong></td>'
+
+        if report_type == 'daily':
+            sb = ('<span class="badge-danger">❌ អវត្តមាន</span>'
+                  if m.get('status') == 'absent' else
+                  '<span class="badge-warning">📋 ច្បាប់</span>')
+            return (f'<tr style="background:{bg}">{n}{nm}'
+                    f'<td class="num">{_h.escape(m["monk_type"])}</td>'
+                    f'<td>{_h.escape(m["position"])}</td>'
+                    f'<td class="num">{m["vassa_years"]} ឆ្នាំ</td>'
+                    f'<td>{_h.escape(m["residence"])}</td>'
+                    f'<td>{sb}</td></tr>')
+
+        elif report_type == 'biweekly':
+            ac  = 'color:#c53030;font-weight:bold' if ab else 'color:#718096'
+            pc  = 'color:#c05621;font-weight:bold' if pr else 'color:#718096'
+            edu = _h.escape(f"{m['education_level']} {m['academic_year']}".strip())
+            dp  = []
+            if m['absent_dates']: dp.append(f'<span style="color:#c53030">❌ {_h.escape(m["absent_dates"])}</span>')
+            if m['perm_dates']:   dp.append(f'<span style="color:#c05621">📋 {_h.escape(m["perm_dates"])}</span>')
+            dc  = '<br>'.join(dp) if dp else '—'
+            return (f'<tr style="background:{bg}">{n}{nm}'
+                    f'<td>{_h.escape(m["position"])}</td>'
+                    f'<td class="num">{m["vassa_years"]} ឆ្នាំ</td>'
+                    f'<td>{_h.escape(m["residence"])}</td><td>{edu}</td>'
+                    f'<td class="num" style="{ac}">{m["absent_count"] or "—"}</td>'
+                    f'<td class="num" style="{pc}">{m["permission_count"] or "—"}</td>'
+                    f'<td class="dates">{dc}</td><td>{badge}</td></tr>')
+
+        else:
+            ac  = 'color:#c53030;font-weight:bold' if ab else 'color:#718096'
+            pc  = 'color:#c05621;font-weight:bold' if pr else 'color:#718096'
+            rng = (f'<span style="font-size:8.5px">{_h.escape(m["perm_dates"])}</span>'
+                   if m['perm_dates'] else '—')
+            return (f'<tr style="background:{bg}">{n}{nm}'
+                    f'<td class="num">{_h.escape(m["monk_type"])}</td>'
+                    f'<td>{_h.escape(m["position"])}</td>'
+                    f'<td class="num">{m["vassa_years"]} ឆ្នាំ</td>'
+                    f'<td class="num" style="{ac}">{m["absent_count"] or "—"}</td>'
+                    f'<td class="num" style="{pc}">{m["permission_count"] or "—"}</td>'
+                    f'<td class="dates">{rng}</td><td>{badge}</td></tr>')
+
+    def section_html(sm, title, hc, bc):
+        if not sm: return ''
+        rows = ''.join(row_html(m, i + 1) for i, m in enumerate(sm))
+        return (f'<h2 style="color:{hc};border-bottom:2px solid {bc};'
+                f'padding:6px 0;margin:18px 0 6px;font-size:13px;">'
+                f'{_h.escape(title)} ({len(sm)} នាក់)</h2>'
+                f'<table><thead><tr>{thead}</tr></thead><tbody>{rows}</tbody></table>')
+
+    bhikkhus  = [m for m in monks if m['monk_type'] == 'ភិក្ខុ']
+    samaneras = [m for m in monks if m['monk_type'] == 'សាមណេរ']
+    av = sum(1 for m in monks if m['absent_count']     >= DISC_ABSENT_MIN)
+    pv = sum(1 for m in monks if m['permission_count'] >= DISC_PERM_MIN)
+    cl = len(monks) - av - pv
+
+    return (
+        '<!DOCTYPE html><html lang="km"><head><meta charset="UTF-8"><style>'
+        "@import url('https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&display=swap');"
+        '*{box-sizing:border-box;margin:0;padding:0}'
+        "body{font-family:'Battambang','Khmer MN','Khmer Sangam MN',sans-serif;color:#2d3748;font-size:10px;}"
+        'h1{text-align:center;font-size:15px;color:#1a202c;margin-bottom:4px;}'
+        '.sub{text-align:center;color:#718096;font-size:9.5px;margin-bottom:3px;}'
+        '.summary{display:flex;gap:12px;justify-content:center;margin:10px 0;flex-wrap:wrap;}'
+        '.summary span{padding:3px 10px;border-radius:4px;font-weight:bold;font-size:9.5px;}'
+        '.s-total{background:#edf2f7;color:#2d3748;}.s-absent{background:#fed7d7;color:#c53030;}'
+        '.s-perm{background:#feebc8;color:#c05621;}.s-clean{background:#c6f6d5;color:#276749;}'
+        'table{width:100%;border-collapse:collapse;margin-bottom:6px;}'
+        'thead tr{background:#f7fafc;}'
+        'th{padding:6px 7px;text-align:left;font-size:8.5px;font-weight:700;color:#718096;'
+        'border-bottom:2px solid #e2e8f0;white-space:nowrap;}'
+        'td{padding:6px 7px;border-bottom:1px solid #edf2f7;vertical-align:middle;font-size:9.5px;}'
+        '.num{text-align:center;}'
+        '.badge-danger{background:#fed7d7;color:#c53030;padding:2px 7px;border-radius:10px;'
+        'font-size:8px;font-weight:bold;white-space:nowrap;}'
+        '.badge-warning{background:#feebc8;color:#c05621;padding:2px 7px;border-radius:10px;'
+        'font-size:8px;font-weight:bold;white-space:nowrap;}'
+        '.badge-ok{background:#c6f6d5;color:#276749;padding:2px 7px;border-radius:10px;'
+        'font-size:8px;font-weight:bold;white-space:nowrap;}'
+        '.dates{font-size:8.5px;line-height:1.7;}'
+        '@page{size:A4;margin:12mm 10mm;}'
+        '</style></head><body>'
+        f'<h1>វត្តនិរោធរង្សី — របាយការណ៍វត្តមាន ({_h.escape(type_label)})</h1>'
+        f'<p class="sub">ចន្លោះ: {_h.escape(subtitle)}</p>'
+        '<div class="summary">'
+        f'<span class="s-total">ព្រះសង្ឃ: {len(monks)} នាក់</span>'
+        f'<span class="s-absent">❌ លើសអវត្តមាន: {av} នាក់</span>'
+        f'<span class="s-perm">📋 លើសច្បាប់: {pv} នាក់</span>'
+        f'<span class="s-clean">✓ ប្រក្រតី: {cl} នាក់</span>'
+        '</div>'
+        + section_html(bhikkhus,  'ផ្នែកទី ១ — ភិក្ខុ',   '#8a6100', '#f0c040')
+        + section_html(samaneras, 'ផ្នែកទី ២ — សាមណេរ', '#1b5e20', '#66bb6a')
+        + '</body></html>'
+    )
+
+
+# ---- Unified export route ----------------------------------------
+
+@main_bp.route('/api/reports/export', methods=['GET'])
+def unified_export():
+    """Export any report type (daily/biweekly/monthly/annual/triennial) as docx or pdf."""
+    try:
+        import io, requests as req
+
+        report_type = request.args.get('type',   'daily')
+        fmt         = request.args.get('fmt',    'docx')
+        action      = request.args.get('action', 'download')
+
+        TELEGRAM_TOKEN   = '8950898077:AAHNR0tTgtJWy17wMXooKwg4nfQLGdfe5aw'
+        TELEGRAM_CHAT_ID = -1003960014484
+
+        monks, type_label, subtitle, period_start, period_end = _fetch_export_data(report_type, request.args)
+
+        av = sum(1 for m in monks if m['absent_count']     >= DISC_ABSENT_MIN)
+        pv = sum(1 for m in monks if m['permission_count'] >= DISC_PERM_MIN)
+
+        if fmt == 'pdf':
+            from weasyprint import HTML
+            buf      = io.BytesIO(
+                HTML(string=_make_export_html(monks, type_label, subtitle, report_type)).write_pdf()
+            )
+            fname    = f"report_{report_type}_{period_start}.pdf"
+            mimetype = 'application/pdf'
+        else:
+            buf      = _make_export_docx(monks, type_label, subtitle, report_type)
+            fname    = f"report_{report_type}_{period_start}.docx"
+            mimetype = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+
+        if action == 'telegram':
+            caption = (
+                f"📋 របាយការណ៍វត្តមាន ({type_label}) — {subtitle}\n"
+                f"📊 សរុប {len(monks)} នាក់  |  ❌ {av}  |  📋 {pv}"
+            )
+            tg = req.post(
+                f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendDocument',
+                data={'chat_id': TELEGRAM_CHAT_ID, 'caption': caption},
+                files={'document': (fname, buf, mimetype)},
+                timeout=25
+            ).json()
+            if not tg.get('ok'):
+                return jsonify({'success': False, 'message': f"Telegram: {tg.get('description')}"}), 500
+            return jsonify({'success': True, 'total': len(monks)})
+
+        return send_file(buf, mimetype=mimetype, as_attachment=True, download_name=fname)
+
+    except ImportError as e:
+        return jsonify({'success': False, 'message': f'Missing dependency: {e}'}), 500
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
