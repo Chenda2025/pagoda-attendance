@@ -1110,6 +1110,42 @@ def attendance_history(monk_id):
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
+def _tg_send_message(token, chat_id, text, req_lib, timeout=10):
+    """Send a text message to Telegram, splitting into chunks if > 4000 chars."""
+    MAX = 4000
+    if len(text) <= MAX:
+        return req_lib.post(
+            f'https://api.telegram.org/bot{token}/sendMessage',
+            json={'chat_id': chat_id, 'text': text},
+            timeout=timeout,
+        ).json()
+
+    # Split on double-newline paragraph boundaries to keep records intact
+    paragraphs = text.split('\n\n')
+    chunks, current = [], ''
+    for para in paragraphs:
+        candidate = (current + '\n\n' + para).lstrip('\n')
+        if len(candidate) <= MAX:
+            current = candidate
+        else:
+            if current:
+                chunks.append(current)
+            current = para[:MAX]          # hard-cut only if single para > MAX
+    if current:
+        chunks.append(current)
+
+    last = None
+    for chunk in chunks:
+        last = req_lib.post(
+            f'https://api.telegram.org/bot{token}/sendMessage',
+            json={'chat_id': chat_id, 'text': chunk},
+            timeout=timeout,
+        ).json()
+        if not last.get('ok'):
+            return last
+    return last
+
+
 @main_bp.route('/api/attendance/submit', methods=['POST'])
 def submit_attendance():
     TELEGRAM_TOKEN   = '8950898077:AAHNR0tTgtJWy17wMXooKwg4nfQLGdfe5aw'
@@ -1173,11 +1209,7 @@ def submit_attendance():
         ]
         message = '\n'.join(parts)
 
-        tg = req.post(
-            f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage',
-            json={'chat_id': TELEGRAM_CHAT_ID, 'text': message},
-            timeout=10
-        ).json()
+        tg = _tg_send_message(TELEGRAM_TOKEN, TELEGRAM_CHAT_ID, message, req)
 
         if not tg.get('ok'):
             return jsonify({'success': False, 'message': f"Telegram: {tg.get('description', 'error')}"}), 500
