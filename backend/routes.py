@@ -2,7 +2,8 @@ import time
 from collections import defaultdict
 from flask import request, render_template, Blueprint, jsonify, send_file, session, redirect, url_for, abort
 from conn import connect_db
-from create_table import create_monks_table, insert_monk, get_all_monks, update_monk, delete_monk
+from create_table import (create_monks_table, insert_monk, get_all_monks,
+                          update_monk, delete_monk, insert_pending_submission)
 from datetime import date as _date
 
 main_bp = Blueprint('main_bp', __name__)
@@ -170,14 +171,175 @@ def public_submit():
     if errors:
         return jsonify({'success': False, 'message': ' | '.join(errors)}), 422
 
+    # Guard against duplicate pending submissions for the same name
     try:
-        monk_id = insert_monk(fullname, vassa_int, monk_type, residence, position,
-                              education_level, academic_year)
-        if monk_id:
-            return jsonify({'success': True, 'monk_id': monk_id})
+        _conn = connect_db()
+        _cur  = _conn.cursor()
+        _cur.execute(
+            "SELECT id FROM pending_submissions WHERE LOWER(fullname)=LOWER(%s) AND status='pending' LIMIT 1",
+            (fullname,)
+        )
+        if _cur.fetchone():
+            _cur.close(); _conn.close()
+            return jsonify({'success': False,
+                            'message': 'ឈ្មោះនេះ​មាន​ក្នុង​បញ្ជីរ​ង់ចាំ​ហើយ។ សូម​រង់ចាំ​ការ​អនុម័ត។'}), 409
+        _cur.close(); _conn.close()
+    except Exception:
+        pass
+
+    try:
+        sub_id = insert_pending_submission(fullname, vassa_int, monk_type, residence,
+                                           position, education_level, academic_year)
+        if sub_id:
+            return jsonify({'success': True, 'pending_id': sub_id})
         return jsonify({'success': False, 'message': 'មានបញ្ហាក្នុងការរក្សាទុក។ សូមព្យាយាមមកវិញ។'}), 500
     except Exception:
         return jsonify({'success': False, 'message': 'កំហុសសេវាកម្ម។ សូមព្យាយាមមកវិញ។'}), 500
+
+
+# ============ APPROVAL QUEUE ============
+
+@main_bp.route('/approve')
+def approve_page():
+    conn = None
+    try:
+        conn = connect_db()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT
+                ps.id, ps.fullname, ps.vassa_years, ps.monk_type,
+                ps.residence, ps.position, ps.education_level, ps.academic_year,
+                ps.submitted_at,
+                (SELECT m.id FROM monk_tbl m
+                 WHERE LOWER(m.fullname) = LOWER(ps.fullname) LIMIT 1) AS matched_id
+            FROM pending_submissions ps
+            WHERE ps.status = 'pending'
+            ORDER BY ps.submitted_at DESC;
+        """)
+        rows = cursor.fetchall()
+        cursor.close()
+        submissions = []
+        for r in rows:
+            submissions.append({
+                'id':              r[0],
+                'fullname':        r[1],
+                'vassa_years':     r[2],
+                'monk_type':       r[3],
+                'residence':       r[4],
+                'position':        r[5],
+                'education_level': r[6],
+                'academic_year':   r[7],
+                'submitted_at':    r[8].strftime('%d/%m/%Y %H:%M') if r[8] else '',
+                'matched':         r[9] is not None,
+            })
+        return render_template('approve.html', submissions=submissions, error=None)
+    except Exception as e:
+        return render_template('approve.html', submissions=[], error=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+
+@main_bp.route('/api/submissions/bulk-action', methods=['POST'])
+def submissions_bulk_action():
+    data           = request.get_json(silent=True) or {}
+    action         = str(data.get('action', '')).strip()
+    ids            = data.get('ids', [])
+    rejection_note = str(data.get('rejection_note', '') or '').strip()[:500] or None
+
+    valid_actions = {'approve-selected', 'approve-all', 'reject-selected', 'reject-all'}
+    if action not in valid_actions:
+        return jsonify({'success': False, 'message': 'សកម្មភាព​មិន​ត្រឹម​ត្រូវ'}), 400
+
+    if action.endswith('-selected') and not ids:
+        return jsonify({'success': False, 'message': 'សូម​រើស​យ៉ាង​ហោច​ណាស់​មួយ​ជួរ'}), 400
+
+    conn = None
+    try:
+        conn = connect_db()
+        conn.autocommit = False
+        cursor = conn.cursor()
+
+        if action in ('reject-all', 'reject-selected'):
+            if action == 'reject-all':
+                cursor.execute("""
+                    UPDATE pending_submissions
+                    SET status = 'rejected', rejection_note = %s, reviewed_at = NOW()
+                    WHERE status = 'pending'
+                """, (rejection_note,))
+            else:
+                cursor.execute("""
+                    UPDATE pending_submissions
+                    SET status = 'rejected', rejection_note = %s, reviewed_at = NOW()
+                    WHERE status = 'pending' AND id = ANY(%s)
+                """, (rejection_note, ids))
+            count = cursor.rowcount
+            conn.commit()
+            return jsonify({'success': True, 'count': count})
+
+        # Approve path — fetch rows to process
+        if action == 'approve-all':
+            cursor.execute("""
+                SELECT id, fullname, vassa_years, monk_type, residence,
+                       position, education_level, academic_year
+                FROM pending_submissions
+                WHERE status = 'pending'
+                FOR UPDATE
+            """)
+        else:
+            cursor.execute("""
+                SELECT id, fullname, vassa_years, monk_type, residence,
+                       position, education_level, academic_year
+                FROM pending_submissions
+                WHERE status = 'pending' AND id = ANY(%s)
+                FOR UPDATE
+            """, (ids,))
+        rows = cursor.fetchall()
+
+        approved = 0
+        for row in rows:
+            sub_id, fullname, vassa_years, monk_type, residence, \
+                position, education_level, academic_year = row
+
+            # Auto-match: update existing monk record if name found, else insert
+            cursor.execute(
+                "SELECT id FROM monk_tbl WHERE LOWER(fullname) = LOWER(%s) LIMIT 1",
+                (fullname,)
+            )
+            match = cursor.fetchone()
+            if match:
+                cursor.execute("""
+                    UPDATE monk_tbl
+                    SET vassa_years=%s, monk_type=%s, residence=%s, position=%s,
+                        education_level=%s, academic_year=%s, updated_at=NOW()
+                    WHERE id=%s
+                """, (vassa_years, monk_type, residence, position,
+                      education_level, academic_year, match[0]))
+            else:
+                cursor.execute("""
+                    INSERT INTO monk_tbl
+                        (fullname, vassa_years, monk_type, residence, position, education_level, academic_year)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """, (fullname, vassa_years, monk_type, residence,
+                      position, education_level, academic_year))
+
+            cursor.execute("""
+                UPDATE pending_submissions
+                SET status = 'approved', reviewed_at = NOW()
+                WHERE id = %s
+            """, (sub_id,))
+            approved += 1
+
+        conn.commit()
+        return jsonify({'success': True, 'count': approved})
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
 
 
 @main_bp.route('/api/monks', methods=['POST'])

@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="km">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ការអនុម័ត — វត្តនិរោធរង្សី</title>
+    <link rel="icon" type="image/jpeg" href="/static/logo.jpg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&family=Kantumruy+Pro:wght@300;400;500;600;700&family=Siemreap&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/approve.css">
+</head>
+<body>
+
+<!-- ── Page Header ─────────────────────────────────────────────────── -->
+<div class="page-header">
+    <a href="/" class="btn-back">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+             fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 9 12 15 6"></polyline>
+        </svg>
+        ត្រឡប់ក្រោយ
+    </a>
+    <img src="/static/logo.jpg" alt="logo" class="header-logo">
+    <h1 class="page-title">ទំព័រ​អនុម័ត​ទិន្នន័យ — វត្ត​និរោធ​រង្សី</h1>
+    <span class="pending-badge {{ 'zero' if submissions|length == 0 else '' }}" id="pending-count-badge">
+        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24"
+             fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <polyline points="12 6 12 12 16 14"></polyline>
+        </svg>
+        <span id="pending-count-num">{{ submissions|length }}</span> ករណី​រង់ចាំ
+    </span>
+</div>
+
+<!-- ── Main Content ─────────────────────────────────────────────────── -->
+<div class="content-wrapper">
+
+    {% if error %}
+    <div class="error-banner">
+        <strong>កំហុស​ប្រព័ន្ធ:</strong> {{ error }}
+    </div>
+    {% endif %}
+
+    <!-- Action Bar -->
+    <div class="action-bar">
+        <!-- Approve Selected -->
+        <button class="btn-approve-sel" id="btn-approve-sel" onclick="triggerAction('approve-selected')" disabled>
+            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24"
+                 fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+            អនុម័ត​ដែល​បាន​រើស
+        </button>
+
+        <!-- Approve All -->
+        <button class="btn-approve-all" id="btn-approve-all" onclick="triggerAction('approve-all')"
+                {% if submissions|length == 0 %}disabled{% endif %}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24"
+                 fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                <polyline points="22 4 12 14.01 9 11.01"></polyline>
+            </svg>
+            អនុម័ត​ទាំង​អស់
+        </button>
+
+        <!-- Reject Selected -->
+        <button class="btn-reject-sel" id="btn-reject-sel" onclick="triggerAction('reject-selected')" disabled>
+            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24"
+                 fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+            បដិ​សេធ​ដែល​បាន​រើស
+        </button>
+
+        <!-- Reject All -->
+        <button class="btn-reject-all" id="btn-reject-all" onclick="triggerAction('reject-all')"
+                {% if submissions|length == 0 %}disabled{% endif %}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24"
+                 fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="15" y1="9" x2="9" y2="15"></line>
+                <line x1="9" y1="9" x2="15" y2="15"></line>
+            </svg>
+            បដិ​សេធ​ទាំង​អស់
+        </button>
+    </div>
+
+    <!-- Legend -->
+    <div class="legend">
+        <span class="legend-item">
+            <span class="legend-dot match"></span>ឈ្មោះ​ស្គាល់​ហើយ (UPDATE)
+        </span>
+        <span class="legend-item">
+            <span class="legend-dot new"></span>ព្រះ​សង្ឃ​ថ្មី (INSERT)
+        </span>
+    </div>
+
+    <!-- Table -->
+    <div class="table-card">
+        {% if submissions %}
+        <div class="table-scroll">
+            <table id="submissions-table">
+                <thead>
+                    <tr>
+                        <th>
+                            <input type="checkbox" id="master-check" title="ជ្រើស​ទាំង​អស់">
+                        </th>
+                        <th>#</th>
+                        <th>ឈ្មោះ​ព្រះ​សង្ឃ</th>
+                        <th>វស្សា</th>
+                        <th>ប្រភេទ</th>
+                        <th>ស្នាក់​នៅ</th>
+                        <th>តួ​នាទី</th>
+                        <th>ការ​សិក្សា</th>
+                        <th>ឆ្នាំ</th>
+                        <th>ថ្ងៃ​ដាក់​ស្នើ</th>
+                    </tr>
+                </thead>
+                <tbody id="submissions-tbody">
+                    {% for sub in submissions %}
+                    <tr class="{{ 'row-match' if sub.matched else 'row-new' }}"
+                        data-id="{{ sub.id }}">
+                        <td>
+                            <input type="checkbox" class="row-check" value="{{ sub.id }}">
+                        </td>
+                        <td>{{ loop.index }}</td>
+                        <td>
+                            {{ sub.fullname }}
+                            {% if sub.matched %}
+                            <span class="tag tag-match">ស្គាល់ · UPDATE</span>
+                            {% else %}
+                            <span class="tag tag-new">ថ្មី · INSERT</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ sub.vassa_years }}</td>
+                        <td>{{ sub.monk_type }}</td>
+                        <td>{{ sub.residence }}</td>
+                        <td>{{ sub.position }}</td>
+                        <td>{{ sub.education_level }}</td>
+                        <td>{{ sub.academic_year }}</td>
+                        <td style="white-space:nowrap; color:#6b7280; font-size:.8rem;">
+                            {{ sub.submitted_at }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 24 24"
+                 fill="none" stroke="#9ca3af" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                <polyline points="22 4 12 14.01 9 11.01"></polyline>
+            </svg>
+            <p>មិន​មាន​ទិន្នន័យ​រង់ចាំ​ការ​អនុម័ត</p>
+        </div>
+        {% endif %}
+    </div>
+
+</div><!-- /content-wrapper -->
+
+<!-- ── Rejection Note Modal ─────────────────────────────────────────── -->
+<div class="modal-overlay" id="reject-modal" style="display:none;" role="dialog" aria-modal="true">
+    <div class="modal">
+        <h3>បដិ​សេធ — ហេតុ​ផល</h3>
+        <p>អ្នក​អាច​បន្ថែម​មតិ​ពន្យល់ (ស្រេច​ចិត្ត):</p>
+        <textarea id="rejection-note" rows="4"
+                  placeholder="ឧ. ព័ត៌​មាន​មិន​គ្រប់​គ្រាន់ / ឈ្មោះ​មិន​ត្រឹម​ត្រូវ..."></textarea>
+        <div class="modal-actions">
+            <button class="btn-modal-cancel" id="btn-modal-cancel">បោះ​បង់</button>
+            <button class="btn-modal-confirm" id="btn-modal-confirm">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+                     fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                បញ្ជាក់​ការ​បដិ​សេធ
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ── Toast ────────────────────────────────────────────────────────── -->
+<div class="toast" id="toast" style="display:none;"></div>
+
+<!-- ── JavaScript ───────────────────────────────────────────────────── -->
+<script>
+// ── State ──────────────────────────────────────────────────────────
+let _pendingAction = null;   // action string waiting for modal confirmation
+let _pendingCount  = {{ submissions|length }};
+
+// ── Master checkbox ─────────────────────────────────────────────────
+const masterCheck = document.getElementById('master-check');
+if (masterCheck) {
+    masterCheck.addEventListener('change', () => {
+        document.querySelectorAll('.row-check').forEach(cb => {
+            cb.checked = masterCheck.checked;
+        });
+        syncActionButtons();
+    });
+}
+
+document.addEventListener('change', e => {
+    if (e.target.classList.contains('row-check')) {
+        const all      = document.querySelectorAll('.row-check');
+        const checked  = document.querySelectorAll('.row-check:checked');
+        if (masterCheck) {
+            masterCheck.indeterminate = checked.length > 0 && checked.length < all.length;
+            masterCheck.checked       = checked.length === all.length && all.length > 0;
+        }
+        syncActionButtons();
+    }
+});
+
+function syncActionButtons() {
+    const selectedCount = document.querySelectorAll('.row-check:checked').length;
+    const hasAny        = _pendingCount > 0;
+    document.getElementById('btn-approve-sel').disabled = selectedCount === 0;
+    document.getElementById('btn-reject-sel').disabled  = selectedCount === 0;
+    document.getElementById('btn-approve-all').disabled = !hasAny;
+    document.getElementById('btn-reject-all').disabled  = !hasAny;
+}
+syncActionButtons();
+
+// ── Action trigger ──────────────────────────────────────────────────
+function triggerAction(action) {
+    if (action.startsWith('reject')) {
+        _pendingAction = action;
+        document.getElementById('rejection-note').value = '';
+        document.getElementById('reject-modal').style.display = 'flex';
+        document.getElementById('rejection-note').focus();
+        return;
+    }
+    // Approve actions don't need a modal — confirm then send
+    const label = action === 'approve-all'
+        ? 'អនុម័ត​ទាំង​អស់?'
+        : `អនុម័ត ${getSelectedIds().length} ជួរ​ដែល​បាន​រើស?`;
+    if (!confirm(label)) return;
+    sendBulkAction(action, [], null);
+}
+
+// ── Modal controls ──────────────────────────────────────────────────
+document.getElementById('btn-modal-cancel').addEventListener('click', () => {
+    document.getElementById('reject-modal').style.display = 'none';
+    _pendingAction = null;
+});
+
+document.getElementById('btn-modal-confirm').addEventListener('click', () => {
+    const note   = document.getElementById('rejection-note').value.trim();
+    const action = _pendingAction;
+    document.getElementById('reject-modal').style.display = 'none';
+    _pendingAction = null;
+    const ids = action.endsWith('-selected') ? getSelectedIds() : [];
+    sendBulkAction(action, ids, note || null);
+});
+
+// Close modal on overlay click
+document.getElementById('reject-modal').addEventListener('click', e => {
+    if (e.target === e.currentTarget) {
+        e.currentTarget.style.display = 'none';
+        _pendingAction = null;
+    }
+});
+
+// ── Helpers ─────────────────────────────────────────────────────────
+function getSelectedIds() {
+    return Array.from(document.querySelectorAll('.row-check:checked'))
+                .map(cb => parseInt(cb.value, 10));
+}
+
+// ── API Call ────────────────────────────────────────────────────────
+function sendBulkAction(action, ids, rejectionNote) {
+    const allBtns = document.querySelectorAll('.action-bar button');
+    allBtns.forEach(b => { b.disabled = true; });
+
+    fetch('/api/submissions/bulk-action', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, ids, rejection_note: rejectionNote }),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            const verb = action.startsWith('approve') ? 'អនុម័ត' : 'បដិ​សេធ';
+            showToast(`${verb}​បាន​ជោគ​ជ័យ ${data.count} ករណី`, 'success');
+            removeProcessedRows(action, ids);
+        } else {
+            showToast(data.message || 'មាន​បញ្ហា​កើត​ឡើង', 'error');
+            allBtns.forEach(b => { b.disabled = false; });
+            syncActionButtons();
+        }
+    })
+    .catch(() => {
+        showToast('មិន​អាច​ភ្ជាប់​ទៅ​ម៉ាស៊ីន​បម្រើ', 'error');
+        allBtns.forEach(b => { b.disabled = false; });
+        syncActionButtons();
+    });
+}
+
+function removeProcessedRows(action, ids) {
+    const tbody = document.getElementById('submissions-tbody');
+    if (!tbody) return;
+
+    if (action.endsWith('-all')) {
+        tbody.querySelectorAll('tr').forEach(tr => tr.remove());
+        _pendingCount = 0;
+    } else {
+        ids.forEach(id => {
+            const tr = tbody.querySelector(`tr[data-id="${id}"]`);
+            if (tr) tr.remove();
+        });
+        _pendingCount = tbody.querySelectorAll('tr').length;
+    }
+
+    // Update badge counter
+    const numEl = document.getElementById('pending-count-num');
+    const badge = document.getElementById('pending-count-badge');
+    if (numEl) numEl.textContent = _pendingCount;
+    if (badge) {
+        if (_pendingCount === 0) badge.classList.add('zero');
+        else badge.classList.remove('zero');
+    }
+
+    // Show empty state if no rows remain
+    if (_pendingCount === 0) {
+        const tableCard = document.querySelector('.table-card');
+        if (tableCard) {
+            tableCard.innerHTML = `
+                <div class="empty-state">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 24 24"
+                         fill="none" stroke="#9ca3af" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                        <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                    </svg>
+                    <p>មិន​មាន​ទិន្នន័យ​រង់ចាំ​ការ​អនុម័ត</p>
+                </div>`;
+        }
+    }
+
+    // Uncheck master and re-sync buttons
+    if (masterCheck) { masterCheck.checked = false; masterCheck.indeterminate = false; }
+    syncActionButtons();
+}
+
+// ── Toast ────────────────────────────────────────────────────────────
+let _toastTimer = null;
+function showToast(msg, type) {
+    const el = document.getElementById('toast');
+    el.textContent  = msg;
+    el.className    = `toast ${type}`;
+    el.style.display = 'block';
+    clearTimeout(_toastTimer);
+    _toastTimer = setTimeout(() => { el.style.display = 'none'; }, 3800);
+}
+</script>
+</body>
+</html>

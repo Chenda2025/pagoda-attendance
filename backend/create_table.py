@@ -224,5 +224,72 @@ def create_summaries_tables():
             conn.close()
 
 
+def create_pending_submissions_table():
+    """Create the pending_submissions staging table for guest entries."""
+    conn = None
+    try:
+        conn = connect_db()
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS pending_submissions (
+                id              SERIAL PRIMARY KEY,
+                fullname        VARCHAR(255) NOT NULL,
+                vassa_years     INTEGER NOT NULL,
+                monk_type       VARCHAR(20) NOT NULL,
+                residence       VARCHAR(100) NOT NULL,
+                position        VARCHAR(100) NOT NULL,
+                education_level VARCHAR(50) NOT NULL,
+                academic_year   VARCHAR(20) NOT NULL,
+                status          VARCHAR(20) NOT NULL DEFAULT 'pending'
+                                    CHECK (status IN ('pending', 'approved', 'rejected')),
+                rejection_note  TEXT,
+                submitted_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                reviewed_at     TIMESTAMP
+            );
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_pending_status
+            ON pending_submissions(status);
+        """)
+        conn.commit()
+        print("Table 'pending_submissions' created / verified.")
+        cursor.close()
+    except Exception as e:
+        print(f"Database error creating pending_submissions: {e}")
+        if conn:
+            conn.rollback()
+    finally:
+        if conn:
+            conn.close()
+
+
+def insert_pending_submission(fullname, vassa_years, monk_type, residence,
+                               position, education_level, academic_year):
+    """Stage a guest submission for admin review."""
+    conn = None
+    try:
+        conn = connect_db()
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO pending_submissions
+                (fullname, vassa_years, monk_type, residence, position, education_level, academic_year)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            RETURNING id;
+        """, (fullname, vassa_years, monk_type, residence, position, education_level, academic_year))
+        result = cursor.fetchone()
+        sub_id = result[0] if result else None
+        conn.commit()
+        cursor.close()
+        return sub_id
+    except Exception as e:
+        print(f"Database error inserting pending submission: {e}")
+        if conn:
+            conn.rollback()
+        return None
+    finally:
+        if conn:
+            conn.close()
+
+
 if __name__ == "__main__":
     create_monks_table()
