@@ -238,7 +238,8 @@ function triggerAction(action) {
         ? 'អនុម័ត​ទាំង​អស់?'
         : `អនុម័ត ${getSelectedIds().length} ជួរ​ដែល​បាន​រើស?`;
     if (!confirm(label)) return;
-    sendBulkAction(action, [], null);
+    const ids = action === 'approve-selected' ? getSelectedIds() : [];
+    sendBulkAction(action, ids, null);
 }
 
 // ── Modal controls ──────────────────────────────────────────────────

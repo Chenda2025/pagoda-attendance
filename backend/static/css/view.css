@@ -459,6 +459,52 @@ body {
     text-align: center;
 }
 
+.data-table th.col-check,
+.data-table td.col-check {
+    text-align: center;
+    width: 38px;
+    padding-left: 10px;
+    padding-right: 4px;
+}
+.data-table td.col-check input[type="checkbox"],
+.data-table th.col-check input[type="checkbox"] {
+    width: 15px;
+    height: 15px;
+    cursor: pointer;
+    accent-color: #667eea;
+}
+
+.selection-bar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 18px;
+    background: #eef2ff;
+    border-bottom: 1px solid #c7d2fe;
+    font-size: .875rem;
+    font-weight: 600;
+    color: #4338ca;
+}
+
+.btn-bulk-delete {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 16px;
+    background: #ef4444;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: .82rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: opacity .15s, transform .15s;
+}
+.btn-bulk-delete:hover  { opacity: .88; transform: translateY(-1px); }
+.btn-bulk-delete:active { transform: none; }
+.btn-bulk-delete:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+
 .data-table th.col-num,
 .data-table td.col-num {
     text-align: center;

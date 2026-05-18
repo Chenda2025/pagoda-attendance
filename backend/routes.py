@@ -432,6 +432,31 @@ def delete_monk_route(monk_id):
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
+@main_bp.route('/api/monks/bulk-delete', methods=['POST'])
+def bulk_delete_monks():
+    data = request.get_json(silent=True) or {}
+    ids  = [int(i) for i in data.get('ids', []) if str(i).isdigit()]
+    if not ids:
+        return jsonify({'success': False, 'message': 'No ids provided'}), 400
+
+    conn = None
+    try:
+        conn = connect_db()
+        conn.autocommit = False
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM monk_tbl WHERE id = ANY(%s)", (ids,))
+        count = cursor.rowcount
+        conn.commit()
+        return jsonify({'success': True, 'count': count})
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
+
+
 @main_bp.route('/api/monks/check-duplicate', methods=['GET'])
 def check_duplicate():
     fullname    = request.args.get('fullname', '').strip()

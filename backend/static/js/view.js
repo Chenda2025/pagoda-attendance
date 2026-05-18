@@ -5,6 +5,8 @@ let _viewFiltered = [];
 let _viewPage     = 1;
 const VIEW_PAGE_SIZE = 20;
 
+const _selectedIds = new Set();
+
 const filters = {
     name: '',
     vassa_years: '',
@@ -265,6 +267,10 @@ function renderTable() {
 
     tbody.innerHTML = pageMonks.map((m, i) => `
         <tr>
+            <td class="col-check">
+                <input type="checkbox" class="row-check" data-id="${m.id}"
+                    ${_selectedIds.has(m.id) ? 'checked' : ''}>
+            </td>
             <td class="col-num">${start + i + 1}</td>
             <td class="cell-name">${escapeHtml(m.fullname)}</td>
             <td class="col-center">${m.vassa_years}</td>
@@ -298,6 +304,8 @@ function renderTable() {
     `).join('');
 
     renderViewPagination(monks.length);
+    _syncMasterCheckbox();
+    _syncSelectionBar();
 }
 
 function renderViewPagination(total) {
@@ -473,6 +481,59 @@ async function handleEditSubmit(e) {
 }
 
 // ============ DELETE MODAL ============
+
+// ============ BULK SELECTION ============
+
+function _syncMasterCheckbox() {
+    const master   = document.getElementById('master-check-view');
+    if (!master) return;
+    const boxes    = document.querySelectorAll('.row-check');
+    const checked  = document.querySelectorAll('.row-check:checked');
+    master.indeterminate = checked.length > 0 && checked.length < boxes.length;
+    master.checked       = boxes.length > 0 && checked.length === boxes.length;
+}
+
+function _syncSelectionBar() {
+    const bar   = document.getElementById('selection-bar');
+    const label = document.getElementById('selection-label');
+    const count = _selectedIds.size;
+    if (count > 0) {
+        bar.style.display = 'flex';
+        label.textContent = `${count} ជួរ​បាន​រើស`;
+    } else {
+        bar.style.display = 'none';
+    }
+}
+
+async function executeBulkDelete() {
+    const ids = Array.from(_selectedIds);
+    if (!ids.length) return;
+
+    if (!confirm(`លុប​ចោល ${ids.length} ជួរ​ដែល​បាន​រើស?`)) return;
+
+    const btn = document.getElementById('btn-bulk-delete');
+    btn.disabled = true;
+
+    try {
+        const res  = await fetch('/api/monks/bulk-delete', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ ids }),
+        });
+        const json = await res.json();
+        if (!json.success) throw new Error(json.message);
+
+        allMonks = allMonks.filter(m => !_selectedIds.has(m.id));
+        _selectedIds.clear();
+        buildDropdownOptions();
+        applyFilters();
+        showToast(`លុប​ចោល ${json.count} ជួរ​ជោគ​ជ័យ!`, 'success');
+    } catch (err) {
+        showToast('មាន​បញ្ហា: ' + err.message, 'error');
+    } finally {
+        btn.disabled = false;
+    }
+}
 
 let pendingDeleteId = null;
 
@@ -725,15 +786,40 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('check-close-btn').addEventListener('click', closeCheckModal);
     document.getElementById('check-trigger-btn').addEventListener('click', runCheckTrigger);
 
+    // Bulk delete button
+    document.getElementById('btn-bulk-delete').addEventListener('click', executeBulkDelete);
+
+    // Master checkbox
+    document.getElementById('master-check-view').addEventListener('change', (e) => {
+        const pageIds = Array.from(document.querySelectorAll('.row-check'))
+                             .map(cb => parseInt(cb.dataset.id));
+        if (e.target.checked) {
+            pageIds.forEach(id => _selectedIds.add(id));
+        } else {
+            pageIds.forEach(id => _selectedIds.delete(id));
+        }
+        document.querySelectorAll('.row-check').forEach(cb => {
+            cb.checked = e.target.checked;
+        });
+        _syncSelectionBar();
+    });
+
     // Table row action buttons — event delegation
     document.getElementById('table-body').addEventListener('click', (e) => {
-        const editBtn = e.target.closest('.btn-edit-row');
+        const editBtn   = e.target.closest('.btn-edit-row');
         const deleteBtn = e.target.closest('.btn-delete-row');
+        const checkBox  = e.target.closest('.row-check');
 
         if (editBtn) {
             openEditModal(parseInt(editBtn.dataset.id));
         } else if (deleteBtn) {
             openDeleteModal(parseInt(deleteBtn.dataset.id), deleteBtn.dataset.name);
+        } else if (checkBox) {
+            const id = parseInt(checkBox.dataset.id);
+            if (checkBox.checked) _selectedIds.add(id);
+            else                  _selectedIds.delete(id);
+            _syncMasterCheckbox();
+            _syncSelectionBar();
         }
     });
 });
