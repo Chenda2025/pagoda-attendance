@@ -1,9 +1,44 @@
+import time
+from collections import defaultdict
 from flask import request, render_template, Blueprint, jsonify, send_file, session, redirect, url_for, abort
 from conn import connect_db
 from create_table import create_monks_table, insert_monk, get_all_monks, update_monk, delete_monk
 from datetime import date as _date
 
 main_bp = Blueprint('main_bp', __name__)
+
+# ============ PUBLIC SUBMISSION — ALLOWED VALUES ============
+
+_VALID_MONK_TYPES       = {'សាមណេរ', 'ភិក្ខុ'}
+_VALID_RESIDENCES       = {
+    'កុដិលេខ១', 'កុដិលេខ២_ជាន់ក្រោម', 'កុដិលេខ២_ជាន់លើ', 'កុដិលេខ៤',
+    'កុដិធំ_ជាន់ទី១', 'កុដិធំ_ជាន់ទី២', 'កុដិធំ_ជាន់ទី៣',
+    'កុដិហោត្រៃ', 'សាលាបាលីចាស់', 'សាលាពុទ្ធិក',
+}
+_VALID_POSITIONS        = {
+    'ព្រះសង្ឃធម្មតា', 'មេក្រុម', 'អនុមេក្រុម',
+    'ព្រះគ្រូសូត្រស្តាំ', 'ព្រះគ្រូសូត្រឆ្វេង', 'ព្រះគ្រូវិន័យធរ',
+    'ព្រះគ្រូលេខា', 'ព្រះគ្រូប្រធានការក',
+    'ព្រះគ្រូអនុប្រធានការកទី១', 'ព្រះគ្រូអនុប្រធានការកទី២',
+    'មេកុដិ', 'អនុកុដិ',
+}
+_VALID_EDUCATION_LEVELS = {'បឋមសិក្សា', 'អនុវិទ្យាល័យ', 'វិទ្យាល័យ', 'មហាវិទ្យាល័យ'}
+_VALID_ACADEMIC_YEARS   = {'ឆ្នាំទី១', 'ឆ្នាំទី២', 'ឆ្នាំទី៣', 'ឆ្នាំទី៤'}
+
+# ============ RATE LIMITER (in-memory, per IP, 10 req/min) ============
+
+_rate_store: dict = defaultdict(list)
+_RATE_MAX    = 10
+_RATE_WINDOW = 60  # seconds
+
+def _rate_limit_ok(ip: str) -> bool:
+    now  = time.monotonic()
+    hits = _rate_store[ip]
+    _rate_store[ip] = [t for t in hits if now - t < _RATE_WINDOW]
+    if len(_rate_store[ip]) >= _RATE_MAX:
+        return False
+    _rate_store[ip].append(now)
+    return True
 
 # ============ AUTH ============
 
@@ -28,7 +63,9 @@ def _allowed(role, path):
 @main_bp.before_request
 def check_auth():
     path = request.path
-    if path.startswith('/static') or path in ('/login', '/logout'):
+    if (path.startswith('/static')
+            or path in ('/login', '/logout', '/submit')
+            or path in ('/public/submit', '/api/monks/check-duplicate')):
         return
 
     role = session.get('role')
@@ -80,6 +117,67 @@ def logout():
 @main_bp.route('/')
 def index():
     return render_template('index.html')
+
+
+# ============ PUBLIC SUBMISSION ROUTES ============
+
+@main_bp.route('/submit', methods=['GET'])
+def public_submit_page():
+    success = request.args.get('success') == '1'
+    return render_template('submit.html', success=success, error=None, form_data={})
+
+
+@main_bp.route('/public/submit', methods=['POST'])
+def public_submit():
+    ip = request.headers.get('X-Forwarded-For', request.remote_addr or '').split(',')[0].strip()
+
+    if not _rate_limit_ok(ip):
+        return jsonify({'success': False, 'message': 'ការដាក់ស្នើច្រើនពេក។ សូមព្យាយាមមកវិញក្រោយ ១ នាទី។'}), 429
+
+    data = request.get_json(silent=True) or {}
+
+    fullname        = str(data.get('fullname',        '') or '').strip()
+    vassa_years     = str(data.get('total-monk',      '') or '').strip()
+    monk_type       = str(data.get('type',            '') or '').strip()
+    residence       = str(data.get('home',            '') or '').strip()
+    position        = str(data.get('position',        '') or '').strip()
+    education_level = str(data.get('education_level', '') or '').strip()
+    academic_year   = str(data.get('academic_level',  '') or '').strip()
+
+    errors = []
+    if not fullname or len(fullname) > 200:
+        errors.append('នាមត្រកូល និង នាម មិនត្រឹមត្រូវ')
+
+    vassa_int = None
+    try:
+        vassa_int = int(vassa_years)
+        if vassa_int < 1 or vassa_int > 100:
+            raise ValueError
+    except (ValueError, TypeError):
+        errors.append('ចំនួនវស្សា ត្រូវតែជាលេខចន្លោះ ១ ដល់ ១០០')
+
+    if monk_type not in _VALID_MONK_TYPES:
+        errors.append('ប្រភេទព្រះសង្ឃ មិនត្រឹមត្រូវ')
+    if residence not in _VALID_RESIDENCES:
+        errors.append('ស្នាក់នៅកុដិ មិនត្រឹមត្រូវ')
+    if position not in _VALID_POSITIONS:
+        errors.append('តួនាទី មិនត្រឹមត្រូវ')
+    if education_level not in _VALID_EDUCATION_LEVELS:
+        errors.append('កម្រិតសិក្សា មិនត្រឹមត្រូវ')
+    if academic_year not in _VALID_ACADEMIC_YEARS:
+        errors.append('ឆ្នាំសិក្សា មិនត្រឹមត្រូវ')
+
+    if errors:
+        return jsonify({'success': False, 'message': ' | '.join(errors)}), 422
+
+    try:
+        monk_id = insert_monk(fullname, vassa_int, monk_type, residence, position,
+                              education_level, academic_year)
+        if monk_id:
+            return jsonify({'success': True, 'monk_id': monk_id})
+        return jsonify({'success': False, 'message': 'មានបញ្ហាក្នុងការរក្សាទុក។ សូមព្យាយាមមកវិញ។'}), 500
+    except Exception:
+        return jsonify({'success': False, 'message': 'កំហុសសេវាកម្ម។ សូមព្យាយាមមកវិញ។'}), 500
 
 
 @main_bp.route('/api/monks', methods=['POST'])

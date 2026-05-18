@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="km">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>បញ្ជូលព័ត៌មានព្រះសង្ឃ — វត្តនិរោធរង្សី</title>
+    <link rel="icon" type="image/jpeg" href="/static/logo.jpg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&family=Kantumruy+Pro:wght@300;400;500;600;700&family=Siemreap&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        .public-page-header {
+            text-align: center;
+            padding: 28px 16px 8px;
+
+        }
+        .public-page-header img {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            object-fit: cover;
+            margin-bottom: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,.18);
+        }
+        .public-page-header h1 {
+            font-size: 1.35rem;
+            font-weight: 700;
+            color: white;
+            margin: 0 0 4px;
+        }
+        .public-page-header p {
+            color: white;
+            font-size: .88rem;
+            margin: 0 0 20px;
+        }
+        #success-message {
+            display: none;
+            align-items: center;
+            gap: 10px;
+            background: #ecfdf5;
+            color: #065f46;
+            border: 1px solid #6ee7b7;
+            border-radius: 10px;
+            padding: 14px 20px;
+            margin: 0 auto 20px;
+            max-width: 900px;
+            font-size: .95rem;
+            font-weight: 600;
+        }
+        .color-text {
+            color: white;
+            
+        }
+    </style>
+</head>
+
+<body>
+    <div class="public-page-header">
+        <img src="/static/logo.jpg" alt="វត្តនិរោធរង្សី">
+        <h1 class="color-text">បញ្ជូលព័ត៌មានព្រះសង្ឃ — វត្តនិរោធរង្សី</h1>
+        <p>សូមបំពេញព័ត៌មានឱ្យបានត្រឹមត្រូវ មុនពេលរក្សាទុក</p>
+    </div>
+
+    <div class="container">
+        <div id="forms-container">
+            <!-- Form 1 -->
+            <div class="form-card" id="form-card-1">
+                <div class="form-header">
+                    <span class="form-number">លេខរៀង #1</span>
+                    <button type="button" class="btn-remove" onclick="removeForm(1)" title="លុបទម្រង់">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+                <form class="monk-form" data-form-index="1">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="fullname-1">នាមត្រកូល និង នាម <span class="required">*</span></label>
+                            <input type="text" id="fullname-1" name="fullname" placeholder="បញ្ចូលនាមព្រះសង្ឃ" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="total-monk-1">ចំនួនវស្សា <span class="required">*</span></label>
+                            <input type="number" id="total-monk-1" name="total-monk" min="1" max="100"
+                                placeholder="បញ្ចូលចំនួន" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="type-1">សាមណេរ / ភិក្ខុ <span class="required">*</span></label>
+                            <select name="type" id="type-1">
+                                <option value="">-- ជ្រើសរើសបួសជា --</option>
+                                <option value="សាមណេរ">សាមណេរ</option>
+                                <option value="ភិក្ខុ">ភិក្ខុ</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="home-1">ស្នាក់នៅកុដិ <span class="required">*</span></label>
+                            <select name="home" id="home-1">
+                                <option value="">-- ជ្រើសរើសកុដិ --</option>
+                                <option value="កុដិលេខ១">កុដិលេខ១</option>
+                                <option value="កុដិលេខ២_ជាន់ក្រោម">កុដិលេខ២​ ជាន់ក្រោម</option>
+                                <option value="កុដិលេខ២_ជាន់លើ">កុដិលេខ២​ ជាន់លើ</option>
+                                <option value="កុដិលេខ៤">កុដិលេខ៤</option>
+                                <option value="កុដិធំ_ជាន់ទី១">កុដិធំ ជាន់ទី១</option>
+                                <option value="កុដិធំ_ជាន់ទី២">កុដិធំ ជាន់ទី២</option>
+                                <option value="កុដិធំ_ជាន់ទី៣">កុដិធំ ជាន់ទី៣</option>
+                                <option value="កុដិហោត្រៃ">កុដិហោត្រៃ</option>
+                                <option value="សាលាបាលីចាស់">កុដិសលាបាលីចាស់</option>
+                                <option value="សាលាពុទ្ធិក">សាលាពុទ្ធិក</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="position-1">តួនាទីក្នុងវត្ត <span class="required">*</span></label>
+                            <select name="position" id="position-1">
+                                <option value="">-- ជ្រើសរើសតួនាទី --</option>
+                                <option value="ព្រះសង្ឃធម្មតា">ព្រះសង្ឃធម្មតា</option>
+                                <option value="មេក្រុម">មេក្រុម</option>
+                                <option value="អនុមេក្រុម">អនុមេក្រុម</option>
+                                <option value="ព្រះគ្រូសូត្រស្តាំ">ព្រះគ្រូសូត្រស្តាំ</option>
+                                <option value="ព្រះគ្រូសូត្រឆ្វេង">ព្រះគ្រូសូត្រឆ្វេង</option>
+                                <option value="ព្រះគ្រូវិន័យធរ">ព្រះគ្រូវិន័យធរ</option>
+                                <option value="ព្រះគ្រូលេខា">ព្រះគ្រូលេខា</option>
+                                <option value="ព្រះគ្រូប្រធានការក">ព្រះគ្រូប្រធានការក</option>
+                                <option value="ព្រះគ្រូអនុប្រធានការកទី១">ព្រះគ្រូអនុប្រធានការកទី១</option>
+                                <option value="ព្រះគ្រូអនុប្រធានការកទី២">ព្រះគ្រូអនុប្រធានការកទី២</option>
+                                <option value="មេកុដិ">មេកុដិ</option>
+                                <option value="អនុកុដិ">អនុកុដិ</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="education_level-1">កម្រិតសិក្សា <span class="required">*</span></label>
+                            <select id="education_level-1" name="education_level">
+                                <option value="">-- ជ្រើសរើសកម្រិតសិក្សា --</option>
+                                <option value="បឋមសិក្សា">បឋមសិក្សា</option>
+                                <option value="អនុវិទ្យាល័យ">អនុវិទ្យាល័យ</option>
+                                <option value="វិទ្យាល័យ">វិទ្យាល័យ</option>
+                                <option value="មហាវិទ្យាល័យ">មហាវិទ្យាល័យ</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="academic_level-1">សិក្សាថ្នាក់ <span class="required">*</span></label>
+                            <select name="academic_level" id="academic_level-1">
+                                <option value="">-- ជ្រើសរើសឆ្នាំសិក្សា --</option>
+                                <option value="ឆ្នាំទី១">ឆ្នាំទី ១</option>
+                                <option value="ឆ្នាំទី២">ឆ្នាំទី ២</option>
+                                <option value="ឆ្នាំទី៣">ឆ្នាំទី ៣</option>
+                                <option value="ឆ្នាំទី៤">ឆ្នាំទី ៤</option>
+                            </select>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Form 2 -->
+            <div class="form-card" id="form-card-2">
+                <div class="form-header">
+                    <span class="form-number">លេខរៀង #2</span>
+                    <button type="button" class="btn-remove" onclick="removeForm(2)" title="លុបទម្រង់">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+                <form class="monk-form" data-form-index="2">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="fullname-2">នាមត្រកូល និង នាម <span class="required">*</span></label>
+                            <input type="text" id="fullname-2" name="fullname" placeholder="បញ្ចូលនាមព្រះសង្ឃ" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="total-monk-2">ចំនួនវស្សា <span class="required">*</span></label>
+                            <input type="number" id="total-monk-2" name="total-monk" min="1" max="100"
+                                placeholder="បញ្ចូលចំនួន" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="type-2">សាមណេរ / ភិក្ខុ <span class="required">*</span></label>
+                            <select name="type" id="type-2">
+                                <option value="">-- ជ្រើសរើសបួសជា --</option>
+                                <option value="សាមណេរ">សាមណេរ</option>
+                                <option value="ភិក្ខុ">ភិក្ខុ</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="home-2">ស្នាក់នៅកុដិ <span class="required">*</span></label>
+                            <select name="home" id="home-2">
+                                <option value="">-- ជ្រើសរើសកុដិ --</option>
+                                <option value="កុដិលេខ១">កុដិលេខ១</option>
+                                <option value="កុដិលេខ២_ជាន់ក្រោម">កុដិលេខ២​ ជាន់ក្រោម</option>
+                                <option value="កុដិលេខ២_ជាន់លើ">កុដិលេខ២​ ជាន់លើ</option>
+                                <option value="កុដិលេខ៤">កុដិលេខ៤</option>
+                                <option value="កុដិធំ_ជាន់ទី១">កុដិធំ ជាន់ទី១</option>
+                                <option value="កុដិធំ_ជាន់ទី២">កុដិធំ ជាន់ទី២</option>
+                                <option value="កុដិធំ_ជាន់ទី៣">កុដិធំ ជាន់ទី៣</option>
+                                <option value="កុដិហោត្រៃ">កុដិហោត្រៃ</option>
+                                <option value="សាលាបាលីចាស់">កុដិសលាបាលីចាស់</option>
+                                <option value="សាលាពុទ្ធិក">សាលាពុទ្ធិក</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="position-2">តួនាទីក្នុងវត្ត <span class="required">*</span></label>
+                            <select name="position" id="position-2">
+                                <option value="">-- ជ្រើសរើសតួនាទី --</option>
+                                <option value="ព្រះសង្ឃធម្មតា">ព្រះសង្ឃធម្មតា</option>
+                                <option value="មេក្រុម">មេក្រុម</option>
+                                <option value="អនុមេក្រុម">អនុមេក្រុម</option>
+                                <option value="ព្រះគ្រូសូត្រស្តាំ">ព្រះគ្រូសូត្រស្តាំ</option>
+                                <option value="ព្រះគ្រូសូត្រឆ្វេង">ព្រះគ្រូសូត្រឆ្វេង</option>
+                                <option value="ព្រះគ្រូវិន័យធរ">ព្រះគ្រូវិន័យធរ</option>
+                                <option value="ព្រះគ្រូលេខា">ព្រះគ្រូលេខា</option>
+                                <option value="ព្រះគ្រូប្រធានការក">ព្រះគ្រូប្រធានការក</option>
+                                <option value="ព្រះគ្រូអនុប្រធានការកទី១">ព្រះគ្រូអនុប្រធានការកទី១</option>
+                                <option value="ព្រះគ្រូអនុប្រធានការកទី២">ព្រះគ្រូអនុប្រធានការកទី២</option>
+                                <option value="មេកុដិ">មេកុដិ</option>
+                                <option value="អនុកុដិ">អនុកុដិ</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="education_level-2">កម្រិតសិក្សា <span class="required">*</span></label>
+                            <select id="education_level-2" name="education_level">
+                                <option value="">-- ជ្រើសរើសកម្រិតសិក្សា --</option>
+                                <option value="បឋមសិក្សា">បឋមសិក្សា</option>
+                                <option value="អនុវិទ្យាល័យ">អនុវិទ្យាល័យ</option>
+                                <option value="វិទ្យាល័យ">វិទ្យាល័យ</option>
+                                <option value="មហាវិទ្យាល័យ">មហាវិទ្យាល័យ</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="academic_level-2">សិក្សាថ្នាក់ <span class="required">*</span></label>
+                            <select name="academic_level" id="academic_level-2">
+                                <option value="">-- ជ្រើសរើសឆ្នាំសិក្សា --</option>
+                                <option value="ឆ្នាំទី១">ឆ្នាំទី ១</option>
+                                <option value="ឆ្នាំទី២">ឆ្នាំទី ២</option>
+                                <option value="ឆ្នាំទី៣">ឆ្នាំទី ៣</option>
+                                <option value="ឆ្នាំទី៤">ឆ្នាំទី ៤</option>
+                            </select>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Action buttons -->
+    <div class="action-buttons">
+        <button type="button" class="btn-add" onclick="addNewForm()">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            បន្ថែមទម្រង់ថ្មី
+        </button>
+        <button type="button" class="btn-submit" onclick="submitAllForms()">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+            រក្សាទុកទាំងអស់
+        </button>
+        <button type="button" class="btn-clear" onclick="clearAllForms()">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"></path>
+            </svg>
+            សម្អាតទាំងអស់
+        </button>
+    </div>
+
+    <!-- Success message -->
+    <div id="success-message">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+        <span>ទិន្នន័យត្រូវបានរក្សទុកជោគជ័យ!</span>
+    </div>
+
+    <script>
+    'use strict';
+
+    // ---- Duplicate validation state ----
+    const _dupTimers = {};
+    const _dupState  = {};   // formIndex -> true if DB dup confirmed
+    const _DUP_FIELDS = ['fullname', 'total-monk', 'type', 'home', 'position'];
+
+    function _getFormDupValues(form) {
+        return {
+            fullname:    (form.querySelector('[name="fullname"]')?.value   || '').trim(),
+            vassa_years: (form.querySelector('[name="total-monk"]')?.value || '').trim(),
+            monk_type:   (form.querySelector('[name="type"]')?.value       || '').trim(),
+            residence:   (form.querySelector('[name="home"]')?.value       || '').trim(),
+            position:    (form.querySelector('[name="position"]')?.value   || '').trim(),
+        };
+    }
+
+    function _dupKeyFilled(v) {
+        return v.fullname && v.vassa_years && v.monk_type && v.residence && v.position;
+    }
+
+    function _dupKey(v) {
+        return `${v.fullname}|${v.monk_type}|${v.vassa_years}|${v.residence}|${v.position}`.toLowerCase();
+    }
+
+    function _showDupAlert(formCard, msg) {
+        const el = formCard.querySelector('.dup-alert');
+        if (!el) return;
+        el.textContent = msg;
+        el.style.display = 'block';
+        formCard.classList.add('has-duplicate');
+    }
+
+    function _clearDupAlert(formCard) {
+        const el = formCard.querySelector('.dup-alert');
+        if (!el) return;
+        el.textContent = '';
+        el.style.display = 'none';
+        formCard.classList.remove('has-duplicate');
+    }
+
+    async function _checkDbForDup(form) {
+        const formCard  = form.closest('.form-card');
+        const formIndex = form.getAttribute('data-form-index');
+        const v         = _getFormDupValues(form);
+
+        if (!_dupKeyFilled(v)) {
+            _dupState[formIndex] = false;
+            _clearDupAlert(formCard);
+            return;
+        }
+
+        const params = new URLSearchParams({
+            fullname:    v.fullname,
+            monk_type:   v.monk_type,
+            vassa_years: v.vassa_years,
+            residence:   v.residence,
+            position:    v.position,
+        });
+
+        try {
+            const res  = await fetch(`/api/monks/check-duplicate?${params}`);
+            const data = await res.json();
+            if (data.exists) {
+                _dupState[formIndex] = true;
+                _showDupAlert(formCard, `⚠️ ព្រះសង្ឃ "${data.match.fullname}" មានរួចហើយក្នុងប្រព័ន្ធ!`);
+            } else {
+                _dupState[formIndex] = false;
+                _clearDupAlert(formCard);
+            }
+        } catch (_) {
+            _dupState[formIndex] = false;
+        }
+    }
+
+    function _scheduleDupCheck(form) {
+        const formIndex = form.getAttribute('data-form-index');
+        clearTimeout(_dupTimers[formIndex]);
+        _dupTimers[formIndex] = setTimeout(() => _checkDbForDup(form), 420);
+    }
+
+    // ---- Form counter ----
+    let formCounter = 2;
+
+    function createFormCard(index) {
+        const card = document.createElement('div');
+        card.className = 'form-card';
+        card.id = `form-card-${index}`;
+        card.innerHTML = `
+            <div class="form-header">
+                <span class="form-number">លេខរៀង #${index}</span>
+                <button type="button" class="btn-remove" onclick="removeForm(${index})" title="លុបទម្រង់">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="dup-alert" style="display:none;"></div>
+            <form class="monk-form" data-form-index="${index}">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="fullname-${index}">នាមត្រកូល និង នាម <span class="required">*</span></label>
+                        <input type="text" id="fullname-${index}" name="fullname" placeholder="បញ្ចូលនាមព្រះសង្ឃ" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="total-monk-${index}">ចំនួនវស្សា <span class="required">*</span></label>
+                        <input type="number" id="total-monk-${index}" name="total-monk" min="1" max="100" placeholder="បញ្ចូលចំនួន" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="type-${index}">សាមណេរ / ភិក្ខុ <span class="required">*</span></label>
+                        <select name="type" id="type-${index}">
+                            <option value="">-- ជ្រើសរើសបួសជា --</option>
+                            <option value="សាមណេរ">សាមណេរ</option>
+                            <option value="ភិក្ខុ">ភិក្ខុ</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="home-${index}">ស្នាក់នៅកុដិ <span class="required">*</span></label>
+                        <select name="home" id="home-${index}">
+                            <option value="">-- ជ្រើសរើសកុដិ --</option>
+                            <option value="កុដិលេខ១">កុដិលេខ១</option>
+                            <option value="កុដិលេខ២_ជាន់ក្រោម">កុដិលេខ២​ ជាន់ក្រោម</option>
+                            <option value="កុដិលេខ២_ជាន់លើ">កុដិលេខ២​ ជាន់លើ</option>
+                            <option value="កុដិលេខ៤">កុដិលេខ៤</option>
+                            <option value="កុដិធំ_ជាន់ទី១">កុដិធំ ជាន់ទី១</option>
+                            <option value="កុដិធំ_ជាន់ទី២">កុដិធំ ជាន់ទី២</option>
+                            <option value="កុដិធំ_ជាន់ទី៣">កុដិធំ ជាន់ទី៣</option>
+                            <option value="កុដិហោត្រៃ">កុដិហោត្រៃ</option>
+                            <option value="សាលាបាលីចាស់">កុដិសលាបាលីចាស់</option>
+                            <option value="សាលាពុទ្ធិក">សាលាពុទ្ធិក</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="position-${index}">តួនាទីក្នុងវត្ត <span class="required">*</span></label>
+                        <select name="position" id="position-${index}">
+                            <option value="">-- ជ្រើសរើសតួនាទី --</option>
+                            <option value="ព្រះសង្ឃធម្មតា">ព្រះសង្ឃធម្មតា</option>
+                            <option value="មេក្រុម">មេក្រុម</option>
+                            <option value="អនុមេក្រុម">អនុមេក្រុម</option>
+                            <option value="ព្រះគ្រូសូត្រស្តាំ">ព្រះគ្រូសូត្រស្តាំ</option>
+                            <option value="ព្រះគ្រូសូត្រឆ្វេង">ព្រះគ្រូសូត្រឆ្វេង</option>
+                            <option value="ព្រះគ្រូវិន័យធរ">ព្រះគ្រូវិន័យធរ</option>
+                            <option value="ព្រះគ្រូលេខា">ព្រះគ្រូលេខា</option>
+                            <option value="ព្រះគ្រូប្រធានការក">ព្រះគ្រូប្រធានការក</option>
+                            <option value="ព្រះគ្រូអនុប្រធានការកទី១">ព្រះគ្រូអនុប្រធានការកទី១</option>
+                            <option value="ព្រះគ្រូអនុប្រធានការកទី២">ព្រះគ្រូអនុប្រធានការកទី២</option>
+                            <option value="មេកុដិ">មេកុដិ</option>
+                            <option value="អនុកុដិ">អនុកុដិ</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="education_level-${index}">កម្រិតសិក្សា <span class="required">*</span></label>
+                        <select id="education_level-${index}" name="education_level">
+                            <option value="">-- ជ្រើសរើសកម្រិតសិក្សា --</option>
+                            <option value="បឋមសិក្សា">បឋមសិក្សា</option>
+                            <option value="អនុវិទ្យាល័យ">អនុវិទ្យាល័យ</option>
+                            <option value="វិទ្យាល័យ">វិទ្យាល័យ</option>
+                            <option value="មហាវិទ្យាល័យ">មហាវិទ្យាល័យ</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="academic_level-${index}">សិក្សាថ្នាក់ <span class="required">*</span></label>
+                        <select name="academic_level" id="academic_level-${index}">
+                            <option value="">-- ជ្រើសរើសឆ្នាំសិក្សា --</option>
+                            <option value="ឆ្នាំទី១">ឆ្នាំទី ១</option>
+                            <option value="ឆ្នាំទី២">ឆ្នាំទី ២</option>
+                            <option value="ឆ្នាំទី៣">ឆ្នាំទី ៣</option>
+                            <option value="ឆ្នាំទី៤">ឆ្នាំទី ៤</option>
+                        </select>
+                    </div>
+                </div>
+            </form>`;
+        return card;
+    }
+
+    function addNewForm() {
+        const container = document.getElementById('forms-container');
+        formCounter++;
+        const card1 = createFormCard(formCounter);
+        container.appendChild(card1);
+        formCounter++;
+        const card2 = createFormCard(formCounter);
+        container.appendChild(card2);
+        card2.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    function removeForm(formId) {
+        const card = document.getElementById(`form-card-${formId}`);
+        if (!card) return;
+        if (document.querySelectorAll('.form-card').length <= 2) {
+            alert('មិនអាចលុបទម្រង់ចុងក្រោយបានទេ!');
+            return;
+        }
+        // Clean up dup state for this card
+        delete _dupState[formId];
+        clearTimeout(_dupTimers[formId]);
+        delete _dupTimers[formId];
+
+        card.classList.add('removing');
+        setTimeout(() => {
+            card.remove();
+            updateFormNumbers();
+        }, 300);
+    }
+
+    function updateFormNumbers() {
+        document.querySelectorAll('.form-card').forEach((card, i) => {
+            const span = card.querySelector('.form-number');
+            if (span) span.textContent = `លេខរៀង #${i + 1}`;
+            const form = card.querySelector('.monk-form');
+            if (form) form.setAttribute('data-form-index', i + 1);
+        });
+    }
+
+    async function submitAllForms() {
+        const allForms = document.querySelectorAll('.monk-form');
+        const entries  = [];
+        let hasErrors  = false;
+
+        allForms.forEach(form => {
+            const data    = {};
+            let formValid = true;
+            form.querySelectorAll('input, select').forEach(el => {
+                const val = el.value.trim();
+                if (el.hasAttribute('required') && !val) {
+                    formValid  = false;
+                    hasErrors  = true;
+                    el.style.borderColor = '#ff4757';
+                } else {
+                    el.style.borderColor = '';
+                }
+                data[el.name] = val;
+            });
+            if (formValid) entries.push(data);
+        });
+
+        if (hasErrors) {
+            alert('សូមបំពេញព័ត៌មានដែលចាំបាច់ (*) ឱ្យបានគ្រប់ចំនួន!');
+            return;
+        }
+
+        // ---- Within-batch duplicate check ----
+        const seen = new Map();
+        let batchDupFound = false;
+        allForms.forEach((form, idx) => {
+            const v = _getFormDupValues(form);
+            if (_dupKeyFilled(v)) {
+                const key = _dupKey(v);
+                if (seen.has(key)) {
+                    batchDupFound = true;
+                    _showDupAlert(form.closest('.form-card'),
+                        `⚠️ ព័ត៌មាននេះដូចគ្នានឹងទម្រង់លេខ ${seen.get(key) + 1}! សូមពិនិត្យម្ដងទៀត។`);
+                    const prevCard = allForms[seen.get(key)].closest('.form-card');
+                    if (!prevCard.classList.contains('has-duplicate'))
+                        _showDupAlert(prevCard, `⚠️ ព័ត៌មាននេះត្រូវបានបញ្ចូលម្ដងទៀតក្នុងទម្រង់ខាងក្រោម!`);
+                } else {
+                    seen.set(key, idx);
+                }
+            }
+        });
+        if (batchDupFound) return;
+
+        // ---- DB duplicate state check ----
+        if (Object.values(_dupState).some(v => v === true)) {
+            alert('ទម្រង់មួយចំនួនមានព្រះសង្ឃដូចគ្នានឹងប្រព័ន្ធ! សូមពិនិត្យទម្រង់ដែលមានការព្រមានពណ៌ក្រហម។');
+            return;
+        }
+
+        const btn          = document.querySelector('.btn-submit');
+        const originalHTML = btn.innerHTML;
+        btn.innerHTML      = '<span>កំពុងរក្សាទុក...</span>';
+        btn.disabled       = true;
+
+        try {
+            for (const data of entries) {
+                const res  = await fetch('/public/submit', {
+                    method:  'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body:    JSON.stringify(data),
+                });
+                const json = await res.json();
+                if (!json.success) {
+                    alert(`បញ្ហា: ${json.message || 'Unknown error'}`);
+                    return;
+                }
+            }
+
+            // All succeeded — reset everything
+            Object.keys(_dupState).forEach(k => { _dupState[k] = false; });
+            document.querySelectorAll('.form-card').forEach(c => _clearDupAlert(c));
+            allForms.forEach(f => {
+                f.reset();
+                f.querySelectorAll('input, select').forEach(el => { el.style.borderColor = ''; });
+            });
+
+            const msg = document.getElementById('success-message');
+            msg.style.display = 'flex';
+            setTimeout(() => { msg.style.display = 'none'; }, 3500);
+
+        } catch (err) {
+            alert('មានបញ្ហាក្នុងការតភ្ជាប់។ សូមព្យាយាមមកវិញ។');
+        } finally {
+            btn.innerHTML = originalHTML;
+            btn.disabled  = false;
+        }
+    }
+
+    function clearAllForms() {
+        if (!confirm('តើអ្នកពិតជាចង់សម្អាតទិន្នន័យទាំងអស់មែនទេ?')) return;
+        Object.keys(_dupState).forEach(k => { _dupState[k] = false; });
+        document.querySelectorAll('.form-card').forEach(c => _clearDupAlert(c));
+        document.querySelectorAll('.monk-form').forEach(f => {
+            f.reset();
+            f.querySelectorAll('input, select').forEach(el => { el.style.borderColor = ''; });
+        });
+        document.getElementById('success-message').style.display = 'none';
+    }
+
+    // Remove error highlight as user types
+    document.addEventListener('input', e => {
+        if (e.target.value.trim()) e.target.style.borderColor = '';
+    });
+
+    // Event delegation for duplicate checks on all 5 key fields
+    document.getElementById('forms-container').addEventListener('input', e => {
+        if (!_DUP_FIELDS.includes(e.target.name)) return;
+        const form = e.target.closest('.monk-form');
+        if (form) _scheduleDupCheck(form);
+    });
+    document.getElementById('forms-container').addEventListener('change', e => {
+        if (!_DUP_FIELDS.includes(e.target.name)) return;
+        const form = e.target.closest('.monk-form');
+        if (form) _scheduleDupCheck(form);
+    });
+
+    // Inject dup-alert div into the two static form cards
+    document.addEventListener('DOMContentLoaded', () => {
+        document.querySelectorAll('.form-card').forEach(card => {
+            if (!card.querySelector('.dup-alert')) {
+                const div = document.createElement('div');
+                div.className = 'dup-alert';
+                div.style.display = 'none';
+                card.querySelector('.form-header').insertAdjacentElement('afterend', div);
+            }
+        });
+    });
+    </script>
+</body>
+
+</html>
