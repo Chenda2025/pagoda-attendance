@@ -1,7 +1,7 @@
 import os
 from flask import Flask
 from routes import main_bp
-from create_table import create_monks_table, create_summaries_tables, create_pending_submissions_table
+from create_table import create_monks_table, create_summaries_tables, create_pending_submissions_table, create_seat_order_table
 from conn import connect_db
 
 app = Flask(__name__)
@@ -27,6 +27,12 @@ def _auto_setup():
         print('[startup] Pending submissions table created / verified.')
     except Exception as e:
         print(f'[startup] pending-submissions warning: {e}')
+
+    try:
+        create_seat_order_table()
+        print('[startup] Seat order table created / verified.')
+    except Exception as e:
+        print(f'[startup] seat-order warning: {e}')
 
     try:
         conn = connect_db()

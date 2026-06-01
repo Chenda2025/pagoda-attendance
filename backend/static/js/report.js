@@ -239,10 +239,15 @@ function _normalizeMonks(monks, type, json) {
             perm_dates:       m.status === 'permission' ? fmtDate(json.date) : '',
         }));
     }
+    if (type === 'biweekly') {
+        // already has absent_count, permission_count, absent_dates, perm_dates
+        return monks;
+    }
+    // monthly / annual / triennial — live range data
     return monks.map(m => ({
         ...m,
-        absent_count:     m.total_absences,
-        permission_count: m.total_permissions,
+        absent_count:     m.total_absences    ?? m.absent_count     ?? 0,
+        permission_count: m.total_permissions ?? m.permission_count ?? 0,
         absent_dates:     '',
         perm_dates:       m.range_start ? `${fmtDate(m.range_start)} → ${fmtDate(m.range_end)}` : '',
     }));

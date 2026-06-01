@@ -291,5 +291,27 @@ def insert_pending_submission(fullname, vassa_years, monk_type, residence,
             conn.close()
 
 
+def create_seat_order_table():
+    """Store admin-defined seat ordering for bhikkhu and samanera grids."""
+    conn = None
+    try:
+        conn = connect_db()
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS seat_order (
+                type       VARCHAR(20) PRIMARY KEY,
+                monk_ids   TEXT NOT NULL DEFAULT '[]',
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+        conn.commit()
+        cursor.close()
+    except Exception as e:
+        print(f'Database error creating seat_order: {e}')
+        if conn: conn.rollback()
+    finally:
+        if conn: conn.close()
+
+
 if __name__ == "__main__":
     create_monks_table()

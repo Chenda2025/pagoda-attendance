@@ -243,6 +243,42 @@ body {
 }
 .btn-clear-search:hover { background: #cbd5e0; }
 
+/* ============ TEST DATE PICKER ============ */
+
+.test-date-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+    padding: 3px 10px 3px 8px;
+    background: #fffbeb;
+    border: 1.5px dashed #f6ad55;
+    border-radius: 8px;
+    color: #b7791f;
+}
+.test-date-wrap svg { flex-shrink: 0; color: #f6ad55; }
+
+.test-date-input {
+    border: none;
+    outline: none;
+    background: transparent;
+    font-size: 13px;
+    font-family: inherit;
+    color: #744210;
+    cursor: pointer;
+}
+
+.btn-reset-date {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    color: #b7791f;
+    padding: 0 2px;
+    line-height: 1;
+}
+.btn-reset-date:hover { color: #744210; }
+
 /* ============ SEARCH HIGHLIGHT ============ */
 
 .seat-highlight {
@@ -479,6 +515,43 @@ body {
 
 /* Samanera cells — green accent */
 .samanera-header ~ .grid-area .seat-filled { border-left: 3px solid #66bb6a; }
+
+/* ============ MOVE-MODE ============ */
+
+.move-toggle-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: 12px;
+    padding: 4px 12px;
+    background: #edf2f7;
+    border: 1.5px solid #cbd5e0;
+    border-radius: 20px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #4a5568;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+    white-space: nowrap;
+}
+.move-toggle-label:has(.move-toggle-cb:checked) {
+    background: #ebf4ff;
+    border-color: #667eea;
+    color: #434190;
+}
+.move-toggle-cb { display: none; }
+
+/* Cells in move-mode: pointer cursor */
+.move-mode-active .seat-filled { cursor: pointer; }
+
+/* First selected cell */
+.seat-move-selected {
+    outline: 2.5px solid #667eea !important;
+    background: #ebf4ff !important;
+}
+.seat-move-selected .seat-name { color: #434190 !important; }
+.seat-move-selected .seat-num  { color: #667eea; }
 
 /* ============ ATTENDANCE CELL STATES ============ */
 

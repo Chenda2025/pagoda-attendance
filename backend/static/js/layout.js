@@ -20,15 +20,87 @@ const SAMANERA_ADMIN_RANK = {
 
 let allMonks = [];
 let attendanceMap = new Map(); // monk_id → 'absent' | 'permission'
+let currentBhikkhu    = [];
+let currentSamanera   = [];
+let bhikkhuOrder      = null;  // array of monk IDs from DB, or null
+let samaneraOrder     = null;
+let seatOrderUpdatedAt = null; // last known DB timestamp
+
+const moveState = {
+    bhikkhu:  { active: false, selectedPos: null },
+    samanera: { active: false, selectedPos: null },
+};
+
+function applyStoredOrder(type, defaultSorted) {
+    const stored = type === 'bhikkhu' ? bhikkhuOrder : samaneraOrder;
+    if (!stored) return defaultSorted;
+    const byId = new Map(defaultSorted.map(m => [m.id, m]));
+    const ordered = [], seen = new Set();
+    for (const id of stored) {
+        const m = byId.get(id);
+        if (m) { ordered.push(m); seen.add(id); }
+    }
+    defaultSorted.forEach(m => { if (!seen.has(m.id)) ordered.push(m); });
+    return ordered;
+}
+
+async function swapMonks(type, posA, posB) {
+    const current = type === 'bhikkhu' ? currentBhikkhu : currentSamanera;
+    const ids = current.map(m => m.id);
+    [ids[posA], ids[posB]] = [ids[posB], ids[posA]];
+    if (type === 'bhikkhu') bhikkhuOrder = ids;
+    else samaneraOrder = ids;
+
+    try {
+        const res  = await fetch('/api/seat-order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type, ids })
+        });
+        const json = await res.json();
+        if (json.success) {
+            seatOrderUpdatedAt = json.updated_at; // so our own poll won't re-render unnecessarily
+            showToast('បានរក្សាទុកប្លង់ ✓', 'success');
+        } else {
+            showToast('រក្សាទុកមិនបាន: ' + (json.message || 'error'), 'error');
+        }
+    } catch (err) {
+        showToast('រក្សាទុកមិនបាន: ' + err.message, 'error');
+    }
+
+    if (type === 'bhikkhu') generateBhikkhu();
+    else generateSamanera();
+}
+
+async function handleMoveClick(type, cell) {
+    const pos   = parseInt(cell.dataset.pos);
+    const state = moveState[type];
+    if (state.selectedPos === null) {
+        state.selectedPos = pos;
+        cell.classList.add('seat-move-selected');
+    } else if (state.selectedPos === pos) {
+        state.selectedPos = null;
+        cell.classList.remove('seat-move-selected');
+    } else {
+        await swapMonks(type, state.selectedPos, pos);
+        state.selectedPos = null;
+    }
+}
+
+function getActiveDate() {
+    const v = document.getElementById('test-date')?.value;
+    return v || new Date().toISOString().slice(0, 10);
+}
 
 // ============ DATA ============
 
 async function loadData() {
     try {
-        const today = new Date().toISOString().slice(0, 10);
-        const [monkRes, attRes] = await Promise.all([
+        const today = getActiveDate();
+        const [monkRes, attRes, orderRes] = await Promise.all([
             fetch('/api/monks'),
-            fetch(`/api/attendance?date=${today}`)
+            fetch(`/api/attendance?date=${today}`),
+            fetch('/api/seat-order')
         ]);
 
         const monkJson = await monkRes.json();
@@ -38,6 +110,13 @@ async function loadData() {
         const attJson = await attRes.json();
         if (attJson.success) {
             attJson.records.forEach(r => attendanceMap.set(r.monk_id, r.status));
+        }
+
+        const orderJson = await orderRes.json();
+        if (orderJson.success) {
+            bhikkhuOrder       = orderJson.bhikkhu;
+            samaneraOrder      = orderJson.samanera;
+            seatOrderUpdatedAt = orderJson.updated_at;
         }
 
         document.getElementById('loading-state').style.display = 'none';
@@ -59,7 +138,7 @@ function generateBhikkhu() {
     localStorage.setItem('bhikkhu-rows', rows);
     localStorage.setItem('bhikkhu-cols', cols);
 
-    const sorted = allMonks
+    const defaultSorted = allMonks
         .filter(m => m.monk_type === 'ភិក្ខុ')
         .sort((a, b) => {
             const ra = BHIKKHU_RANK[a.position] ?? 99;
@@ -68,7 +147,8 @@ function generateBhikkhu() {
             return b.vassa_years - a.vassa_years; // tiebreak: more vassa first
         });
 
-    renderGrid('bhikkhu-grid', sorted, rows, cols, 'bhikkhu');
+    currentBhikkhu = applyStoredOrder('bhikkhu', defaultSorted);
+    renderGrid('bhikkhu-grid', currentBhikkhu, rows, cols, 'bhikkhu');
 }
 
 function generateSamanera() {
@@ -77,7 +157,7 @@ function generateSamanera() {
     localStorage.setItem('samanera-rows', rows);
     localStorage.setItem('samanera-cols', cols);
 
-    const sorted = allMonks
+    const defaultSorted = allMonks
         .filter(m => m.monk_type === 'សាមណេរ')
         .sort((a, b) => {
             const ra = SAMANERA_ADMIN_RANK[a.position] ?? 99;
@@ -87,7 +167,8 @@ function generateSamanera() {
             return a.fullname.localeCompare(b.fullname);
         });
 
-    renderGrid('samanera-grid', sorted, rows, cols, 'samanera');
+    currentSamanera = applyStoredOrder('samanera', defaultSorted);
+    renderGrid('samanera-grid', currentSamanera, rows, cols, 'samanera');
 }
 
 // ============ GRID RENDERER ============
@@ -128,6 +209,8 @@ function renderGrid(containerId, monks, rows, cols, type) {
                     <td class="seat-cell seat-filled${attClass}"
                         data-monk-id="${monk.id}"
                         data-monk-name="${escapeHtml(monk.fullname)}"
+                        data-pos="${idx}"
+                        data-type="${type}"
                         title="${escapeHtml(monk.fullname)}">
                         <span class="seat-num">${idx + 1}</span>
                         <span class="seat-name">${escapeHtml(monk.fullname)}</span>
@@ -149,7 +232,7 @@ function renderGrid(containerId, monks, rows, cols, type) {
 // ============ ATTENDANCE ============
 
 async function setAttendance(monkId, status) {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = getActiveDate();
     try {
         const res = await fetch('/api/attendance', {
             method: 'POST',
@@ -166,7 +249,7 @@ async function setAttendance(monkId, status) {
 }
 
 async function clearAttendance(monkId) {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = getActiveDate();
     try {
         const res = await fetch(`/api/attendance/${monkId}?date=${today}`, { method: 'DELETE' });
         const json = await res.json();
@@ -226,6 +309,27 @@ function reapplySearch() {
     if (input) highlightSearch(input.value.trim());
 }
 
+// ============ LIVE SEAT-ORDER POLL ============
+
+async function pollSeatOrder() {
+    // Skip while admin is mid-swap (avoids clearing the selected-cell highlight)
+    if (moveState.bhikkhu.active || moveState.samanera.active) return;
+    try {
+        const res  = await fetch('/api/seat-order');
+        const json = await res.json();
+        if (!json.success) return;
+
+        // Nothing changed — skip re-render
+        if (json.updated_at === seatOrderUpdatedAt) return;
+
+        seatOrderUpdatedAt = json.updated_at;
+        bhikkhuOrder  = json.bhikkhu;
+        samaneraOrder = json.samanera;
+        generateBhikkhu();
+        generateSamanera();
+    } catch { /* ignore network errors */ }
+}
+
 function scheduleNewDayReset() {
     const now = new Date();
     const reset = new Date(now);
@@ -278,6 +382,12 @@ function initPopover() {
         const cell = e.target.closest('.seat-filled[data-monk-id]');
         if (cell) {
             e.stopPropagation();
+            // Move-mode: select/swap instead of opening popover
+            const cellType = cell.dataset.type;
+            if (moveState[cellType]?.active) {
+                await handleMoveClick(cellType, cell);
+                return;
+            }
             activeMonkId = parseInt(cell.dataset.monkId);
             const monkName = cell.dataset.monkName;
 
@@ -288,7 +398,7 @@ function initPopover() {
             popover.style.display = 'block';
 
             try {
-                const res  = await fetch(`/api/attendance/history/${activeMonkId}`);
+                const res  = await fetch(`/api/attendance/history/${activeMonkId}?date=${getActiveDate()}`);
                 const hist = await res.json();
                 if (!hist.success) return;
 
@@ -443,13 +553,37 @@ document.addEventListener('DOMContentLoaded', () => {
     restore('samanera-rows', 'samanera-rows');
     restore('samanera-cols', 'samanera-cols');
 
+    // Test date picker — admin only
+    const testDateEl = document.getElementById('test-date');
+    if (testDateEl) {
+        testDateEl.value = new Date().toISOString().slice(0, 10);
+        testDateEl.addEventListener('change', () => { attendanceMap.clear(); loadData(); });
+        document.getElementById('btn-reset-date').addEventListener('click', () => {
+            testDateEl.value = new Date().toISOString().slice(0, 10);
+            attendanceMap.clear();
+            loadData();
+        });
+    }
+
+    // Move-mode checkbox toggles (admin only — elements may not exist for user1)
+    ['bhikkhu', 'samanera'].forEach(type => {
+        document.getElementById(`move-toggle-${type}`)?.addEventListener('change', function () {
+            moveState[type].active = this.checked;
+            moveState[type].selectedPos = null;
+            document.querySelectorAll(`#${type}-grid .seat-move-selected`)
+                .forEach(el => el.classList.remove('seat-move-selected'));
+            document.getElementById(`${type}-grid`).classList.toggle('move-mode-active', this.checked);
+        });
+    });
+
     initSearch();
     initPopover();
     scheduleNewDayReset();
     loadData();
+    setInterval(pollSeatOrder, 5000); // sync seat order from DB every 5 s
 
-    document.getElementById('btn-gen-bhikkhu').addEventListener('click', generateBhikkhu);
-    document.getElementById('btn-gen-samanera').addEventListener('click', generateSamanera);
+    document.getElementById('btn-gen-bhikkhu')?.addEventListener('click', generateBhikkhu);
+    document.getElementById('btn-gen-samanera')?.addEventListener('click', generateSamanera);
     document.getElementById('btn-submit-att').addEventListener('click', submitAttendance);
     // Export dropdown
     const _layDd = document.getElementById('lay-export-dd');
@@ -462,9 +596,9 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btn-export-word').addEventListener('click', () => { _layDd.classList.remove('open'); exportWord(); });
     document.getElementById('btn-export-pdf').addEventListener('click',  () => { _layDd.classList.remove('open'); exportPdf(); });
 
-    // Regenerate on Enter key in any input
-    document.getElementById('bhikkhu-rows').addEventListener('keydown', e => { if (e.key === 'Enter') generateBhikkhu(); });
-    document.getElementById('bhikkhu-cols').addEventListener('keydown', e => { if (e.key === 'Enter') generateBhikkhu(); });
-    document.getElementById('samanera-rows').addEventListener('keydown', e => { if (e.key === 'Enter') generateSamanera(); });
-    document.getElementById('samanera-cols').addEventListener('keydown', e => { if (e.key === 'Enter') generateSamanera(); });
+    // Regenerate on Enter key — admin only (inputs are hidden for user1 but still present)
+    document.getElementById('bhikkhu-rows')?.addEventListener('keydown', e => { if (e.key === 'Enter') generateBhikkhu(); });
+    document.getElementById('bhikkhu-cols')?.addEventListener('keydown', e => { if (e.key === 'Enter') generateBhikkhu(); });
+    document.getElementById('samanera-rows')?.addEventListener('keydown', e => { if (e.key === 'Enter') generateSamanera(); });
+    document.getElementById('samanera-cols')?.addEventListener('keydown', e => { if (e.key === 'Enter') generateSamanera(); });
 });

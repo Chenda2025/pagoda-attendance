@@ -115,6 +115,20 @@
             </svg>
             <input type="text" id="search-name" placeholder="ស្វែងរកឈ្មោះ...">
             <button id="btn-clear-search" class="btn-clear-search" style="display:none" title="លុបការស្វែងរក">✕</button>
+
+            {% if role == 'admin' %}
+            <div class="test-date-wrap" title="ថ្ងៃសម្រាប់ Testing">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                </svg>
+                <input type="date" id="test-date" class="test-date-input">
+                <button id="btn-reset-date" class="btn-reset-date" title="ត្រលប់ថ្ងៃនេះ">↺</button>
+            </div>
+            {% endif %}
         </div>
 
         <!-- Loading state -->
@@ -135,7 +149,14 @@
                         </svg>
                         <h2 class="section-title">ផ្នែកទី ១ — ភិក្ខុ</h2>
                         <span class="section-badge bhikkhu-badge">តម្រៀបតាមឋានានុក្រម</span>
+                        {% if role == 'admin' %}
+                        <label class="move-toggle-label" for="move-toggle-bhikkhu">
+                            <input type="checkbox" id="move-toggle-bhikkhu" class="move-toggle-cb">
+                            ប្តូរទីតាំង
+                        </label>
+                        {% endif %}
                     </div>
+                    {% if role == 'admin' %}
                     <div class="controls-bar no-print">
                         <div class="control-group">
                             <label class="ctrl-label">ជួរដេក</label>
@@ -156,6 +177,12 @@
                             បង្កើតប្លង់
                         </button>
                     </div>
+                    {% else %}
+                    <div class="controls-bar-hidden">
+                        <input type="number" id="bhikkhu-rows" value="3" style="display:none">
+                        <input type="number" id="bhikkhu-cols" value="5" style="display:none">
+                    </div>
+                    {% endif %}
                 </div>
                 <div id="bhikkhu-grid" class="grid-area"></div>
             </div>
@@ -171,7 +198,14 @@
                         </svg>
                         <h2 class="section-title">ផ្នែកទី ២ — សាមណេរ</h2>
                         <span class="section-badge samanera-badge">តម្រៀបតាមវស្សា</span>
+                        {% if role == 'admin' %}
+                        <label class="move-toggle-label" for="move-toggle-samanera">
+                            <input type="checkbox" id="move-toggle-samanera" class="move-toggle-cb">
+                            ប្តូរទីតាំង
+                        </label>
+                        {% endif %}
                     </div>
+                    {% if role == 'admin' %}
                     <div class="controls-bar no-print">
                         <div class="control-group">
                             <label class="ctrl-label">ជួរដេក</label>
@@ -192,6 +226,12 @@
                             បង្កើតប្លង់
                         </button>
                     </div>
+                    {% else %}
+                    <div class="controls-bar-hidden">
+                        <input type="number" id="samanera-rows" value="12" style="display:none">
+                        <input type="number" id="samanera-cols" value="10" style="display:none">
+                    </div>
+                    {% endif %}
                 </div>
                 <div id="samanera-grid" class="grid-area"></div>
             </div>
