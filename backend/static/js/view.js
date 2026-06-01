@@ -361,6 +361,38 @@ function exportData(fmt) {
     window.location.href = `/api/monks/export?${params.toString()}`;
 }
 
+// ============ SEND TO TELEGRAM ============
+
+async function sendToTelegram() {
+    const btn = document.getElementById('btn-send-tg');
+    const orig = btn.innerHTML;
+    btn.disabled    = true;
+    btn.textContent = 'កំពុងបញ្ជូន...';
+    document.getElementById('export-menu').classList.remove('open');
+
+    const params = new URLSearchParams({ fmt: 'pdf', action: 'telegram' });
+    if (filters.name)            params.set('name',            filters.name);
+    if (filters.vassa_years)     params.set('vassa_years',     filters.vassa_years);
+    if (filters.monk_type)       params.set('monk_type',       filters.monk_type);
+    if (filters.residence)       params.set('residence',       filters.residence);
+    if (filters.position)        params.set('position',        filters.position);
+    if (filters.education_level) params.set('education_level', filters.education_level);
+    if (filters.academic_year)   params.set('academic_year',   filters.academic_year);
+    if (filters.sort_vassa)      params.set('sort_vassa',      filters.sort_vassa);
+
+    try {
+        const res  = await fetch(`/api/monks/export?${params}`);
+        const json = await res.json();
+        if (!json.success) throw new Error(json.message);
+        showToast(`បានបញ្ជូន ${json.total} នាក់ ទៅ Telegram ជោគជ័យ!`, 'success');
+    } catch (err) {
+        showToast('មានបញ្ហា: ' + err.message, 'error');
+    } finally {
+        btn.disabled  = false;
+        btn.innerHTML = orig;
+    }
+}
+
 // ============ RESET FILTERS ============
 
 function resetFilters() {
@@ -781,6 +813,9 @@ document.addEventListener('DOMContentLoaded', () => {
         e.stopPropagation();
         document.getElementById('export-menu').classList.toggle('open');
     });
+
+    // Telegram send
+    document.getElementById('btn-send-tg').addEventListener('click', sendToTelegram);
 
     // Check modal buttons
     document.getElementById('check-close-btn').addEventListener('click', closeCheckModal);

@@ -1302,7 +1302,8 @@ def export_monks():
     try:
         import io, html as _html
         from datetime import date
-        fmt = request.args.get('fmt', 'docx')
+        fmt    = request.args.get('fmt',    'docx')
+        action = request.args.get('action', 'download')
 
         name       = (request.args.get('name')            or '').strip()
         vassa      = (request.args.get('vassa_years')     or '').strip()
@@ -1454,50 +1455,174 @@ def export_monks():
         elif fmt == 'pdf':
             from weasyprint import HTML
 
-            def row_h(m, idx):
-                bg  = '#fff8e1' if m['monk_type'] == 'ភិក្ខុ' else '#f1f8e9'
+            bhikkhus  = [m for m in monks if m['monk_type'] == 'ភិក្ខុ']
+            samaneras = [m for m in monks if m['monk_type'] == 'សាមណេរ']
+
+            def _trow(m, idx, stripe):
                 edu = _html.escape(f"{m['education_level']} {m['academic_year']}".strip())
                 cre = m['created_at'].strftime('%d/%m/%Y') if m['created_at'] else '—'
+                bg  = '#f8fafc' if stripe else '#ffffff'
                 return (
                     f'<tr style="background:{bg}">'
-                    f'<td class="num">{idx}</td>'
-                    f'<td><strong>{_html.escape(m["fullname"])}</strong></td>'
-                    f'<td class="num">{m["vassa_years"]}</td>'
-                    f'<td>{_html.escape(m["monk_type"])}</td>'
-                    f'<td>{_html.escape(m["residence"])}</td>'
+                    f'<td class="c">{idx}</td>'
+                    f'<td class="name">{_html.escape(m["fullname"])}</td>'
+                    f'<td class="c">{m["vassa_years"]} ឆ្នាំ</td>'
                     f'<td>{_html.escape(m["position"])}</td>'
+                    f'<td>{_html.escape(m["residence"])}</td>'
                     f'<td>{edu}</td>'
-                    f'<td>{cre}</td>'
+                    f'<td class="c dt">{cre}</td>'
                     f'</tr>'
                 )
 
-            rows_html = ''.join(row_h(m, i + 1) for i, m in enumerate(monks))
-            html_str = (
-                '<!DOCTYPE html><html lang="km"><head><meta charset="UTF-8"><style>'
-                "@import url('https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&display=swap');"
-                '*{box-sizing:border-box;margin:0;padding:0}'
-                "body{font-family:'Battambang','Khmer MN','Khmer Sangam MN',sans-serif;color:#2d3748;font-size:10px;}"
-                'h1{text-align:center;font-size:15px;color:#1a202c;margin-bottom:4px;}'
-                '.sub{text-align:center;color:#718096;font-size:9.5px;margin-bottom:12px;}'
-                'table{width:100%;border-collapse:collapse;}'
-                'thead tr{background:#667eea;}'
-                'th{padding:7px 8px;text-align:left;font-size:8.5px;font-weight:700;'
-                'color:#fff;border-bottom:2px solid #5a6fd6;white-space:nowrap;}'
-                'td{padding:6px 7px;border-bottom:1px solid #edf2f7;vertical-align:middle;font-size:9.5px;}'
-                '.num{text-align:center;}'
-                '@page{size:A4;margin:12mm 10mm;}'
-                '</style></head><body>'
-                '<h1>វត្តនិរោធរង្សី — បញ្ជីព្រះសង្ឃ</h1>'
-                f'<p class="sub">ថ្ងៃទី {today}  |  ចំនួនសរុប: {len(monks)} នាក់</p>'
-                '<table><thead><tr>'
-                '<th>#</th><th>ឈ្មោះ</th><th>វស្សា</th><th>ប្រភេទ</th>'
-                '<th>ស្នាក់នៅ</th><th>តួនាទី</th><th>ការសិក្សា</th><th>ថ្ងៃបញ្ចូល</th>'
-                '</tr></thead>'
-                f'<tbody>{rows_html}</tbody></table>'
-                '</body></html>'
+            def _section(section_monks, title, hdr_bg, hdr_color, border_color):
+                if not section_monks:
+                    return ''
+                rows = ''.join(_trow(m, i + 1, i % 2 == 1) for i, m in enumerate(section_monks))
+                return f'''
+                <div class="sec-title" style="background:{hdr_bg};color:{hdr_color};border-left:4px solid {border_color}">
+                    {_html.escape(title)} &nbsp;<span class="sec-count">({len(section_monks)} នាក់)</span>
+                </div>
+                <table>
+                    <thead><tr>
+                        <th class="c" style="width:28px">#</th>
+                        <th>ឈ្មោះ</th>
+                        <th class="c" style="width:48px">វស្សា</th>
+                        <th>តួនាទី</th>
+                        <th>ស្នាក់នៅ</th>
+                        <th>ការសិក្សា</th>
+                        <th class="c" style="width:58px">ថ្ងៃបញ្ចូល</th>
+                    </tr></thead>
+                    <tbody>{rows}</tbody>
+                </table>'''
+
+            # Active filters line
+            fp = []
+            if name:      fp.append(f'ឈ្មោះ: <strong>{_html.escape(name)}</strong>')
+            if monk_type: fp.append(f'ប្រភេទ: <strong>{_html.escape(monk_type)}</strong>')
+            if residence: fp.append(f'កុដិ: <strong>{_html.escape(residence.replace("_"," "))}</strong>')
+            if position:  fp.append(f'តួនាទី: <strong>{_html.escape(position)}</strong>')
+            if edu:       fp.append(f'ការសិក្សា: <strong>{_html.escape(edu)}</strong>')
+            if acad:      fp.append(f'ថ្នាក់: <strong>{_html.escape(acad)}</strong>')
+            filter_html = (
+                f'<div class="filter-bar">🔎 &nbsp;' + ' &nbsp;|&nbsp; '.join(fp) + '</div>'
+                if fp else ''
             )
+
+            css = (
+                "@import url('https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&display=swap');"
+                "*, *::before, *::after{box-sizing:border-box;margin:0;padding:0}"
+                "body{font-family:'Battambang','Khmer MN','Khmer Sangam MN',sans-serif;"
+                "color:#1a202c;font-size:9px;background:#fff}"
+
+                # Header
+                ".header{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);"
+                "color:#fff;padding:14px 18px 12px;border-radius:8px;margin-bottom:14px}"
+                ".hdr-top{display:flex;justify-content:space-between;align-items:flex-start}"
+                ".hdr-name{font-size:17px;font-weight:700;letter-spacing:.4px}"
+                ".hdr-sub{font-size:8.5px;opacity:.85;margin-top:3px}"
+                ".hdr-date{font-size:8.5px;opacity:.8;text-align:right}"
+                ".hdr-divider{border:none;border-top:1px solid rgba(255,255,255,.3);margin:10px 0 8px}"
+                ".hdr-stats{display:flex;gap:20px}"
+                ".hdr-stat{font-size:8.5px;opacity:.9}"
+                ".hdr-stat strong{font-size:13px;display:block;font-weight:700}"
+
+                # Summary chips
+                ".chips{display:flex;gap:8px;margin-bottom:12px}"
+                ".chip{flex:1;padding:7px 10px;border-radius:6px;text-align:center}"
+                ".chip-lbl{font-size:7.5px;color:#718096;display:block;margin-bottom:2px}"
+                ".chip-val{font-size:15px;font-weight:700;display:block}"
+                ".chip-total{background:#edf2f7}.chip-total .chip-val{color:#2d3748}"
+                ".chip-b{background:#fff8e1}.chip-b .chip-val{color:#8a6100}"
+                ".chip-s{background:#f1f8e9}.chip-s .chip-val{color:#1b5e20}"
+
+                # Filter bar
+                ".filter-bar{background:#f7fafc;border:1px solid #e2e8f0;border-radius:5px;"
+                "padding:5px 10px;font-size:8px;color:#4a5568;margin-bottom:12px}"
+
+                # Section title
+                ".sec-title{padding:5px 10px;font-size:10px;font-weight:700;"
+                "border-radius:4px;margin-bottom:4px;margin-top:14px}"
+                ".sec-count{font-weight:400;font-size:8.5px;opacity:.8}"
+
+                # Table
+                "table{width:100%;border-collapse:collapse;margin-bottom:4px}"
+                "thead tr{background:#4a5568}"
+                "th{padding:6px 6px;text-align:left;font-size:7.5px;font-weight:700;"
+                "color:#fff;white-space:nowrap;border-right:1px solid rgba(255,255,255,.15)}"
+                "th:last-child{border-right:none}"
+                "td{padding:5px 6px;font-size:8.5px;border-bottom:1px solid #edf2f7;"
+                "vertical-align:middle}"
+                ".c{text-align:center}"
+                ".name{font-weight:600;color:#1a202c}"
+                ".dt{font-size:7.5px;color:#718096}"
+
+                # Footer
+                ".footer{position:running(footer);display:flex;justify-content:space-between;"
+                "font-size:7px;color:#a0aec0;border-top:1px solid #e2e8f0;padding-top:4px;"
+                "margin-top:6px}"
+                "@page{size:A4;margin:12mm 10mm 18mm;"
+                "@bottom-center{content:element(footer)}}"
+            )
+
+            html_str = f'''<!DOCTYPE html>
+<html lang="km"><head><meta charset="UTF-8">
+<style>{css}</style></head><body>
+
+<div class="header">
+    <div class="hdr-top">
+        <div>
+            <div class="hdr-name">វត្តនិរោធរង្សី</div>
+            <div class="hdr-sub">Pagoda Niroth Rangsay — បញ្ជីព្រះសង្ឃ</div>
+        </div>
+        <div class="hdr-date">
+            ថ្ងៃទី {_html.escape(today)}<br>
+            ស្ថានភាព​ ​បច្ចុប្បន្ន
+        </div>
+    </div>
+    <hr class="hdr-divider">
+    <div class="hdr-stats">
+        <div class="hdr-stat"><strong>{len(monks)}</strong>ព្រះសង្ឃ​សរុប</div>
+        <div class="hdr-stat"><strong>{len(bhikkhus)}</strong>ភិក្ខុ</div>
+        <div class="hdr-stat"><strong>{len(samaneras)}</strong>សាមណេរ</div>
+    </div>
+</div>
+
+{filter_html}
+
+{_section(bhikkhus,  'ផ្នែកទី ១ — ភិក្ខុ',   '#fff8e1','#8a6100','#f0c040')}
+{_section(samaneras, 'ផ្នែកទី ២ — សាមណេរ', '#f1f8e9','#1b5e20','#66bb6a')}
+
+<div class="footer">
+    <span>វត្តនិរោធរង្សី — បញ្ជីព្រះសង្ឃ</span>
+    <span>ថ្ងៃទី {_html.escape(today)}</span>
+</div>
+</body></html>'''
+
             pdf_bytes = HTML(string=html_str).write_pdf()
             buf = io.BytesIO(pdf_bytes)
+
+            if action == 'telegram':
+                import requests as _req
+                TELEGRAM_TOKEN   = '8950898077:AAHNR0tTgtJWy17wMXooKwg4nfQLGdfe5aw'
+                TELEGRAM_CHAT_ID = -1003960014484
+                caption = (
+                    f"📋 បញ្ជីព្រះសង្ឃ — {today}\n"
+                    f"📊 សរុប {len(monks)} នាក់  |  ភិក្ខុ {len(bhikkhus)}  |  សាមណេរ {len(samaneras)}"
+                )
+                if fp:
+                    caption += '\n🔎 ' + ' | '.join(
+                        f.replace('<strong>', '').replace('</strong>', '') for f in fp
+                    )
+                tg = _req.post(
+                    f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendDocument',
+                    data={'chat_id': TELEGRAM_CHAT_ID, 'caption': caption},
+                    files={'document': (f"{fname_base}.pdf", buf, 'application/pdf')},
+                    timeout=25
+                ).json()
+                if not tg.get('ok'):
+                    return jsonify({'success': False, 'message': f"Telegram: {tg.get('description')}"}), 500
+                return jsonify({'success': True, 'total': len(monks)})
+
             return send_file(buf, mimetype='application/pdf',
                              as_attachment=True, download_name=f"{fname_base}.pdf")
 
@@ -1760,34 +1885,77 @@ def export_layout_pdf():
         today = date.today().strftime('%d/%m/%Y')
         css = (
             "@import url('https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&display=swap');"
-            "*{box-sizing:border-box;margin:0;padding:0}"
-            "body{font-family:'Battambang','Khmer MN',sans-serif;color:#2d3748;font-size:9px;}"
-            "h1{text-align:center;font-size:14px;font-weight:700;color:#1a202c;margin-bottom:3px;}"
-            ".sub-title{text-align:center;color:#718096;font-size:8.5px;margin-bottom:10px;}"
-            "h2{font-size:11px;font-weight:700;margin:12px 0 4px;padding:4px 8px;border-radius:4px;}"
-            ".h-bhikkhu{background:#fff8e1;color:#8a6100;}"
-            ".h-samanera{background:#f1f8e9;color:#1b5e20;}"
-            "table{width:100%;border-collapse:collapse;margin-bottom:6px;}"
-            "td{border:1px solid #cbd5e0;vertical-align:top;padding:3px 4px;}"
-            ".filled{background:#f7f8fa;}"
-            ".empty{background:#fff;}"
-            ".num{display:block;font-size:7px;color:#a0aec0;}"
-            ".num-e{display:block;font-size:7px;color:#ddd;}"
-            ".name{display:block;font-size:8.5px;font-weight:700;color:#1a202c;margin:1px 0;}"
-            ".sub{display:block;font-size:7.5px;color:#718096;}"
-            "@page{size:A4 landscape;margin:10mm 12mm;}"
+            "*, *::before, *::after{box-sizing:border-box;margin:0;padding:0}"
+            "body{font-family:'Battambang','Khmer MN',sans-serif;color:#1a202c;font-size:8.5px;background:#fff}"
+
+            # Header
+            ".header{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);"
+            "color:#fff;padding:10px 14px 9px;border-radius:7px;margin-bottom:10px}"
+            ".hdr-row{display:flex;justify-content:space-between;align-items:center}"
+            ".hdr-title{font-size:15px;font-weight:700;letter-spacing:.3px}"
+            ".hdr-sub{font-size:8px;opacity:.85;margin-top:2px}"
+            ".hdr-right{text-align:right;font-size:8px;opacity:.85}"
+            ".hdr-divider{border:none;border-top:1px solid rgba(255,255,255,.3);margin:7px 0 6px}"
+            ".hdr-stats{display:flex;gap:18px}"
+            ".hdr-stat{font-size:8px;opacity:.9}"
+            ".hdr-stat strong{font-size:12px;display:block;font-weight:700}"
+
+            # Section
+            ".sec{padding:4px 9px;font-size:10px;font-weight:700;border-radius:4px;margin:10px 0 4px}"
+            ".sec-b{background:#fff8e1;color:#8a6100;border-left:4px solid #f0c040}"
+            ".sec-s{background:#f1f8e9;color:#1b5e20;border-left:4px solid #66bb6a}"
+            ".sec-sub{font-size:7.5px;font-weight:400;opacity:.75;margin-left:6px}"
+
+            # Grid table
+            "table{width:100%;border-collapse:collapse;margin-bottom:8px}"
+            "td{border:1px solid #e2e8f0;vertical-align:top;padding:3px 4px}"
+            ".filled{background:#f7f8fa}"
+            ".empty{background:#fafbfc}"
+            ".num{display:block;font-size:6.5px;color:#a0aec0;line-height:1}"
+            ".num-e{display:block;font-size:6.5px;color:#e2e8f0}"
+            ".name{display:block;font-size:8px;font-weight:700;color:#1a202c;margin:2px 0 1px;line-height:1.3}"
+            ".sub{display:block;font-size:7px;color:#718096;line-height:1.2}"
+
+            # Footer
+            ".footer{position:running(footer);display:flex;justify-content:space-between;"
+            "font-size:7px;color:#a0aec0;border-top:1px solid #e2e8f0;padding-top:3px}"
+            "@page{size:A4 landscape;margin:10mm 12mm 16mm;"
+            "@bottom-center{content:element(footer)}}"
         )
-        html_str = (
-            f'<!DOCTYPE html><html lang="km"><head><meta charset="UTF-8">'
-            f'<style>{css}</style></head><body>'
-            f'<h1>ប្លង់អាសនៈព្រះសង្ឃ — វត្តនិរោធរង្សី</h1>'
-            f'<p class="sub-title">ថ្ងៃទី {today}</p>'
-            f'<h2 class="h-bhikkhu">ផ្នែកទី ១ — ភិក្ខុ ({len(bhikkhus)} នាក់  |  {br}×{bc})</h2>'
-            f'{build_grid(bhikkhus, br, bc, "bhikkhu")}'
-            f'<h2 class="h-samanera">ផ្នែកទី ២ — សាមណេរ ({len(samaneras)} នាក់  |  {sr}×{sc})</h2>'
-            f'{build_grid(samaneras, sr, sc, "samanera")}'
-            f'</body></html>'
-        )
+        html_str = f'''<!DOCTYPE html>
+<html lang="km"><head><meta charset="UTF-8"><style>{css}</style></head><body>
+
+<div class="header">
+  <div class="hdr-row">
+    <div>
+      <div class="hdr-title">ប្លង់អាសនៈព្រះសង្ឃ — វត្តនិរោធរង្សី</div>
+      <div class="hdr-sub">Pagoda Niroth Rangsay — Seating Layout</div>
+    </div>
+    <div class="hdr-right">ថ្ងៃទី {today}<br>ស្ថានភាព​ ​បច្ចុប្បន្ន</div>
+  </div>
+  <hr class="hdr-divider">
+  <div class="hdr-stats">
+    <div class="hdr-stat"><strong>{len(bhikkhus)}</strong>ភិក្ខុ</div>
+    <div class="hdr-stat"><strong>{len(samaneras)}</strong>សាមណេរ</div>
+    <div class="hdr-stat"><strong>{len(bhikkhus)+len(samaneras)}</strong>ព្រះសង្ឃ​សរុប</div>
+  </div>
+</div>
+
+<div class="sec sec-b">ផ្នែកទី ១ — ភិក្ខុ
+  <span class="sec-sub">{len(bhikkhus)} នាក់ &nbsp;|&nbsp; ក្រឡា {br}×{bc}={br*bc}</span>
+</div>
+{build_grid(bhikkhus, br, bc, "bhikkhu")}
+
+<div class="sec sec-s">ផ្នែកទី ២ — សាមណេរ
+  <span class="sec-sub">{len(samaneras)} នាក់ &nbsp;|&nbsp; ក្រឡា {sr}×{sc}={sr*sc}</span>
+</div>
+{build_grid(samaneras, sr, sc, "samanera")}
+
+<div class="footer">
+  <span>វត្តនិរោធរង្សី — ប្លង់អាសនៈព្រះសង្ឃ</span>
+  <span>ថ្ងៃទី {today}</span>
+</div>
+</body></html>'''
 
         pdf_bytes = HTML(string=html_str).write_pdf()
         buf = io.BytesIO(pdf_bytes)
@@ -2379,13 +2547,16 @@ def _make_export_html(monks, type_label, subtitle, report_type):
                     f'<td class="num" style="{pc}">{m["permission_count"] or "—"}</td>'
                     f'<td class="dates">{rng}</td><td>{badge}</td></tr>')
 
-    def section_html(sm, title, hc, bc):
+    def section_html(sm, title, sec_cls, border_color):
         if not sm: return ''
         rows = ''.join(row_html(m, i + 1) for i, m in enumerate(sm))
-        return (f'<h2 style="color:{hc};border-bottom:2px solid {bc};'
-                f'padding:6px 0;margin:18px 0 6px;font-size:13px;">'
-                f'{_h.escape(title)} ({len(sm)} នាក់)</h2>'
-                f'<table><thead><tr>{thead}</tr></thead><tbody>{rows}</tbody></table>')
+        return (
+            f'<div class="sec {sec_cls}">'
+            f'{_h.escape(title)}'
+            f'<span class="sec-count">({len(sm)} នាក់)</span></div>'
+            f'<table><thead><tr class="thead-row">{thead}</tr></thead>'
+            f'<tbody>{rows}</tbody></table>'
+        )
 
     bhikkhus  = [m for m in monks if m['monk_type'] == 'ភិក្ខុ']
     samaneras = [m for m in monks if m['monk_type'] == 'សាមណេរ']
@@ -2393,44 +2564,99 @@ def _make_export_html(monks, type_label, subtitle, report_type):
     pv = sum(1 for m in monks if m['permission_count'] >= DISC_PERM_MIN)
     cl = len(monks) - av - pv
 
-    return (
-        '<!DOCTYPE html><html lang="km"><head><meta charset="UTF-8"><style>'
+    css = (
         "@import url('https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&display=swap');"
-        '*{box-sizing:border-box;margin:0;padding:0}'
-        "body{font-family:'Battambang','Khmer MN','Khmer Sangam MN',sans-serif;color:#2d3748;font-size:10px;}"
-        'h1{text-align:center;font-size:15px;color:#1a202c;margin-bottom:4px;}'
-        '.sub{text-align:center;color:#718096;font-size:9.5px;margin-bottom:3px;}'
-        '.summary{display:flex;gap:12px;justify-content:center;margin:10px 0;flex-wrap:wrap;}'
-        '.summary span{padding:3px 10px;border-radius:4px;font-weight:bold;font-size:9.5px;}'
-        '.s-total{background:#edf2f7;color:#2d3748;}.s-absent{background:#fed7d7;color:#c53030;}'
-        '.s-perm{background:#feebc8;color:#c05621;}.s-clean{background:#c6f6d5;color:#276749;}'
-        'table{width:100%;border-collapse:collapse;margin-bottom:6px;}'
-        'thead tr{background:#f7fafc;}'
-        'th{padding:6px 7px;text-align:left;font-size:8.5px;font-weight:700;color:#718096;'
-        'border-bottom:2px solid #e2e8f0;white-space:nowrap;}'
-        'td{padding:6px 7px;border-bottom:1px solid #edf2f7;vertical-align:middle;font-size:9.5px;}'
-        '.num{text-align:center;}'
-        '.badge-danger{background:#fed7d7;color:#c53030;padding:2px 7px;border-radius:10px;'
-        'font-size:8px;font-weight:bold;white-space:nowrap;}'
-        '.badge-warning{background:#feebc8;color:#c05621;padding:2px 7px;border-radius:10px;'
-        'font-size:8px;font-weight:bold;white-space:nowrap;}'
-        '.badge-ok{background:#c6f6d5;color:#276749;padding:2px 7px;border-radius:10px;'
-        'font-size:8px;font-weight:bold;white-space:nowrap;}'
-        '.dates{font-size:8.5px;line-height:1.7;}'
-        '@page{size:A4;margin:12mm 10mm;}'
-        '</style></head><body>'
-        f'<h1>វត្តនិរោធរង្សី — របាយការណ៍វត្តមាន ({_h.escape(type_label)})</h1>'
-        f'<p class="sub">ចន្លោះ: {_h.escape(subtitle)}</p>'
-        '<div class="summary">'
-        f'<span class="s-total">ព្រះសង្ឃ: {len(monks)} នាក់</span>'
-        f'<span class="s-absent">❌ លើសអវត្តមាន: {av} នាក់</span>'
-        f'<span class="s-perm">📋 លើសច្បាប់: {pv} នាក់</span>'
-        f'<span class="s-clean">✓ ប្រក្រតី: {cl} នាក់</span>'
-        '</div>'
-        + section_html(bhikkhus,  'ផ្នែកទី ១ — ភិក្ខុ',   '#8a6100', '#f0c040')
-        + section_html(samaneras, 'ផ្នែកទី ២ — សាមណេរ', '#1b5e20', '#66bb6a')
-        + '</body></html>'
+        "*, *::before, *::after{box-sizing:border-box;margin:0;padding:0}"
+        "body{font-family:'Battambang','Khmer MN','Khmer Sangam MN',sans-serif;"
+        "color:#1a202c;font-size:9px;background:#fff}"
+
+        # Header
+        ".header{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);"
+        "color:#fff;padding:13px 16px 11px;border-radius:7px;margin-bottom:12px}"
+        ".hdr-top{display:flex;justify-content:space-between;align-items:flex-start}"
+        ".hdr-title{font-size:15px;font-weight:700;letter-spacing:.3px}"
+        ".hdr-sub{font-size:8px;opacity:.85;margin-top:3px}"
+        ".hdr-right{text-align:right;font-size:8px;opacity:.85}"
+        ".hdr-divider{border:none;border-top:1px solid rgba(255,255,255,.3);margin:8px 0 7px}"
+        ".hdr-stats{display:flex;gap:18px}"
+        ".hdr-stat{font-size:8px;opacity:.9}"
+        ".hdr-stat strong{font-size:13px;display:block;font-weight:700}"
+
+        # Chips
+        ".chips{display:flex;gap:7px;margin-bottom:11px}"
+        ".chip{flex:1;padding:6px 8px;border-radius:6px;text-align:center}"
+        ".chip-lbl{font-size:7px;display:block;margin-bottom:1px}"
+        ".chip-val{font-size:14px;font-weight:700;display:block}"
+        ".c-total{background:#edf2f7}.c-total .chip-lbl{color:#718096}.c-total .chip-val{color:#2d3748}"
+        ".c-abs{background:#fed7d7}.c-abs .chip-lbl{color:#c53030}.c-abs .chip-val{color:#c53030}"
+        ".c-perm{background:#feebc8}.c-perm .chip-lbl{color:#c05621}.c-perm .chip-val{color:#c05621}"
+        ".c-ok{background:#c6f6d5}.c-ok .chip-lbl{color:#276749}.c-ok .chip-val{color:#276749}"
+
+        # Section
+        ".sec{padding:5px 10px;font-size:10px;font-weight:700;border-radius:4px;margin:12px 0 4px}"
+        ".sec-b{background:#fff8e1;color:#8a6100;border-left:4px solid #f0c040}"
+        ".sec-s{background:#f1f8e9;color:#1b5e20;border-left:4px solid #66bb6a}"
+        ".sec-count{font-weight:400;font-size:8px;opacity:.75;margin-left:6px}"
+
+        # Table
+        "table{width:100%;border-collapse:collapse;margin-bottom:4px}"
+        ".thead-row{background:#4a5568}"
+        "th{padding:6px 6px;text-align:left;font-size:7.5px;font-weight:700;"
+        "color:#fff;white-space:nowrap;border-right:1px solid rgba(255,255,255,.15)}"
+        "th:last-child{border-right:none}"
+        "td{padding:5px 6px;font-size:8.5px;border-bottom:1px solid #edf2f7;vertical-align:middle}"
+        "tr:nth-child(even) td{background:#f8fafc}"
+        ".num{text-align:center}"
+        ".dates{font-size:7.5px;line-height:1.6}"
+        ".badge-danger{background:#fed7d7;color:#c53030;padding:1px 6px;"
+        "border-radius:8px;font-size:7.5px;font-weight:700;white-space:nowrap}"
+        ".badge-warning{background:#feebc8;color:#c05621;padding:1px 6px;"
+        "border-radius:8px;font-size:7.5px;font-weight:700;white-space:nowrap}"
+        ".badge-ok{background:#c6f6d5;color:#276749;padding:1px 6px;"
+        "border-radius:8px;font-size:7.5px;font-weight:700;white-space:nowrap}"
+
+        # Footer
+        ".footer{position:running(footer);display:flex;justify-content:space-between;"
+        "font-size:7px;color:#a0aec0;border-top:1px solid #e2e8f0;padding-top:4px}"
+        "@page{size:A4;margin:12mm 10mm 17mm;"
+        "@bottom-center{content:element(footer)}}"
     )
+
+    return f'''<!DOCTYPE html>
+<html lang="km"><head><meta charset="UTF-8"><style>{css}</style></head><body>
+
+<div class="header">
+  <div class="hdr-top">
+    <div>
+      <div class="hdr-title">វត្តនិរោធរង្សី — របាយការណ៍វត្តមាន</div>
+      <div class="hdr-sub">Pagoda Niroth Rangsay &nbsp;|&nbsp; {_h.escape(type_label)}</div>
+    </div>
+    <div class="hdr-right">ចន្លោះ: {_h.escape(subtitle)}</div>
+  </div>
+  <hr class="hdr-divider">
+  <div class="hdr-stats">
+    <div class="hdr-stat"><strong>{len(monks)}</strong>ព្រះសង្ឃ​សរុប</div>
+    <div class="hdr-stat"><strong>{av}</strong>លើស​អវត្តមាន</div>
+    <div class="hdr-stat"><strong>{pv}</strong>លើស​ច្បាប់</div>
+    <div class="hdr-stat"><strong>{cl}</strong>ប្រក្រតី</div>
+  </div>
+</div>
+
+<div class="chips">
+  <div class="chip c-total"><span class="chip-lbl">ព្រះសង្ឃ</span><span class="chip-val">{len(monks)}</span></div>
+  <div class="chip c-abs"><span class="chip-lbl">❌ លើស​អវត្តមាន</span><span class="chip-val">{av}</span></div>
+  <div class="chip c-perm"><span class="chip-lbl">📋 លើស​ច្បាប់</span><span class="chip-val">{pv}</span></div>
+  <div class="chip c-ok"><span class="chip-lbl">✓ ប្រក្រតី</span><span class="chip-val">{cl}</span></div>
+</div>
+
+{section_html(bhikkhus,  'ផ្នែកទី ១ — ភិក្ខុ',   'sec-b', '#f0c040')}
+{section_html(samaneras, 'ផ្នែកទី ២ — សាមណេរ', 'sec-s', '#66bb6a')}
+
+<div class="footer">
+  <span>វត្តនិរោធរង្សី — របាយការណ៍វត្តមាន ({_h.escape(type_label)})</span>
+  <span>{_h.escape(subtitle)}</span>
+</div>
+</body></html>'''
 
 
 # ---- Unified export route ----------------------------------------
