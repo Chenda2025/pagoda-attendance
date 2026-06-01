@@ -515,7 +515,7 @@ def get_seat_order():
         cur.execute("SELECT type, monk_ids, updated_at FROM seat_order")
         rows = cur.fetchall()
         cur.close(); conn.close()
-        result = {'bhikkhu': None, 'samanera': None, 'updated_at': None}
+        result = {'bhikkhu': None, 'samanera': None, 'grid_config': None, 'updated_at': None}
         for row in rows:
             result[row[0]] = _json.loads(row[1])
             ts = row[2].isoformat() if row[2] else None
@@ -534,9 +534,12 @@ def save_seat_order():
     data  = request.get_json(silent=True) or {}
     type_ = str(data.get('type', '')).strip()
     ids   = data.get('ids', [])
-    if type_ not in ('bhikkhu', 'samanera'):
+    if type_ not in ('bhikkhu', 'samanera', 'grid_config'):
         return jsonify({'success': False, 'message': 'Invalid type'}), 400
-    if not isinstance(ids, list):
+    if type_ == 'grid_config':
+        if not isinstance(ids, dict):
+            return jsonify({'success': False, 'message': 'ids must be a dict for grid_config'}), 400
+    elif not isinstance(ids, list):
         return jsonify({'success': False, 'message': 'ids must be a list'}), 400
     try:
         conn = connect_db()

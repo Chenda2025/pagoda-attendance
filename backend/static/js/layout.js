@@ -117,6 +117,7 @@ async function loadData() {
             bhikkhuOrder       = orderJson.bhikkhu;
             samaneraOrder      = orderJson.samanera;
             seatOrderUpdatedAt = orderJson.updated_at;
+            _applyGridConfig(orderJson.grid_config);
         }
 
         document.getElementById('loading-state').style.display = 'none';
@@ -309,6 +310,39 @@ function reapplySearch() {
     if (input) highlightSearch(input.value.trim());
 }
 
+// ============ GRID CONFIG ============
+
+function _applyGridConfig(cfg) {
+    if (!cfg) return;
+    const set = (id, val) => {
+        const el = document.getElementById(id);
+        if (el && val) el.value = val;
+    };
+    set('bhikkhu-rows',  cfg.br);
+    set('bhikkhu-cols',  cfg.bc);
+    set('samanera-rows', cfg.sr);
+    set('samanera-cols', cfg.sc);
+}
+
+async function saveGridConfig() {
+    if (typeof PAGE_ROLE === 'undefined' || PAGE_ROLE !== 'admin') return;
+    const cfg = {
+        br: parseInt(document.getElementById('bhikkhu-rows')?.value  || 3),
+        bc: parseInt(document.getElementById('bhikkhu-cols')?.value  || 5),
+        sr: parseInt(document.getElementById('samanera-rows')?.value || 12),
+        sc: parseInt(document.getElementById('samanera-cols')?.value || 10),
+    };
+    try {
+        const res  = await fetch('/api/seat-order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: 'grid_config', ids: cfg })
+        });
+        const json = await res.json();
+        if (json.success) seatOrderUpdatedAt = json.updated_at;
+    } catch { /* non-fatal */ }
+}
+
 // ============ LIVE SEAT-ORDER POLL ============
 
 async function pollSeatOrder() {
@@ -325,6 +359,7 @@ async function pollSeatOrder() {
         seatOrderUpdatedAt = json.updated_at;
         bhikkhuOrder  = json.bhikkhu;
         samaneraOrder = json.samanera;
+        _applyGridConfig(json.grid_config);
         generateBhikkhu();
         generateSamanera();
     } catch { /* ignore network errors */ }
@@ -582,8 +617,8 @@ document.addEventListener('DOMContentLoaded', () => {
     loadData();
     setInterval(pollSeatOrder, 5000); // sync seat order from DB every 5 s
 
-    document.getElementById('btn-gen-bhikkhu')?.addEventListener('click', generateBhikkhu);
-    document.getElementById('btn-gen-samanera')?.addEventListener('click', generateSamanera);
+    document.getElementById('btn-gen-bhikkhu')?.addEventListener('click', () => { generateBhikkhu();  saveGridConfig(); });
+    document.getElementById('btn-gen-samanera')?.addEventListener('click', () => { generateSamanera(); saveGridConfig(); });
     document.getElementById('btn-submit-att').addEventListener('click', submitAttendance);
     // Export dropdown
     const _layDd = document.getElementById('lay-export-dd');
@@ -596,9 +631,8 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btn-export-word').addEventListener('click', () => { _layDd.classList.remove('open'); exportWord(); });
     document.getElementById('btn-export-pdf').addEventListener('click',  () => { _layDd.classList.remove('open'); exportPdf(); });
 
-    // Regenerate on Enter key — admin only (inputs are hidden for user1 but still present)
-    document.getElementById('bhikkhu-rows')?.addEventListener('keydown', e => { if (e.key === 'Enter') generateBhikkhu(); });
-    document.getElementById('bhikkhu-cols')?.addEventListener('keydown', e => { if (e.key === 'Enter') generateBhikkhu(); });
-    document.getElementById('samanera-rows')?.addEventListener('keydown', e => { if (e.key === 'Enter') generateSamanera(); });
-    document.getElementById('samanera-cols')?.addEventListener('keydown', e => { if (e.key === 'Enter') generateSamanera(); });
+    document.getElementById('bhikkhu-rows')?.addEventListener('keydown',  e => { if (e.key === 'Enter') { generateBhikkhu();  saveGridConfig(); } });
+    document.getElementById('bhikkhu-cols')?.addEventListener('keydown',  e => { if (e.key === 'Enter') { generateBhikkhu();  saveGridConfig(); } });
+    document.getElementById('samanera-rows')?.addEventListener('keydown', e => { if (e.key === 'Enter') { generateSamanera(); saveGridConfig(); } });
+    document.getElementById('samanera-cols')?.addEventListener('keydown', e => { if (e.key === 'Enter') { generateSamanera(); saveGridConfig(); } });
 });
