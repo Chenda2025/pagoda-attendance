@@ -659,8 +659,27 @@ def get_attendance():
         cursor = conn.cursor()
         cursor.execute("SELECT monk_id, status FROM attendance_tbl WHERE date = %s;", (date_str,))
         records = [{'monk_id': r[0], 'status': r[1]} for r in cursor.fetchall()]
+        
+        cursor.execute("""
+            SELECT monk_id, start_date, end_date, reason FROM monk_permission
+            WHERE %s BETWEEN start_date AND end_date
+        """, (date_str,))
+
+        perms = {}
+        target_date = _date.fromisoformat(date_str)
+        for r in cursor.fetchall():
+            monk_id, start_date, end_date, reason = r
+            days_left = (end_date - target_date).days
+            if days_left >= 0:
+                perms[monk_id] = {
+                    'start_date': start_date.isoformat(),
+                    'end_date': end_date.isoformat(),
+                    'days_left': days_left,
+                    'reason': reason or ''
+                }
+                
         cursor.close(); conn.close()
-        return jsonify({'success': True, 'records': records})
+        return jsonify({'success': True, 'records': records, 'permissions_info': perms})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 
@@ -672,7 +691,7 @@ def set_attendance():
         monk_id = data.get('monk_id')
         status  = data.get('status')
         date_str = data.get('date', _date.today().isoformat())
-        if status not in ('absent', 'permission'):
+        if status not in ('absent', 'permission', 'late'):
             return jsonify({'success': False, 'message': 'Invalid status'}), 400
         conn = connect_db()
         cursor = conn.cursor()
@@ -681,6 +700,109 @@ def set_attendance():
             VALUES (%s, %s, %s)
             ON CONFLICT (monk_id, date) DO UPDATE SET status = EXCLUDED.status;
         """, (monk_id, status, date_str))
+        conn.commit()
+
+        if status in ('absent', 'late'):
+            block_start, block_end = _get_block_dates(date_str)
+            cursor.execute("""
+                SELECT 
+                    SUM(CASE WHEN status = 'absent' THEN 1 ELSE 0 END),
+                    SUM(CASE WHEN status = 'permission' THEN 1 ELSE 0 END),
+                    SUM(CASE WHEN status = 'late' THEN 1 ELSE 0 END)
+                FROM attendance_tbl
+                WHERE monk_id = %s
+                  AND date >= %s
+                  AND date <= %s;
+            """, (monk_id, block_start.isoformat(), block_end.isoformat()))
+            row = cursor.fetchone()
+            absent_count = int(row[0] or 0)
+            perm_count = int(row[1] or 0)
+            late_count = int(row[2] or 0)
+
+            if absent_count in (3, 6) or late_count in (3, 6):
+                # Fetch monk info
+                cursor.execute("SELECT fullname, residence FROM monk_tbl WHERE id = %s", (monk_id,))
+                monk_info = cursor.fetchone()
+                if monk_info:
+                    fullname, kuti = monk_info
+                    
+                    # Fetch head and deputy
+                    cursor.execute("SELECT fullname FROM monk_tbl WHERE residence = %s AND position = 'មេកុដិ' LIMIT 1", (kuti,))
+                    kuti_head_row = cursor.fetchone()
+                    kuti_head = kuti_head_row[0] if kuti_head_row else '...........'
+                    
+                    cursor.execute("SELECT fullname FROM monk_tbl WHERE residence = %s AND position = 'អនុកុដិ' LIMIT 1", (kuti,))
+                    kuti_deputy_row = cursor.fetchone()
+                    kuti_deputy = kuti_deputy_row[0] if kuti_deputy_row else '...........'
+
+                    msg = (
+                        "🔔 សេចក្តីប្រគេនដំណឹង 🔔\n"
+                        "កិច្ចវត្តថ្វាយបង្គំរាល់ល្ងាចវត្តនិរោធរង្សី\n"
+                        "----- សារព្រមាន -----\n"
+                        f"ព្រះសង្ឃនាម ៖ {fullname}\n"
+                        f"កុដិ ៖ {kuti or '............'}\n"
+                        f"មេកុដិ ៖ {kuti_head}\n"
+                        f"អនុកុដិ ៖ {kuti_deputy}\n"
+                        "- - - - - បញ្ហា - - - - - \n"
+                        f"អវត្តមាន ៖ {absent_count}\n"
+                        f"ច្បាប់ ៖ {perm_count}\n"
+                        f"កាលបរិច្ឆេទ៖ {date_str}\n"
+                        "ដូចបានប្រគេនខាងលើនេះសូមមេកុដិនិងអនុកុដិសួរនាំជាបន្ទាន់ដល់សមាជិកកុដិរបស់ខ្លួន។"
+                    )
+                    import requests as req
+                    import threading
+                    TELEGRAM_TOKEN   = '8950898077:AAHNR0tTgtJWy17wMXooKwg4nfQLGdfe5aw'
+                    TELEGRAM_CHAT_ID = -1003960014484
+                    # Run telegram sending in a background thread to not block the response
+                    def send_tg():
+                        try:
+                            _tg_send_message(TELEGRAM_TOKEN, TELEGRAM_CHAT_ID, msg, req)
+                        except: pass
+                    threading.Thread(target=send_tg).start()
+                    
+        cursor.close(); conn.close()
+        
+        # Check and send monthly alert
+        _check_and_send_monthly_alert(date_str)
+        
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@main_bp.route('/api/permissions', methods=['POST'])
+def add_permission():
+    try:
+        data = request.get_json()
+        monk_id = data.get('monk_id')
+        start_date = data.get('start_date')
+        end_date = data.get('end_date')
+        reason = data.get('reason', '')
+        
+        s_date = _date.fromisoformat(start_date)
+        e_date = _date.fromisoformat(end_date)
+        
+        if e_date < s_date:
+            return jsonify({'success': False, 'message': 'ថ្ងៃបញ្ចប់ត្រូវតែក្រោយថ្ងៃចាប់ផ្តើម'}), 400
+            
+        conn = connect_db()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            INSERT INTO monk_permission (monk_id, reason, start_date, end_date)
+            VALUES (%s, %s, %s, %s)
+        """, (monk_id, reason, start_date, end_date))
+        
+        from datetime import timedelta
+        current_date = s_date
+        while current_date <= e_date:
+            cursor.execute("""
+                INSERT INTO attendance_tbl (monk_id, status, date)
+                VALUES (%s, 'permission', %s)
+                ON CONFLICT (monk_id, date) DO UPDATE SET status = EXCLUDED.status;
+            """, (monk_id, current_date.isoformat()))
+            current_date += timedelta(days=1)
+            
         conn.commit(); cursor.close(); conn.close()
         return jsonify({'success': True})
     except Exception as e:
@@ -726,6 +848,126 @@ def remove_attendance(monk_id):
 @main_bp.route('/report')
 def report():
     return render_template('report.html')
+
+
+def _check_and_send_monthly_alert(date_str):
+    import os, calendar
+    try:
+        d = _date.fromisoformat(date_str)
+    except:
+        return
+        
+    last_day = calendar.monthrange(d.year, d.month)[1]
+    is_target_day = d.day == 15 or d.day == 30 or (d.day == last_day and last_day < 30)
+    
+    if not is_target_day:
+        return
+        
+    flag_file = os.path.join(os.path.dirname(__file__), 'last_monthly_alert.txt')
+    try:
+        if os.path.exists(flag_file):
+            with open(flag_file, 'r') as f:
+                if f.read().strip() == date_str:
+                    return
+    except:
+        pass
+        
+    import requests as req
+    import threading
+    import io
+    from collections import Counter
+    TELEGRAM_TOKEN   = '8950898077:AAHNR0tTgtJWy17wMXooKwg4nfQLGdfe5aw'
+    TELEGRAM_CHAT_ID = -1003960014484
+    
+    def send_tg():
+        try:
+            # 1. Fetch data
+            monks, start_date, end_date = _fetch_report_rows({'date': date_str})
+            
+            # 2. Filter violators
+            ABSENT_LIMIT = 2
+            PERM_LIMIT = 3
+            violators = []
+            for m in monks:
+                ab = m['absent_count'] >= ABSENT_LIMIT
+                pr = m['permission_count'] >= PERM_LIMIT
+                if ab or pr:
+                    violators.append(m)
+                    
+            # 3. Sort by Kuti frequency then Kuti name then absences/permissions
+            kuti_counts = Counter(m['residence'] for m in violators)
+            violators.sort(key=lambda m: (
+                -kuti_counts[m['residence']],
+                m['residence'],
+                -m['absent_count'],
+                -m['permission_count']
+            ))
+            
+            # 4. Generate HTML
+            html_str = _build_report_html(violators, start_date, end_date, ["អ្នកដែលមានបញ្ហា (អវត្តមាន/ច្បាប់លើសដែន)"], ABSENT_LIMIT, PERM_LIMIT)
+            
+            # 5. Generate PDF and Image
+            from weasyprint import HTML
+            from pdf2image import convert_from_bytes
+            from PIL import Image
+            
+            pdf_bytes = HTML(string=html_str).write_pdf()
+            
+            images = convert_from_bytes(pdf_bytes, fmt='png', dpi=150)
+            if len(images) > 1:
+                widths, heights = zip(*(i.size for i in images))
+                total_width = max(widths)
+                max_height = sum(heights)
+                img_to_send = Image.new('RGB', (total_width, max_height))
+                y_offset = 0
+                for im in images:
+                    img_to_send.paste(im, (0, y_offset))
+                    y_offset += im.size[1]
+            elif images:
+                img_to_send = images[0]
+            else:
+                img_to_send = Image.new('RGB', (100, 100))
+                
+            png_io = io.BytesIO()
+            img_to_send.save(png_io, format='PNG')
+            png_bytes = png_io.getvalue()
+            
+            # 6. Send to Telegram
+            fname_pdf = f"attendance_report_{end_date.isoformat()}.pdf"
+            fname_png = f"attendance_report_{end_date.isoformat()}.png"
+            
+            caption = (
+                f"🔔 របាយការណ៍បូកសរុប ១៥ថ្ងៃ 🔔\n"
+                f"កាលបរិច្ឆេទ៖ {start_date.strftime('%d/%m/%Y')} - {end_date.strftime('%d/%m/%Y')}\n"
+                f"ចំនួនអ្នកដែលមានបញ្ហា៖ {len(violators)} អង្គ\n"
+                f"សូមមេកុដិ និងអនុកុដិសួរនាំជាបន្ទាន់។"
+            )
+            
+            # Send Document (PDF)
+            tg_pdf = req.post(
+                f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendDocument',
+                data={'chat_id': TELEGRAM_CHAT_ID},
+                files={'document': (fname_pdf, io.BytesIO(pdf_bytes), 'application/pdf')},
+                timeout=25
+            ).json()
+            
+            # Send Photo (PNG) with Caption
+            tg_png = req.post(
+                f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto',
+                data={'chat_id': TELEGRAM_CHAT_ID, 'caption': caption},
+                files={'photo': (fname_png, io.BytesIO(png_bytes), 'image/png')},
+                timeout=25
+            ).json()
+            
+            if tg_png.get('ok') or tg_pdf.get('ok'):
+                with open(flag_file, 'w') as f:
+                    f.write(date_str)
+                    
+        except Exception as e:
+            print(f"Failed to send monthly alert: {e}")
+            
+    threading.Thread(target=send_tg).start()
+
 
 
 def _get_block_dates(date_str):
@@ -779,8 +1021,6 @@ def _fetch_report_rows(args):
         {where_sql}
         GROUP BY m.id, m.fullname, m.monk_type, m.position, m.vassa_years,
                  m.residence, m.education_level, m.academic_year
-        HAVING COUNT(CASE WHEN a.status = 'absent'     THEN 1 END) >= 2
-            OR COUNT(CASE WHEN a.status = 'permission' THEN 1 END) >= 3
         ORDER BY m.monk_type,
                  COUNT(CASE WHEN a.status = 'absent'     THEN 1 END) DESC,
                  COUNT(CASE WHEN a.status = 'permission' THEN 1 END) DESC,
@@ -1190,6 +1430,50 @@ def attendance_history(monk_id):
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
+@main_bp.route('/api/attendance/full-history/<int:monk_id>', methods=['GET'])
+def attendance_full_history(monk_id):
+    try:
+        date_str = request.args.get('date', _date.today().isoformat())
+        block_start, block_end = _get_block_dates(date_str)
+        conn = connect_db()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT a.date, a.status, p.reason, p.end_date
+            FROM attendance_tbl a
+            LEFT JOIN monk_permission p
+                   ON p.monk_id = a.monk_id
+                  AND a.date >= p.start_date
+                  AND a.date <= p.end_date
+            WHERE a.monk_id = %s
+              AND a.date >= %s
+              AND a.date <= %s
+            ORDER BY a.date DESC;
+        """, (monk_id, block_start.isoformat(), block_end.isoformat()))
+        rows = cursor.fetchall()
+        cursor.close(); conn.close()
+
+        absent_dates = []
+        perm_dates   = []
+        for date, status, reason, end_date in rows:
+            entry = {'date': date.isoformat() if hasattr(date, 'isoformat') else str(date)}
+            if status == 'absent':
+                absent_dates.append(entry)
+            elif status == 'permission':
+                entry['reason']   = reason   or ''
+                entry['end_date'] = end_date.isoformat() if end_date and hasattr(end_date, 'isoformat') else (str(end_date) if end_date else '')
+                perm_dates.append(entry)
+
+        return jsonify({
+            'success':          True,
+            'absent_count':     len(absent_dates),
+            'permission_count': len(perm_dates),
+            'absent_dates':     absent_dates,
+            'perm_dates':       perm_dates,
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 def _tg_send_message(token, chat_id, text, req_lib, timeout=10):
     """Send a text message to Telegram, splitting into chunks if > 4000 chars."""
     MAX = 4000
@@ -1295,6 +1579,35 @@ def submit_attendance():
             return jsonify({'success': False, 'message': f"Telegram: {tg.get('description', 'error')}"}), 500
 
         return jsonify({'success': True, 'total': len(rows)})
+
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@main_bp.route('/api/attendance/submit-image', methods=['POST'])
+def submit_attendance_image():
+    TELEGRAM_TOKEN   = '8950898077:AAHNR0tTgtJWy17wMXooKwg4nfQLGdfe5aw'
+    TELEGRAM_CHAT_ID = -1003960014484
+
+    try:
+        import requests as req
+        if 'image' not in request.files:
+            return jsonify({'success': False, 'message': 'No image provided'}), 400
+
+        image_bytes = request.files['image'].read()
+        caption = f'📋 បញ្ជីអវត្តមាន/ច្បាប់ — {_date.today().strftime("%d/%m/%Y")}'
+
+        resp = req.post(
+            f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto',
+            data={'chat_id': TELEGRAM_CHAT_ID, 'caption': caption},
+            files={'photo': ('attendance.png', image_bytes, 'image/png')},
+            timeout=30,
+        ).json()
+
+        if not resp.get('ok'):
+            return jsonify({'success': False, 'message': resp.get('description', 'Telegram error')}), 500
+
+        return jsonify({'success': True})
 
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
