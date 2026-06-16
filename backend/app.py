@@ -104,7 +104,7 @@ def _run_scheduler():
         sched.add_job(check_monthly_alert, 'interval', hours=1, id='monthly_alert_check',
                       misfire_grace_time=3600)
         sched.start()
-        print('[scheduler] APScheduler started (period 12h, alert 1h).')
+        print('[scheduler] APScheduler started (period 12h, check 1h).')
     except ImportError:
         print('[scheduler] APScheduler not installed — skipping.')
     except Exception as e:

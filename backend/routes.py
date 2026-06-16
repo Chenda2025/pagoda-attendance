@@ -691,7 +691,7 @@ def set_attendance():
         monk_id = data.get('monk_id')
         status  = data.get('status')
         date_str = data.get('date', _date.today().isoformat())
-        if status not in ('absent', 'permission', 'late'):
+        if status not in ('absent', 'permission'):
             return jsonify({'success': False, 'message': 'Invalid status'}), 400
         conn = connect_db()
         cursor = conn.cursor()
@@ -702,13 +702,12 @@ def set_attendance():
         """, (monk_id, status, date_str))
         conn.commit()
 
-        if status in ('absent', 'late'):
+        if status == 'absent':
             block_start, block_end = _get_block_dates(date_str)
             cursor.execute("""
                 SELECT 
                     SUM(CASE WHEN status = 'absent' THEN 1 ELSE 0 END),
-                    SUM(CASE WHEN status = 'permission' THEN 1 ELSE 0 END),
-                    SUM(CASE WHEN status = 'late' THEN 1 ELSE 0 END)
+                    SUM(CASE WHEN status = 'permission' THEN 1 ELSE 0 END)
                 FROM attendance_tbl
                 WHERE monk_id = %s
                   AND date >= %s
@@ -717,9 +716,8 @@ def set_attendance():
             row = cursor.fetchone()
             absent_count = int(row[0] or 0)
             perm_count = int(row[1] or 0)
-            late_count = int(row[2] or 0)
 
-            if absent_count in (3, 6) or late_count in (3, 6):
+            if absent_count in (3, 6):
                 # Fetch monk info
                 cursor.execute("SELECT fullname, residence FROM monk_tbl WHERE id = %s", (monk_id,))
                 monk_info = cursor.fetchone()

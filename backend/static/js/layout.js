@@ -458,7 +458,7 @@ function renderGrid(containerId, monks, rows, cols, type) {
                     ? escapeHtml(monk.position)
                     : `វស្សា ${monk.vassa_years}`;
                 const att = attendanceMap.get(monk.id);
-                const attClass = att === 'absent' ? ' seat-absent' : att === 'permission' ? ' seat-permission' : att === 'late' ? ' seat-late' : '';
+                const attClass = att === 'absent' ? ' seat-absent' : att === 'permission' ? ' seat-permission' : '';
                 
                 let badgeText = '';
                 let permIcon = '';
@@ -549,18 +549,16 @@ function updateCellDisplay(monkId) {
     const cell = document.querySelector(`[data-monk-id="${monkId}"]`);
     if (!cell) return;
     const status = attendanceMap.get(monkId);
-    cell.classList.remove('seat-absent', 'seat-permission', 'seat-late');
+    cell.classList.remove('seat-absent', 'seat-permission');
     const badge = cell.querySelector('.seat-status');
     if (badge) badge.remove();
     if (status) {
-        cell.classList.add(status === 'absent' ? 'seat-absent' : status === 'late' ? 'seat-late' : 'seat-permission');
+        cell.classList.add(status === 'absent' ? 'seat-absent' : 'seat-permission');
         const span = document.createElement('span');
         span.className = 'seat-status';
         
         if (status === 'absent') {
             span.textContent = 'អវត្តមាន';
-        } else if (status === 'late') {
-            span.textContent = 'យឺត';
         } else {
             let text = 'ច្បាប់';
             const permInfo = permissionsMap.get(monkId);
@@ -702,7 +700,6 @@ function initPopover() {
     const nameEl    = popover.querySelector('.att-popover-name');
     const absentBtn = popover.querySelector('.att-btn-absent');
     const permBtn   = popover.querySelector('.att-btn-permission');
-    const lateBtn   = popover.querySelector('.att-btn-late');
     const clearBtn  = popover.querySelector('.att-btn-clear');
 
     const MAX_ABSENT = 2;
@@ -726,9 +723,6 @@ function initPopover() {
         permBtn.disabled = false;
         permBtn.style.opacity = '';
         permBtn.title = '';
-        lateBtn.disabled = false;
-        lateBtn.style.opacity = '';
-        lateBtn.title = '';
     }
 
     document.addEventListener('click', async e => {
@@ -791,11 +785,6 @@ function initPopover() {
     absentBtn.addEventListener('click', async () => {
         popover.style.display = 'none';
         await setAttendance(activeMonkId, 'absent');
-    });
-    
-    lateBtn.addEventListener('click', async () => {
-        popover.style.display = 'none';
-        await setAttendance(activeMonkId, 'late');
     });
 
     // Permission Modal Logic
