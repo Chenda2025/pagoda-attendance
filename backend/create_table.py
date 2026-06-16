@@ -29,11 +29,16 @@ def create_monks_table():
             CREATE TABLE IF NOT EXISTS attendance_tbl (
                 id       SERIAL PRIMARY KEY,
                 monk_id  INTEGER NOT NULL REFERENCES monk_tbl(id) ON DELETE CASCADE,
-                status   VARCHAR(20) NOT NULL CHECK (status IN ('absent', 'permission')),
+                status   VARCHAR(20) NOT NULL CHECK (status IN ('absent', 'permission', 'late')),
                 date     DATE NOT NULL DEFAULT CURRENT_DATE,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE (monk_id, date)
             );
+        """)
+        
+        cursor.execute("""
+            ALTER TABLE attendance_tbl DROP CONSTRAINT IF EXISTS attendance_tbl_status_check;
+            ALTER TABLE attendance_tbl ADD CONSTRAINT attendance_tbl_status_check CHECK (status IN ('absent', 'permission', 'late'));
         """)
 
         index_queries = [
@@ -308,6 +313,32 @@ def create_seat_order_table():
         cursor.close()
     except Exception as e:
         print(f'Database error creating seat_order: {e}')
+        if conn: conn.rollback()
+    finally:
+        if conn: conn.close()
+
+
+def create_permission_table():
+    """Create the monk_permission table."""
+    conn = None
+    try:
+        conn = connect_db()
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS monk_permission (
+                id         SERIAL PRIMARY KEY,
+                monk_id    INTEGER NOT NULL REFERENCES monk_tbl(id) ON DELETE CASCADE,
+                reason     TEXT,
+                start_date DATE NOT NULL,
+                end_date   DATE NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+        conn.commit()
+        print("Table 'monk_permission' created / verified.")
+        cursor.close()
+    except Exception as e:
+        print(f"Database error creating monk_permission: {e}")
         if conn: conn.rollback()
     finally:
         if conn: conn.close()
