@@ -154,7 +154,7 @@ function renderTotals() {
     const absent = all.filter(m => attendanceMap.get(m.id) === 'absent').length;
     const perm   = all.filter(m => attendanceMap.get(m.id) === 'permission').length;
     const listBtn = document.getElementById('btn-show-att-list');
-    if (listBtn) listBtn.style.display = (absent > 0 || perm > 0) ? 'inline-flex' : 'none';
+    if (listBtn) listBtn.style.display = 'inline-flex';
 }
 
 async function showAttList() {
