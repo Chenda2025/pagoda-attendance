@@ -51,8 +51,8 @@ USERS = {
 
 # URL prefixes each role may access (startswith matching)
 _ROLE_PATHS = {
-    'user1': ('/layout', '/api/monks', '/api/attendance', '/api/export-layout', '/api/check', '/api/seat-order'),
-    'user2': ('/report', '/api/attendance', '/api/monks/', '/api/reports'),
+    'user1': ('/layout', '/api/monks', '/api/attendance', '/api/permissions', '/api/export-layout', '/api/check', '/api/seat-order'),
+    'user2': ('/report', '/api/attendance', '/api/permissions', '/api/monks/', '/api/reports'),
 }
 
 def _allowed(role, path):
