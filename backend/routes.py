@@ -2789,7 +2789,7 @@ def _make_export_html(monks, type_label, subtitle, report_type):
         else:
             ac  = 'color:#c53030;font-weight:bold' if ab else 'color:#718096'
             pc  = 'color:#c05621;font-weight:bold' if pr else 'color:#718096'
-            rng = (f'<span style="font-size:8.5px">{_h.escape(m["perm_dates"])}</span>'
+            rng = (f'<span style="font-size:15px">{_h.escape(m["perm_dates"])}</span>'
                    if m['perm_dates'] else '—')
             return (f'<tr style="background:{bg}">{n}{nm}'
                     f'<td class="num">{_h.escape(m["monk_type"])}</td>'
@@ -2820,56 +2820,56 @@ def _make_export_html(monks, type_label, subtitle, report_type):
         "@import url('https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&display=swap');"
         "*, *::before, *::after{box-sizing:border-box;margin:0;padding:0}"
         "body{font-family:'Battambang','Khmer MN','Khmer Sangam MN',sans-serif;"
-        "color:#1a202c;font-size:9px;background:#fff}"
+        "color:#1a202c;font-size:17px;background:#fff}"
 
         # Header
         ".header{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);"
-        "color:#fff;padding:13px 16px 11px;border-radius:7px;margin-bottom:12px}"
+        "color:#fff;padding:16px 18px 14px;border-radius:7px;margin-bottom:14px}"
         ".hdr-top{display:flex;justify-content:space-between;align-items:flex-start}"
-        ".hdr-title{font-size:15px;font-weight:700;letter-spacing:.3px}"
-        ".hdr-sub{font-size:8px;opacity:.85;margin-top:3px}"
-        ".hdr-right{text-align:right;font-size:8px;opacity:.85}"
-        ".hdr-divider{border:none;border-top:1px solid rgba(255,255,255,.3);margin:8px 0 7px}"
-        ".hdr-stats{display:flex;gap:18px}"
-        ".hdr-stat{font-size:8px;opacity:.9}"
-        ".hdr-stat strong{font-size:13px;display:block;font-weight:700}"
+        ".hdr-title{font-size:27px;font-weight:700;letter-spacing:.3px}"
+        ".hdr-sub{font-size:15px;opacity:.85;margin-top:4px}"
+        ".hdr-right{text-align:right;font-size:15px;opacity:.85}"
+        ".hdr-divider{border:none;border-top:1px solid rgba(255,255,255,.3);margin:10px 0 8px}"
+        ".hdr-stats{display:flex;gap:20px}"
+        ".hdr-stat{font-size:15px;opacity:.9}"
+        ".hdr-stat strong{font-size:23px;display:block;font-weight:700}"
 
         # Chips
-        ".chips{display:flex;gap:7px;margin-bottom:11px}"
-        ".chip{flex:1;padding:6px 8px;border-radius:6px;text-align:center}"
-        ".chip-lbl{font-size:7px;display:block;margin-bottom:1px}"
-        ".chip-val{font-size:14px;font-weight:700;display:block}"
+        ".chips{display:flex;gap:8px;margin-bottom:13px}"
+        ".chip{flex:1;padding:7px 9px;border-radius:6px;text-align:center}"
+        ".chip-lbl{font-size:13px;display:block;margin-bottom:2px}"
+        ".chip-val{font-size:24px;font-weight:700;display:block}"
         ".c-total{background:#edf2f7}.c-total .chip-lbl{color:#718096}.c-total .chip-val{color:#2d3748}"
         ".c-abs{background:#fed7d7}.c-abs .chip-lbl{color:#c53030}.c-abs .chip-val{color:#c53030}"
         ".c-perm{background:#feebc8}.c-perm .chip-lbl{color:#c05621}.c-perm .chip-val{color:#c05621}"
         ".c-ok{background:#c6f6d5}.c-ok .chip-lbl{color:#276749}.c-ok .chip-val{color:#276749}"
 
         # Section
-        ".sec{padding:5px 10px;font-size:10px;font-weight:700;border-radius:4px;margin:12px 0 4px}"
+        ".sec{padding:6px 12px;font-size:18px;font-weight:700;border-radius:4px;margin:14px 0 5px}"
         ".sec-b{background:#fff8e1;color:#8a6100;border-left:4px solid #f0c040}"
         ".sec-s{background:#f1f8e9;color:#1b5e20;border-left:4px solid #66bb6a}"
-        ".sec-count{font-weight:400;font-size:8px;opacity:.75;margin-left:6px}"
+        ".sec-count{font-weight:400;font-size:14px;opacity:.75;margin-left:7px}"
 
         # Table
-        "table{width:100%;border-collapse:collapse;margin-bottom:4px}"
+        "table{width:100%;border-collapse:collapse;margin-bottom:5px}"
         ".thead-row{background:#4a5568}"
-        "th{padding:6px 6px;text-align:left;font-size:7.5px;font-weight:700;"
+        "th{padding:8px 8px;text-align:left;font-size:14px;font-weight:700;"
         "color:#fff;white-space:nowrap;border-right:1px solid rgba(255,255,255,.15)}"
         "th:last-child{border-right:none}"
-        "td{padding:5px 6px;font-size:8.5px;border-bottom:1px solid #edf2f7;vertical-align:middle}"
+        "td{padding:7px 8px;font-size:16px;border-bottom:1px solid #edf2f7;vertical-align:middle}"
         "tr:nth-child(even) td{background:#f8fafc}"
         ".num{text-align:center}"
-        ".dates{font-size:7.5px;line-height:1.6}"
-        ".badge-danger{background:#fed7d7;color:#c53030;padding:1px 6px;"
-        "border-radius:8px;font-size:7.5px;font-weight:700;white-space:nowrap}"
-        ".badge-warning{background:#feebc8;color:#c05621;padding:1px 6px;"
-        "border-radius:8px;font-size:7.5px;font-weight:700;white-space:nowrap}"
-        ".badge-ok{background:#c6f6d5;color:#276749;padding:1px 6px;"
-        "border-radius:8px;font-size:7.5px;font-weight:700;white-space:nowrap}"
+        ".dates{font-size:14px;line-height:1.6}"
+        ".badge-danger{background:#fed7d7;color:#c53030;padding:2px 7px;"
+        "border-radius:8px;font-size:14px;font-weight:700;white-space:nowrap}"
+        ".badge-warning{background:#feebc8;color:#c05621;padding:2px 7px;"
+        "border-radius:8px;font-size:14px;font-weight:700;white-space:nowrap}"
+        ".badge-ok{background:#c6f6d5;color:#276749;padding:2px 7px;"
+        "border-radius:8px;font-size:14px;font-weight:700;white-space:nowrap}"
 
         # Footer
         ".footer{position:running(footer);display:flex;justify-content:space-between;"
-        "font-size:7px;color:#a0aec0;border-top:1px solid #e2e8f0;padding-top:4px}"
+        "font-size:12px;color:#a0aec0;border-top:1px solid #e2e8f0;padding-top:5px}"
         "@page{size:A4;margin:12mm 10mm 17mm;"
         "@bottom-center{content:element(footer)}}"
     )
