@@ -556,7 +556,7 @@ async function exportReport(action, fmt = 'docx') {
     try {
         if (isTg) {
             // Take screenshot and send to submit-image
-            const wrapper = document.querySelector('.report-wrapper');
+            const wrapper = document.querySelector('#report-content');
             if (!wrapper) throw new Error('រកមិនឃើញរបាយការណ៍');
             
             // Add a small delay to ensure rendering
