@@ -1116,6 +1116,7 @@ def _build_report_html(monks, start_date, end_date, filters_applied, ABSENT_LIMI
         'border-radius:10px;font-size:8px;font-weight:bold;white-space:nowrap;}'
         '.dates{font-size:8.5px;line-height:1.7;}'
         '@page{size:A4;margin:12mm 10mm;}'
+        '@media print { @page { size: A4 landscape; margin: 10mm; } }'
         '</style></head><body>'
         '<h1>វត្តនិរោធរង្សី — របាយការណ៍វត្តមាន</h1>'
         f'<p class="sub">ចន្លោះ: {date_range} (១៥ ថ្ងៃ)</p>'
@@ -1804,7 +1805,9 @@ def export_monks():
 
             html_str = f'''<!DOCTYPE html>
 <html lang="km"><head><meta charset="UTF-8">
-<style>{css}</style></head><body>
+<style>{css}
+@media print {{ @page {{ size: A4 landscape; margin: 10mm; }} }}
+</style></head><body>
 
 <div class="header">
     <div class="hdr-top">
@@ -2160,7 +2163,9 @@ def export_layout_pdf():
             "@bottom-center{content:element(footer)}}"
         )
         html_str = f'''<!DOCTYPE html>
-<html lang="km"><head><meta charset="UTF-8"><style>{css}</style></head><body>
+<html lang="km"><head><meta charset="UTF-8"><style>{css}
+@media print {{ @page {{ size: A4 landscape; margin: 10mm; }} }}
+</style></head><body>
 
 <div class="header">
   <div class="hdr-row">
@@ -2860,7 +2865,9 @@ def _make_export_html(monks, type_label, subtitle, report_type):
     )
 
     return f'''<!DOCTYPE html>
-<html lang="km"><head><meta charset="UTF-8"><style>{css}</style></head><body>
+<html lang="km"><head><meta charset="UTF-8"><style>{css}
+@media print {{ @page {{ size: A4 landscape; margin: 10mm; }} }}
+</style></head><body>
 
 <div class="header">
   <div class="hdr-top">
