@@ -554,21 +554,38 @@ async function exportReport(action, fmt = 'docx') {
     }
 
     try {
-        const res = await fetch(`/api/reports/export?${p}`);
-        if (!isTg) {
-            if (!res.ok) { const j = await res.json(); throw new Error(j.message); }
-            const blob = await res.blob();
-            const ext  = isPdf ? 'pdf' : 'docx';
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = `report_${type}_${date}.${ext}`;
-            a.click();
-            URL.revokeObjectURL(a.href);
-            showToast(isPdf ? 'ឯកសារ PDF បានដំណើរការ!' : 'ឯកសារ Word បានដំណើរការ!', 'success');
-        } else {
+        if (isTg) {
+            // Take screenshot and send to submit-image
+            const wrapper = document.querySelector('.report-wrapper');
+            if (!wrapper) throw new Error('រកមិនឃើញរបាយការណ៍');
+            
+            // Add a small delay to ensure rendering
+            await new Promise(r => setTimeout(r, 200));
+            const canvas = await html2canvas(wrapper, { scale: 2, useCORS: true });
+            
+            const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+            const form = new FormData();
+            form.append('image', blob, 'report.png');
+            
+            const res = await fetch('/api/reports/submit-image', { method: 'POST', body: form });
             const json = await res.json();
             if (!json.success) throw new Error(json.message);
-            showToast(`បានបញ្ជូន ${json.total} នាក់ ទៅ Telegram!`, 'success');
+            showToast('បានបញ្ជូនរូបភាពទៅ Telegram ជោគជ័យ!', 'success');
+        } else if (isPdf) {
+            // Open print dialog in a new tab
+            p.set('fmt', 'html');
+            window.open(`/api/reports/export?${p}`, '_blank');
+        } else {
+            // DOCX download
+            const res = await fetch(`/api/reports/export?${p}`);
+            if (!res.ok) { const j = await res.json(); throw new Error(j.message); }
+            const blob = await res.blob();
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `report_${type}_${date}.docx`;
+            a.click();
+            URL.revokeObjectURL(a.href);
+            showToast('ឯកសារ Word បានដំណើរការ!', 'success');
         }
     } catch (err) {
         showToast('មានបញ្ហា: ' + err.message, 'error');

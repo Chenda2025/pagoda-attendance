@@ -931,7 +931,14 @@ function exportWord() {
 
 function exportPdf() {
     const btn = document.getElementById('btn-export-pdf');
-    _doExport('/api/export-layout-pdf', 'pdf', btn, 'កំពុងបង្កើត...', 'ឯកសារ PDF បានដំណើរការជោគជ័យ!');
+    const origHTML = btn.innerHTML;
+    btn.disabled = true;
+    btn.textContent = 'កំពុងរៀបចំ...';
+    setTimeout(() => {
+        window.open(`/api/export-layout-pdf?date=${document.getElementById('att-date').value}`, '_blank');
+        btn.disabled = false;
+        btn.innerHTML = origHTML;
+    }, 300);
 }
 
 // ============ PERMISSION PREVIEW TOOLTIP ============

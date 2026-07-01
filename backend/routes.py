@@ -901,38 +901,11 @@ def _check_and_send_monthly_alert(date_str):
                 -m['permission_count']
             ))
             
-            # 4. Generate HTML
-            html_str = _build_report_html(violators, start_date, end_date, ["អ្នកដែលមានបញ្ហា (អវត្តមាន/ច្បាប់លើសដែន)"], ABSENT_LIMIT, PERM_LIMIT)
+            # 4. Generate DOCX
+            docx_buf = _make_export_docx(violators, 'អ្នកដែលមានបញ្ហា (អវត្តមាន/ច្បាប់លើសដែន)', '', 'biweekly')
             
-            # 5. Generate PDF and Image
-            from weasyprint import HTML
-            from pdf2image import convert_from_bytes
-            from PIL import Image
-            
-            pdf_bytes = HTML(string=html_str).write_pdf()
-            
-            images = convert_from_bytes(pdf_bytes, fmt='png', dpi=150)
-            if len(images) > 1:
-                widths, heights = zip(*(i.size for i in images))
-                total_width = max(widths)
-                max_height = sum(heights)
-                img_to_send = Image.new('RGB', (total_width, max_height))
-                y_offset = 0
-                for im in images:
-                    img_to_send.paste(im, (0, y_offset))
-                    y_offset += im.size[1]
-            elif images:
-                img_to_send = images[0]
-            else:
-                img_to_send = Image.new('RGB', (100, 100))
-                
-            png_io = io.BytesIO()
-            img_to_send.save(png_io, format='PNG')
-            png_bytes = png_io.getvalue()
-            
-            # 6. Send to Telegram
-            fname_pdf = f"attendance_report_{end_date.isoformat()}.pdf"
-            fname_png = f"attendance_report_{end_date.isoformat()}.png"
+            # 5. Send to Telegram
+            fname_docx = f"attendance_report_{end_date.isoformat()}.docx"
             
             caption = (
                 f"🔔 របាយការណ៍បូកសរុប ១៥ថ្ងៃ 🔔\n"
@@ -941,11 +914,10 @@ def _check_and_send_monthly_alert(date_str):
                 f"សូមមេកុដិ និងអនុកុដិសួរនាំជាបន្ទាន់។"
             )
             
-            # Send Document (PDF)
-            tg_pdf = req.post(
+            tg_docx = req.post(
                 f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendDocument',
-                data={'chat_id': TELEGRAM_CHAT_ID},
-                files={'document': (fname_pdf, io.BytesIO(pdf_bytes), 'application/pdf')},
+                data={'chat_id': TELEGRAM_CHAT_ID, 'caption': caption},
+                files={'document': (fname_docx, docx_buf, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')},
                 timeout=25
             ).json()
             
@@ -1164,8 +1136,7 @@ def _build_report_html(monks, start_date, end_date, filters_applied, ABSENT_LIMI
 def export_attendance_report_pdf():
     try:
         import io, requests as req
-        from weasyprint import HTML
-
+        
         action = request.args.get('action', 'download')
         monks, start_date, end_date = _fetch_report_rows(request.args)
 
@@ -1180,33 +1151,8 @@ def export_attendance_report_pdf():
                 filters_applied.append(f"{label}: {v}")
 
         html_str  = _build_report_html(monks, start_date, end_date, filters_applied, ABSENT_LIMIT, PERM_LIMIT)
-        pdf_bytes = HTML(string=html_str).write_pdf()
-        buf       = io.BytesIO(pdf_bytes)
-        fname     = f"attendance_report_{end_date.isoformat()}.pdf"
-
-        absent_viol = sum(1 for m in monks if m['absent_count']     >= ABSENT_LIMIT)
-        perm_viol   = sum(1 for m in monks if m['permission_count'] >= PERM_LIMIT)
-
-        if action == 'telegram':
-            TELEGRAM_TOKEN   = '8950898077:AAHNR0tTgtJWy17wMXooKwg4nfQLGdfe5aw'
-            TELEGRAM_CHAT_ID = -1003960014484
-            caption = (
-                f"📋 របាយការណ៍វត្តមាន (PDF) — {end_date.strftime('%d/%m/%Y')}\n"
-                f"📊 សរុប {len(monks)} នាក់  |  ❌ {absent_viol}  |  📋 {perm_viol}"
-            )
-            if filters_applied:
-                caption += '\n🔎 ' + ' | '.join(filters_applied)
-            tg = req.post(
-                f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendDocument',
-                data={'chat_id': TELEGRAM_CHAT_ID, 'caption': caption},
-                files={'document': (fname, buf, 'application/pdf')},
-                timeout=25
-            ).json()
-            if not tg.get('ok'):
-                return jsonify({'success': False, 'message': f"Telegram: {tg.get('description')}"}), 500
-            return jsonify({'success': True, 'total': len(monks)})
-
-        return send_file(buf, mimetype='application/pdf', as_attachment=True, download_name=fname)
+        html_str += '<script>window.onload = function() { setTimeout(function(){ window.print(); }, 500); }</script>'
+        return html_str
 
     except ImportError:
         return jsonify({'success': False,
@@ -1366,28 +1312,7 @@ def export_attendance_report():
             if not tg.get('ok'):
                 return jsonify({'success': False, 'message': f"Telegram (Word): {tg.get('description')}"}), 500
 
-            if action == 'telegram-both':
-                from weasyprint import HTML
-                _fa = []
-                for k, lbl in [('monk_type','ប្រភេទ'),('kuti','កុដិ'),
-                                ('education_level','ការសិក្សា'),('academic_year','ឆ្នាំ'),('name','ឈ្មោះ')]:
-                    v = request.args.get(k, '').strip()
-                    if v: _fa.append(f"{lbl}: {v}")
-                html_str  = _build_report_html(monks, start_date, end_date, _fa, ABSENT_LIMIT, PERM_LIMIT)
-                pdf_bytes = HTML(string=html_str).write_pdf()
-                pdf_buf   = io.BytesIO(pdf_bytes)
-                fname_pdf = f"attendance_report_{end_date.isoformat()}.pdf"
-                tg2 = req.post(
-                    f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendDocument',
-                    data={'chat_id': TELEGRAM_CHAT_ID,
-                          'caption': f"📄 PDF — {end_date.strftime('%d/%m/%Y')}"},
-                    files={'document': (fname_pdf, pdf_buf, 'application/pdf')},
-                    timeout=25
-                ).json()
-                if not tg2.get('ok'):
-                    return jsonify({'success': False, 'message': f"Telegram (PDF): {tg2.get('description')}"}), 500
-
-            return jsonify({'success': True, 'total': len(monks)})
+            
 
         fname = f"attendance_report_{end_date.isoformat()}.docx"
         return send_file(
@@ -1767,8 +1692,7 @@ def export_monks():
 
         # ── PDF ──────────────────────────────────────────────────────────────
         elif fmt == 'pdf':
-            from weasyprint import HTML
-
+            
             bhikkhus  = [m for m in monks if m['monk_type'] == 'ភិក្ខុ']
             samaneras = [m for m in monks if m['monk_type'] == 'សាមណេរ']
 
@@ -2150,8 +2074,7 @@ def export_layout_pdf():
         return max(lo, min(hi, int(val or 0)))
 
     try:
-        from weasyprint import HTML
-
+        
         br = clamp(request.args.get('br', 3),  1, 30)
         bc = clamp(request.args.get('bc', 5),  1, 30)
         sr = clamp(request.args.get('sr', 12), 1, 50)
@@ -2975,6 +2898,34 @@ def _make_export_html(monks, type_label, subtitle, report_type):
 
 # ---- Unified export route ----------------------------------------
 
+
+@main_bp.route('/api/reports/submit-image', methods=['POST'])
+def submit_report_image():
+    try:
+        import requests as req
+        if 'image' not in request.files:
+            return jsonify({'success': False, 'message': 'រកមិនឃើញរូបភាព'}), 400
+            
+        file = request.files['image']
+        TELEGRAM_TOKEN   = '8950898077:AAHNR0tTgtJWy17wMXooKwg4nfQLGdfe5aw'
+        TELEGRAM_CHAT_ID = -1003960014484
+        
+        caption = "របាយការណ៍វត្តមាន (បំប្លែងជារូបភាព)"
+        
+        tg = req.post(
+            f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto',
+            data={'chat_id': TELEGRAM_CHAT_ID, 'caption': caption},
+            files={'photo': ('report.png', file.read(), 'image/png')},
+            timeout=25
+        ).json()
+        
+        if not tg.get('ok'):
+            return jsonify({'success': False, 'message': f"Telegram: {tg.get('description')}"}), 500
+            
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
 @main_bp.route('/api/reports/export', methods=['GET'])
 def unified_export():
     """Export any report type (daily/biweekly/monthly/annual/triennial) as docx or pdf."""
@@ -2993,13 +2944,10 @@ def unified_export():
         av = sum(1 for m in monks if m['absent_count']     >= DISC_ABSENT_MIN)
         pv = sum(1 for m in monks if m['permission_count'] >= DISC_PERM_MIN)
 
-        if fmt == 'pdf':
-            from weasyprint import HTML
-            buf      = io.BytesIO(
-                HTML(string=_make_export_html(monks, type_label, subtitle, report_type)).write_pdf()
-            )
-            fname    = f"report_{report_type}_{period_start}.pdf"
-            mimetype = 'application/pdf'
+        if fmt == 'pdf' or fmt == 'html':
+            html = _make_export_html(monks, type_label, subtitle, report_type)
+            html += '<script>window.onload = function() { setTimeout(function(){ window.print(); }, 500); }</script>'
+            return html
         else:
             buf      = _make_export_docx(monks, type_label, subtitle, report_type)
             fname    = f"report_{report_type}_{period_start}.docx"
@@ -3021,33 +2969,7 @@ def unified_export():
                 return jsonify({'success': False, 'message': f"Telegram: {tg.get('description')}"}), 500
             return jsonify({'success': True, 'total': len(monks)})
 
-        if action == 'telegram-both':
-            from weasyprint import HTML as _HTML
-            docx_buf  = _make_export_docx(monks, type_label, subtitle, report_type)
-            docx_name = f"report_{report_type}_{period_start}.docx"
-            pdf_buf   = io.BytesIO(
-                _HTML(string=_make_export_html(monks, type_label, subtitle, report_type)).write_pdf()
-            )
-            pdf_name  = f"report_{report_type}_{period_start}.pdf"
-            tg1 = req.post(
-                f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendDocument',
-                data={'chat_id': TELEGRAM_CHAT_ID, 'caption': caption},
-                files={'document': (docx_name, docx_buf,
-                                    'application/vnd.openxmlformats-officedocument.wordprocessingml.document')},
-                timeout=25
-            ).json()
-            if not tg1.get('ok'):
-                return jsonify({'success': False, 'message': f"Telegram (Word): {tg1.get('description')}"}), 500
-            tg2 = req.post(
-                f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendDocument',
-                data={'chat_id': TELEGRAM_CHAT_ID,
-                      'caption': f"📄 PDF — {type_label} — {subtitle}"},
-                files={'document': (pdf_name, pdf_buf, 'application/pdf')},
-                timeout=30
-            ).json()
-            if not tg2.get('ok'):
-                return jsonify({'success': False, 'message': f"Telegram (PDF): {tg2.get('description')}"}), 500
-            return jsonify({'success': True, 'total': len(monks)})
+        
 
         return send_file(buf, mimetype=mimetype, as_attachment=True, download_name=fname)
 
