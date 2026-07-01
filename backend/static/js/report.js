@@ -559,9 +559,16 @@ async function exportReport(action, fmt = 'docx') {
             const wrapper = document.querySelector('#report-content');
             if (!wrapper) throw new Error('រកមិនឃើញរបាយការណ៍');
             
+            // Temporarily set a fixed width (landscape) to ensure the table doesn't get squished
+            const origWidth = wrapper.style.width;
+            wrapper.style.width = '1200px';
+            
             // Add a small delay to ensure rendering
             await new Promise(r => setTimeout(r, 200));
-            const canvas = await html2canvas(wrapper, { scale: 2, useCORS: true });
+            const canvas = await html2canvas(wrapper, { scale: 1.5, useCORS: true, backgroundColor: '#f7fafc' });
+            
+            // Restore width
+            wrapper.style.width = origWidth;
             
             const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
             const form = new FormData();
