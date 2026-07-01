@@ -519,6 +519,66 @@ function renderSummary(monks) {
 
 // ============ EXPORT ============
 
+const _PDF_PAGE_W_PX = 1400; // render width; A4 landscape aspect ratio is preserved by jsPDF below
+
+// Renders a standalone export HTML document (as returned by /api/reports/export?fmt=html)
+// off-screen at A4-landscape proportions and returns the rasterized canvas.
+async function _renderExportHtmlToCanvas(html) {
+    // Strip the server's auto-print script; we render this ourselves and don't want a print dialog.
+    html = html.replace(/<script>[\s\S]*?window\.print\(\)[\s\S]*?<\/script>/i, '');
+
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = `position:fixed; top:-99999px; left:-99999px; width:${_PDF_PAGE_W_PX}px; border:0;`;
+    document.body.appendChild(iframe);
+
+    try {
+        await new Promise((resolve) => {
+            iframe.onload = resolve;
+            iframe.srcdoc = html;
+        });
+
+        const doc = iframe.contentDocument;
+        iframe.style.height = doc.body.scrollHeight + 'px';
+        await new Promise(r => setTimeout(r, 200)); // let fonts/layout settle
+
+        return await html2canvas(doc.body, {
+            scale: 2,
+            useCORS: true,
+            backgroundColor: '#ffffff',
+            windowWidth: _PDF_PAGE_W_PX
+        });
+    } finally {
+        document.body.removeChild(iframe);
+    }
+}
+
+// Renders the export HTML and saves it as a real, downloadable A4-landscape PDF file.
+async function _downloadHtmlAsPdf(html, filename) {
+    const canvas = await _renderExportHtmlToCanvas(html);
+
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    const pageW = pdf.internal.pageSize.getWidth();
+    const pageH = pdf.internal.pageSize.getHeight();
+    const imgW  = pageW;
+    const imgH  = (canvas.height * imgW) / canvas.width;
+    const imgData = canvas.toDataURL('image/jpeg', 0.95);
+
+    let heightLeft = imgH;
+    let position   = 0;
+    pdf.addImage(imgData, 'JPEG', 0, position, imgW, imgH);
+    heightLeft -= pageH;
+
+    while (heightLeft > 0) {
+        position -= pageH;
+        pdf.addPage();
+        pdf.addImage(imgData, 'JPEG', 0, position, imgW, imgH);
+        heightLeft -= pageH;
+    }
+
+    pdf.save(filename);
+}
+
 async function exportReport(action, fmt = 'docx') {
     const type    = _reportType;
     const filters = getFilters();
@@ -536,15 +596,17 @@ async function exportReport(action, fmt = 'docx') {
 
     const date = filters.date || todayISO();
     const d    = new Date(date);
-    const p    = new URLSearchParams({ type, fmt, action, date });
+    const p = new URLSearchParams({
+        type, fmt, action, date,
+        violation:       filters.violation,
+        monk_type:       filters.monk_type,
+        kuti:            filters.kuti,
+        education_level: filters.education_level,
+        academic_year:   filters.academic_year,
+        name:            filters.name,
+    });
 
-    if (type === 'biweekly') {
-        p.set('monk_type',       filters.monk_type);
-        p.set('kuti',            filters.kuti);
-        p.set('education_level', filters.education_level);
-        p.set('academic_year',   filters.academic_year);
-        p.set('name',            filters.name);
-    } else if (type === 'annual') {
+    if (type === 'annual') {
         p.set('year', d.getFullYear());
     } else if (type === 'monthly') {
         p.set('year',  d.getFullYear());
@@ -555,33 +617,29 @@ async function exportReport(action, fmt = 'docx') {
 
     try {
         if (isTg) {
-            // Take screenshot and send to submit-image
-            const wrapper = document.querySelector('#report-content');
-            if (!wrapper) throw new Error('រកមិនឃើញរបាយការណ៍');
-            
-            // Temporarily set a fixed width (landscape) to ensure the table doesn't get squished
-            const origWidth = wrapper.style.width;
-            wrapper.style.width = '1200px';
-            
-            // Add a small delay to ensure rendering
-            await new Promise(r => setTimeout(r, 200));
-            const canvas = await html2canvas(wrapper, { scale: 1.5, useCORS: true, backgroundColor: '#f7fafc' });
-            
-            // Restore width
-            wrapper.style.width = origWidth;
-            
+            // Render the same A4-landscape PDF report HTML and send that image to Telegram,
+            // so the Telegram image always matches the PDF report (incl. active filters).
+            p.set('fmt', 'html');
+            const res0 = await fetch(`/api/reports/export?${p}`);
+            if (!res0.ok) { const j = await res0.json(); throw new Error(j.message); }
+            const html = await res0.text();
+
+            const canvas = await _renderExportHtmlToCanvas(html);
             const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
             const form = new FormData();
             form.append('image', blob, 'report.png');
-            
+
             const res = await fetch('/api/reports/submit-image', { method: 'POST', body: form });
             const json = await res.json();
             if (!json.success) throw new Error(json.message);
             showToast('បានបញ្ជូនរូបភាពទៅ Telegram ជោគជ័យ!', 'success');
         } else if (isPdf) {
-            // Open print dialog in a new tab
             p.set('fmt', 'html');
-            window.open(`/api/reports/export?${p}`, '_blank');
+            const res = await fetch(`/api/reports/export?${p}`);
+            if (!res.ok) { const j = await res.json(); throw new Error(j.message); }
+            const html = await res.text();
+            await _downloadHtmlAsPdf(html, `report_${type}_${date}.pdf`);
+            showToast('ឯកសារ PDF បានដំណើរការ!', 'success');
         } else {
             // DOCX download
             const res = await fetch(`/api/reports/export?${p}`);

@@ -955,6 +955,20 @@ def _get_block_dates(date_str):
     return start, end
 
 
+def _format_date_list(dates):
+    """Format a list of dates in the same month as '03, 04, 05 - 07 - 2026',
+    grouping by month/year when the list spans more than one month."""
+    from itertools import groupby
+    dates = [d for d in (dates or []) if d]
+    if not dates:
+        return ''
+    groups = []
+    for (year, month), grp in groupby(dates, key=lambda d: (d.year, d.month)):
+        days = ', '.join(f'{d.day:02d}' for d in grp)
+        groups.append(f'{days} - {month:02d} - {year}')
+    return '; '.join(groups)
+
+
 def _fetch_report_rows(args):
     date_str   = (args.get('date') or _date.today().isoformat())
     start_date, end_date = _get_block_dates(date_str)
@@ -979,12 +993,8 @@ def _fetch_report_rows(args):
                m.residence, m.education_level, m.academic_year,
                COUNT(CASE WHEN a.status = 'absent'     THEN 1 END) AS absent_count,
                COUNT(CASE WHEN a.status = 'permission' THEN 1 END) AS perm_count,
-               STRING_AGG(CASE WHEN a.status = 'absent'
-                               THEN TO_CHAR(a.date, 'DD/MM') END,
-                          ', ' ORDER BY a.date) AS absent_dates,
-               STRING_AGG(CASE WHEN a.status = 'permission'
-                               THEN TO_CHAR(a.date, 'DD/MM') END,
-                          ', ' ORDER BY a.date) AS perm_dates
+               ARRAY_AGG(a.date ORDER BY a.date) FILTER (WHERE a.status = 'absent')     AS absent_dates,
+               ARRAY_AGG(a.date ORDER BY a.date) FILTER (WHERE a.status = 'permission') AS perm_dates
         FROM monk_tbl m
         LEFT JOIN attendance_tbl a
             ON a.monk_id = m.id AND a.date >= %s AND a.date <= %s
@@ -1009,7 +1019,7 @@ def _fetch_report_rows(args):
         'vassa_years': r[4], 'residence': (r[5] or '').replace('_', ' '),
         'education_level': r[6] or '', 'academic_year': r[7] or '',
         'absent_count': int(r[8] or 0), 'permission_count': int(r[9] or 0),
-        'absent_dates': r[10] or '', 'perm_dates': r[11] or '',
+        'absent_dates': _format_date_list(r[10]), 'perm_dates': _format_date_list(r[11]),
     } for r in rows]
 
     return monks, start_date, end_date
@@ -2933,6 +2943,34 @@ def submit_report_image():
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 
+def _apply_report_filters(monks, args):
+    """Apply the same monk_type/kuti/education/academic_year/name/violation
+    filters the live report page applies client-side, so exports match what
+    the user sees on screen."""
+    monk_type       = (args.get('monk_type')       or '').strip()
+    kuti            = (args.get('kuti')            or '').strip()
+    education_level = (args.get('education_level') or '').strip()
+    academic_year   = (args.get('academic_year')   or '').strip()
+    name            = (args.get('name')            or '').strip().lower()
+    violation       = args.get('violation', 'all')
+
+    def keep(m):
+        if monk_type       and m.get('monk_type')       != monk_type:                  return False
+        if kuti            and m.get('residence')       != kuti.replace('_', ' '):     return False
+        if education_level and m.get('education_level') != education_level:            return False
+        if academic_year   and m.get('academic_year')   != academic_year:              return False
+        if name            and name not in (m.get('fullname') or '').lower():          return False
+        if violation == 'violations' and not (m['absent_count'] >= DISC_ABSENT_MIN or m['permission_count'] >= DISC_PERM_MIN):
+            return False
+        if violation == 'absent'     and not (m['absent_count']     >= DISC_ABSENT_MIN):
+            return False
+        if violation == 'permission' and not (m['permission_count'] >= DISC_PERM_MIN):
+            return False
+        return True
+
+    return [m for m in monks if keep(m)]
+
+
 @main_bp.route('/api/reports/export', methods=['GET'])
 def unified_export():
     """Export any report type (daily/biweekly/monthly/annual/triennial) as docx or pdf."""
@@ -2947,6 +2985,7 @@ def unified_export():
         TELEGRAM_CHAT_ID = -1003960014484
 
         monks, type_label, subtitle, period_start, period_end = _fetch_export_data(report_type, request.args)
+        monks = _apply_report_filters(monks, request.args)
 
         av = sum(1 for m in monks if m['absent_count']     >= DISC_ABSENT_MIN)
         pv = sum(1 for m in monks if m['permission_count'] >= DISC_PERM_MIN)

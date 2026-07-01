@@ -578,8 +578,63 @@ function _buildExportUrl(type, fmt, action) {
   return `/api/reports/export?${p}`;
 }
 
+// Renders a standalone export HTML document off-screen and saves it as a real, downloadable PDF file.
+async function _downloadHtmlAsPdf(html, filename) {
+  // Strip the server's auto-print script; we render this ourselves and don't want a print dialog.
+  html = html.replace(/<script>[\s\S]*?window\.print\(\)[\s\S]*?<\/script>/i, '');
+
+  const PAGE_W_PX = 1400; // render width; A4 landscape aspect ratio is preserved by jsPDF below
+
+  const iframe = document.createElement('iframe');
+  iframe.style.cssText = `position:fixed; top:-99999px; left:-99999px; width:${PAGE_W_PX}px; border:0;`;
+  document.body.appendChild(iframe);
+
+  try {
+    await new Promise((resolve) => {
+      iframe.onload = resolve;
+      iframe.srcdoc = html;
+    });
+
+    const doc = iframe.contentDocument;
+    iframe.style.height = doc.body.scrollHeight + 'px';
+    await new Promise(r => setTimeout(r, 200)); // let fonts/layout settle
+
+    const canvas = await html2canvas(doc.body, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      windowWidth: PAGE_W_PX
+    });
+
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    const pageW = pdf.internal.pageSize.getWidth();
+    const pageH = pdf.internal.pageSize.getHeight();
+    const imgW  = pageW;
+    const imgH  = (canvas.height * imgW) / canvas.width;
+    const imgData = canvas.toDataURL('image/jpeg', 0.95);
+
+    let heightLeft = imgH;
+    let position   = 0;
+    pdf.addImage(imgData, 'JPEG', 0, position, imgW, imgH);
+    heightLeft -= pageH;
+
+    while (heightLeft > 0) {
+      position -= pageH;
+      pdf.addPage();
+      pdf.addImage(imgData, 'JPEG', 0, position, imgW, imgH);
+      heightLeft -= pageH;
+    }
+
+    pdf.save(filename);
+  } finally {
+    document.body.removeChild(iframe);
+  }
+}
+
 async function _doExport(btn, type, fmt, action) {
   const isTg    = action === 'telegram-both' || action === 'telegram';
+  const isPdf   = fmt === 'pdf' && !isTg;
   const origTxt = btn.textContent;
   btn.disabled  = true;
   btn.textContent = isTg ? 'កំពុងបញ្ជូន...' : 'កំពុងបង្កើត...';
@@ -591,16 +646,20 @@ async function _doExport(btn, type, fmt, action) {
       const json = await res.json();
       if (!json.success) throw new Error(json.message);
       toast(`✓ បានបញ្ជូន ${json.total} នាក់ ទៅ Telegram!`);
+    } else if (isPdf) {
+      if (!res.ok) { const j = await res.json(); throw new Error(j.message); }
+      const html = await res.text();
+      await _downloadHtmlAsPdf(html, `report_${type}.pdf`);
+      toast(`✓ ឯកសារ PDF បានដំណើរការ!`);
     } else {
       if (!res.ok) { const j = await res.json(); throw new Error(j.message); }
       const blob = await res.blob();
-      const ext  = fmt === 'pdf' ? 'pdf' : 'docx';
       const a    = document.createElement('a');
       a.href     = URL.createObjectURL(blob);
-      a.download = `report_${type}.${ext}`;
+      a.download = `report_${type}.docx`;
       a.click();
       URL.revokeObjectURL(a.href);
-      toast(`✓ ឯកសារ ${ext.toUpperCase()} បានដំណើរការ!`);
+      toast(`✓ ឯកសារ DOCX បានដំណើរការ!`);
     }
   } catch (e) {
     toast(`⚠ ${e.message}`, 4000);
