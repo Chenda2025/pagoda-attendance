@@ -2917,7 +2917,7 @@ def submit_report_image():
         TELEGRAM_TOKEN   = '8950898077:AAHNR0tTgtJWy17wMXooKwg4nfQLGdfe5aw'
         TELEGRAM_CHAT_ID = -1003960014484
         
-        caption = "របាយការណ៍វត្តមាន (បំប្លែងជារូបភាព)"
+        caption = request.form.get('caption', "ប្រគេនរបាយការណ៍វត្តមាន (បំប្លែងជារូបភាព)")
         
         tg = req.post(
             f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto',
