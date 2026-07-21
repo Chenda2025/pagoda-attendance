@@ -583,12 +583,16 @@ async function exportReport(action, fmt = 'docx') {
     const type    = _reportType;
     const filters = getFilters();
     const isPdf   = fmt === 'pdf';
+    const isExcel = fmt === 'excel';
+    const isImg   = fmt === 'image';
     const isTg    = action === 'telegram' || action === 'telegram-both';
 
     let btn;
-    if (isTg)       btn = document.getElementById('btn-send-tg');
-    else if (isPdf) btn = document.getElementById('btn-export-pdf');
-    else            btn = document.getElementById('btn-export-docx');
+    if (isTg)         btn = document.getElementById('btn-send-tg');
+    else if (isPdf)   btn = document.getElementById('btn-export-pdf');
+    else if (isExcel) btn = document.getElementById('btn-export-excel');
+    else if (isImg)   btn = document.getElementById('btn-export-image');
+    else              btn = document.getElementById('btn-export-docx');
 
     const origHTML = btn.innerHTML;
     btn.disabled    = true;
@@ -640,17 +644,31 @@ async function exportReport(action, fmt = 'docx') {
             const html = await res.text();
             await _downloadHtmlAsPdf(html, `report_${type}_${date}.pdf`);
             showToast('ឯកសារ PDF បានដំណើរការ!', 'success');
+        } else if (isImg) {
+            // Image download — same rendering pipeline as the Telegram image, saved locally.
+            p.set('fmt', 'html');
+            const res = await fetch(`/api/reports/export?${p}`);
+            if (!res.ok) { const j = await res.json(); throw new Error(j.message); }
+            const html = await res.text();
+            const canvas = await _renderExportHtmlToCanvas(html);
+            const blob   = await new Promise(r => canvas.toBlob(r, 'image/png'));
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `report_${type}_${date}.png`;
+            a.click();
+            URL.revokeObjectURL(a.href);
+            showToast('រូបភាពបានដំណើរការ!', 'success');
         } else {
-            // DOCX download
+            // DOCX/Excel download
             const res = await fetch(`/api/reports/export?${p}`);
             if (!res.ok) { const j = await res.json(); throw new Error(j.message); }
             const blob = await res.blob();
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
-            a.download = `report_${type}_${date}.docx`;
+            a.download = `report_${type}_${date}.${isExcel ? 'xlsx' : 'docx'}`;
             a.click();
             URL.revokeObjectURL(a.href);
-            showToast('ឯកសារ Word បានដំណើរការ!', 'success');
+            showToast(isExcel ? 'ឯកសារ Excel បានដំណើរការ!' : 'ឯកសារ Word បានដំណើរការ!', 'success');
         }
     } catch (err) {
         showToast('មានបញ្ហា: ' + err.message, 'error');
@@ -918,9 +936,11 @@ document.addEventListener('DOMContentLoaded', () => {
         _expDd.classList.toggle('open');
     });
 
-    document.getElementById('btn-export-pdf').addEventListener('click',  () => { _expDd.classList.remove('open'); exportReport('download', 'pdf'); });
-    document.getElementById('btn-export-docx').addEventListener('click', () => { _expDd.classList.remove('open'); exportReport('download', 'docx'); });
-    document.getElementById('btn-send-tg').addEventListener('click',     () => exportReport('telegram-both', 'docx'));
+    document.getElementById('btn-export-pdf').addEventListener('click',   () => { _expDd.classList.remove('open'); exportReport('download', 'pdf'); });
+    document.getElementById('btn-export-docx').addEventListener('click',  () => { _expDd.classList.remove('open'); exportReport('download', 'docx'); });
+    document.getElementById('btn-export-excel').addEventListener('click', () => { _expDd.classList.remove('open'); exportReport('download', 'excel'); });
+    document.getElementById('btn-export-image').addEventListener('click', () => { _expDd.classList.remove('open'); exportReport('download', 'image'); });
+    document.getElementById('btn-send-tg').addEventListener('click',      () => exportReport('telegram-both', 'docx'));
 
     // Attend modal wiring
     document.getElementById('r-attend-close').addEventListener('click', closeAttendModal);

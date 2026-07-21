@@ -5,6 +5,14 @@ from conn import connect_db
 from create_table import (create_monks_table, insert_monk, get_all_monks,
                           update_monk, delete_monk, insert_pending_submission)
 from datetime import date as _date
+from sorting import sort_attendance_monks
+from khmer_lunar import khmer_lunar_date
+
+# ============ MINISTRY DOCUMENT HEADER (shared by docx/html/excel exports) ============
+
+_HDR_LEFT_LINES  = ['មន្ទីរធម្មការ និងសាសនា រាជធានី', 'ភ្នំពេញ', 'សាលា ពុ.អ.វិ.ស.ព្រ.ន.វ.និ']
+_HDR_RIGHT_LINES = ['ព្រះរាជាណាចក្រកម្ពុជា', 'ជាតិ សាសនា ព្រះមហាក្សត្រ']
+_HDR_MAIN_TITLE  = 'ស្ថិតព្រះសង្ឃក្នុងវត្តនិរោធរង្សី'
 
 main_bp = Blueprint('main_bp', __name__)
 
@@ -17,6 +25,7 @@ _VALID_RESIDENCES       = {
     'កុដិហោត្រៃ', 'សាលាបាលីចាស់', 'សាលាពុទ្ធិក',
 }
 _VALID_POSITIONS        = {
+    'ព្រះអធិការ',
     'ព្រះសង្ឃធម្មតា', 'មេក្រុម', 'អនុមេក្រុម',
     'ព្រះគ្រូសូត្រស្តាំ', 'ព្រះគ្រូសូត្រឆ្វេង', 'ព្រះគ្រូវិន័យធរ',
     'ព្រះគ្រូលេខា', 'ព្រះគ្រូប្រធានការក',
@@ -393,6 +402,7 @@ def list_monks():
                 'created_at': monk[8].isoformat() if monk[8] else None,
                 'updated_at': monk[9].isoformat() if monk[9] else None
             })
+        monks_list = sort_attendance_monks(monks_list)
         return jsonify({'success': True, 'monks': monks_list})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
@@ -1553,7 +1563,6 @@ def export_monks():
         import io, html as _html
         from datetime import date
         fmt    = request.args.get('fmt',    'docx')
-        action = request.args.get('action', 'download')
 
         name       = (request.args.get('name')            or '').strip()
         vassa      = (request.args.get('vassa_years')     or '').strip()
@@ -1574,16 +1583,13 @@ def export_monks():
         if acad:      where_parts.append("academic_year = %s");      where_params.append(acad)
         where_sql = ('WHERE ' + ' AND '.join(where_parts)) if where_parts else ''
 
-        vassa_dir = 'ASC' if sort_vassa == 'asc' else 'DESC'
-        order_sql = f"ORDER BY monk_type, vassa_years {vassa_dir}, fullname"
-
         conn = connect_db()
         cur  = conn.cursor()
         cur.execute(f"""
             SELECT fullname, vassa_years, monk_type, residence, position,
                    education_level, academic_year, created_at
             FROM monk_tbl {where_sql}
-            {order_sql};
+            ORDER BY fullname;
         """, where_params)
         rows = cur.fetchall()
         cur.close(); conn.close()
@@ -1594,6 +1600,14 @@ def export_monks():
             'education_level': r[5] or '', 'academic_year': r[6] or '',
             'created_at': r[7]
         } for r in rows]
+
+        # Default: the same role > type > vassa hierarchy used everywhere else.
+        # A monk clicking the vassa column header on /view wants a pure vassa
+        # sort instead — sort_vassa carries that explicit override into export.
+        if sort_vassa in ('asc', 'desc'):
+            monks.sort(key=lambda m: m['vassa_years'] or 0, reverse=(sort_vassa == 'desc'))
+        else:
+            monks = sort_attendance_monks(monks)
 
         today      = date.today().strftime('%d/%m/%Y')
         fname_base = f"monks_{date.today().isoformat()}"
@@ -1625,8 +1639,8 @@ def export_monks():
             sub.runs[0].font.color.rgb = RGBColor(0x71, 0x80, 0x96)
             doc.add_paragraph()
 
-            hdrs   = ['#', 'ឈ្មោះ', 'វស្សា', 'ប្រភេទ', 'ស្នាក់នៅ', 'តួនាទី', 'ការសិក្សា', 'ថ្ងៃបញ្ចូល']
-            widths = [0.6, 3.2, 1.0, 1.5, 2.2, 2.5, 2.5, 1.8]
+            hdrs   = ['#', 'ឈ្មោះ', 'វស្សា', 'ប្រភេទ', 'ស្នាក់នៅ', 'តួនាទី', 'កម្រិតសិក្សា']
+            widths = [0.8, 3.8, 1.4, 1.8, 2.8, 3.4, 3.0]
             tbl = doc.add_table(rows=1, cols=len(hdrs))
             tbl.style = 'Table Grid'
             for i, (hdr, w) in enumerate(zip(hdrs, widths)):
@@ -1638,15 +1652,13 @@ def export_monks():
 
             for idx, m in enumerate(monks, 1):
                 bg  = 'FFF8E1' if m['monk_type'] == 'ភិក្ខុ' else 'F1F8E9'
-                edu = f"{m['education_level']} {m['academic_year']}".strip()
-                cre = m['created_at'].strftime('%d/%m/%Y') if m['created_at'] else '—'
                 vals = [str(idx), m['fullname'], f"{m['vassa_years']} ឆ្នាំ", m['monk_type'],
-                        m['residence'], m['position'], edu, cre]
+                        m['residence'], m['position'], m['education_level']]
                 row = tbl.add_row()
                 for j, (val, w) in enumerate(zip(vals, widths)):
                     cell = row.cells[j]; cell.width = Cm(w); _shade(cell, bg)
                     p = cell.paragraphs[0]
-                    p.alignment = WD_ALIGN_PARAGRAPH.CENTER if j in (0, 2, 7) else WD_ALIGN_PARAGRAPH.LEFT
+                    p.alignment = WD_ALIGN_PARAGRAPH.CENTER if j in (0, 2) else WD_ALIGN_PARAGRAPH.LEFT
                     run = p.add_run(val); run.font.size = Pt(8.5)
                     if j == 1: run.bold = True
 
@@ -1702,24 +1714,22 @@ def export_monks():
                 as_attachment=True, download_name=f"{fname_base}.xlsx")
 
         # ── PDF ──────────────────────────────────────────────────────────────
-        elif fmt == 'pdf':
-            
+        elif fmt == 'html':
+
             bhikkhus  = [m for m in monks if m['monk_type'] == 'ភិក្ខុ']
             samaneras = [m for m in monks if m['monk_type'] == 'សាមណេរ']
 
             def _trow(m, idx, stripe):
-                edu = _html.escape(f"{m['education_level']} {m['academic_year']}".strip())
-                cre = m['created_at'].strftime('%d/%m/%Y') if m['created_at'] else '—'
                 bg  = '#f8fafc' if stripe else '#ffffff'
                 return (
                     f'<tr style="background:{bg}">'
                     f'<td class="c">{idx}</td>'
                     f'<td class="name">{_html.escape(m["fullname"])}</td>'
                     f'<td class="c">{m["vassa_years"]} ឆ្នាំ</td>'
-                    f'<td>{_html.escape(m["position"])}</td>'
+                    f'<td>{_html.escape(m["monk_type"])}</td>'
                     f'<td>{_html.escape(m["residence"])}</td>'
-                    f'<td>{edu}</td>'
-                    f'<td class="c dt">{cre}</td>'
+                    f'<td>{_html.escape(m["position"])}</td>'
+                    f'<td>{_html.escape(m["education_level"])}</td>'
                     f'</tr>'
                 )
 
@@ -1736,10 +1746,10 @@ def export_monks():
                         <th class="c" style="width:28px">#</th>
                         <th>ឈ្មោះ</th>
                         <th class="c" style="width:48px">វស្សា</th>
-                        <th>តួនាទី</th>
+                        <th>ប្រភេទ</th>
                         <th>ស្នាក់នៅ</th>
-                        <th>ការសិក្សា</th>
-                        <th class="c" style="width:58px">ថ្ងៃបញ្ចូល</th>
+                        <th>តួនាទី</th>
+                        <th>កម្រិតសិក្សា</th>
                     </tr></thead>
                     <tbody>{rows}</tbody>
                 </table>'''
@@ -1750,7 +1760,7 @@ def export_monks():
             if monk_type: fp.append(f'ប្រភេទ: <strong>{_html.escape(monk_type)}</strong>')
             if residence: fp.append(f'កុដិ: <strong>{_html.escape(residence.replace("_"," "))}</strong>')
             if position:  fp.append(f'តួនាទី: <strong>{_html.escape(position)}</strong>')
-            if edu:       fp.append(f'ការសិក្សា: <strong>{_html.escape(edu)}</strong>')
+            if edu:       fp.append(f'កម្រិតសិក្សា: <strong>{_html.escape(edu)}</strong>')
             if acad:      fp.append(f'ថ្នាក់: <strong>{_html.escape(acad)}</strong>')
             filter_html = (
                 f'<div class="filter-bar">🔎 &nbsp;' + ' &nbsp;|&nbsp; '.join(fp) + '</div>'
@@ -1803,7 +1813,6 @@ def export_monks():
                 "vertical-align:middle}"
                 ".c{text-align:center}"
                 ".name{font-weight:600;color:#1a202c}"
-                ".dt{font-size:7.5px;color:#718096}"
 
                 # Footer
                 ".footer{position:running(footer);display:flex;justify-content:space-between;"
@@ -1849,33 +1858,7 @@ def export_monks():
 </div>
 </body></html>'''
 
-            pdf_bytes = HTML(string=html_str).write_pdf()
-            buf = io.BytesIO(pdf_bytes)
-
-            if action == 'telegram':
-                import requests as _req
-                TELEGRAM_TOKEN   = '8950898077:AAHNR0tTgtJWy17wMXooKwg4nfQLGdfe5aw'
-                TELEGRAM_CHAT_ID = -1003960014484
-                caption = (
-                    f"📋 បញ្ជីព្រះសង្ឃ — {today}\n"
-                    f"📊 សរុប {len(monks)} នាក់  |  ភិក្ខុ {len(bhikkhus)}  |  សាមណេរ {len(samaneras)}"
-                )
-                if fp:
-                    caption += '\n🔎 ' + ' | '.join(
-                        f.replace('<strong>', '').replace('</strong>', '') for f in fp
-                    )
-                tg = _req.post(
-                    f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendDocument',
-                    data={'chat_id': TELEGRAM_CHAT_ID, 'caption': caption},
-                    files={'document': (f"{fname_base}.pdf", buf, 'application/pdf')},
-                    timeout=25
-                ).json()
-                if not tg.get('ok'):
-                    return jsonify({'success': False, 'message': f"Telegram: {tg.get('description')}"}), 500
-                return jsonify({'success': True, 'total': len(monks)})
-
-            return send_file(buf, mimetype='application/pdf',
-                             as_attachment=True, download_name=f"{fname_base}.pdf")
+            return html_str
 
         return jsonify({'success': False, 'message': 'Unknown format'}), 400
 
@@ -2553,7 +2536,7 @@ def _fetch_export_data(report_type, args):
             FROM attendance_tbl a
             JOIN monk_tbl m ON m.id = a.monk_id
             WHERE a.date = %s
-            ORDER BY m.monk_type, a.status, m.fullname
+            ORDER BY m.fullname
         """, (date_str,))
         rows = cur.fetchall(); cur.close(); conn.close()
         d_fmt = _date.fromisoformat(date_str).strftime('%d/%m/%Y')
@@ -2567,6 +2550,7 @@ def _fetch_export_data(report_type, args):
             'perm_dates':       d_fmt if r[8] == 'permission' else '',
             'status': r[8],
         } for r in rows]
+        monks = sort_attendance_monks(monks)
         return monks, 'ប្រចាំថ្ងៃ', d_fmt, date_str, date_str
 
     elif report_type == 'biweekly':
@@ -2622,10 +2606,65 @@ def _norm_summary_monks(monks):
     return result
 
 
+# ---- Unified export: Ministry document header (docx) --------------
+
+def _add_ministry_header_docx(doc, lunar_str):
+    from docx.shared import Pt, Cm, RGBColor
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.enum.table import WD_TABLE_ALIGNMENT
+    from docx.oxml.ns import qn
+    from docx.oxml import OxmlElement
+
+    def no_border(table):
+        tbl_pr = table._tbl.tblPr
+        borders = OxmlElement('w:tblBorders')
+        for edge in ('top', 'left', 'bottom', 'right', 'insideH', 'insideV'):
+            el = OxmlElement(f'w:{edge}')
+            el.set(qn('w:val'), 'none')
+            borders.append(el)
+        tbl_pr.append(borders)
+
+    def line(cell, text, *, bold=False, color=None, size=10, first=False):
+        p = cell.paragraphs[0] if first else cell.add_paragraph()
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = p.add_run(text)
+        run.bold = bold
+        run.font.size = Pt(size)
+        if color: run.font.color.rgb = RGBColor(*color)
+
+    hdr_tbl = doc.add_table(rows=1, cols=2)
+    hdr_tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
+    no_border(hdr_tbl)
+    left, right = hdr_tbl.rows[0].cells
+    left.width = right.width = Cm(8.5)
+
+    line(left, '[ និមិត្តសញ្ញាក្រសួង ]', color=(0x2B, 0x6C, 0xB0), size=9, first=True)
+    for txt in _HDR_LEFT_LINES:
+        line(left, txt, color=(0x2B, 0x6C, 0xB0), size=10)
+
+    line(right, _HDR_RIGHT_LINES[0], bold=True, size=12, first=True)
+    line(right, _HDR_RIGHT_LINES[1], bold=True, size=11)
+
+    doc.add_paragraph()
+    t = doc.add_paragraph()
+    t.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    tr = t.add_run(_HDR_MAIN_TITLE)
+    tr.bold = True
+    tr.font.size = Pt(16)
+
+    s = doc.add_paragraph()
+    s.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    sr = s.add_run(f"កាលបរិច្ឆេទ ជាចន្ទគតិ: {lunar_str}")
+    sr.font.size = Pt(10)
+    sr.font.color.rgb = RGBColor(0x71, 0x80, 0x96)
+    doc.add_paragraph()
+
+
 # ---- Unified export: build docx ----------------------------------
 
 def _make_export_docx(monks, type_label, subtitle, report_type):
     import io
+    from datetime import date as _d
     from docx import Document
     from docx.shared import Pt, Cm, RGBColor
     from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -2700,11 +2739,18 @@ def _make_export_docx(monks, type_label, subtitle, report_type):
                 if ab and j == abs_col:  run.font.color.rgb = RGBColor(0xC5, 0x30, 0x30)
                 if pr and j == perm_col: run.font.color.rgb = RGBColor(0xC0, 0x56, 0x21)
 
+    from docx.enum.section import WD_ORIENT
+
     doc = Document()
     sec = doc.sections[0]
+    sec.orientation  = WD_ORIENT.LANDSCAPE
+    sec.page_width, sec.page_height = sec.page_height, sec.page_width
     sec.left_margin = sec.right_margin = Cm(1.5)
     sec.top_margin  = sec.bottom_margin = Cm(1.5)
-    t = doc.add_heading(f'វត្តនិរោធរង្សី — របាយការណ៍វត្តមាន ({type_label})', 0)
+
+    _add_ministry_header_docx(doc, khmer_lunar_date(_d.today()))
+
+    t = doc.add_heading(f'របាយការណ៍វត្តមាន ({type_label})', 1)
     t.alignment = WD_ALIGN_PARAGRAPH.CENTER
     sub = doc.add_paragraph(f"ចន្លោះ: {subtitle}")
     sub.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -2870,14 +2916,44 @@ def _make_export_html(monks, type_label, subtitle, report_type):
         # Footer
         ".footer{position:running(footer);display:flex;justify-content:space-between;"
         "font-size:12px;color:#a0aec0;border-top:1px solid #e2e8f0;padding-top:5px}"
-        "@page{size:A4;margin:12mm 10mm 17mm;"
+        "@page{size:A4 landscape;margin:12mm 10mm 17mm;"
         "@bottom-center{content:element(footer)}}"
+
+        # Ministry document header
+        ".mh{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px}"
+        ".mh-left{display:flex;flex-direction:column;align-items:center;"
+        "color:#2b6cb0;font-size:13px;line-height:1.5;flex:1}"
+        ".mh-logo{width:44px;height:44px;border:1px dashed #2b6cb0;border-radius:4px;"
+        "display:flex;align-items:center;justify-content:center;font-size:7px;"
+        "margin-bottom:4px;text-align:center;color:#2b6cb0}"
+        ".mh-right{text-align:center;font-weight:700;font-size:15px;line-height:1.6;flex:1}"
+        ".mh-title{text-align:center;font-weight:700;font-size:22px;margin-top:4px}"
+        ".mh-sub{text-align:center;font-size:13px;color:#718096;margin:2px 0 12px}"
     )
+
+    lunar_str = khmer_lunar_date(_date.today())
+    ministry_header = f'''
+<div class="mh">
+  <div class="mh-left">
+    <div class="mh-logo">[ និមិត្តសញ្ញា<br>ក្រសួង ]</div>
+    <div>{_h.escape(_HDR_LEFT_LINES[0])}</div>
+    <div>{_h.escape(_HDR_LEFT_LINES[1])}</div>
+    <div>{_h.escape(_HDR_LEFT_LINES[2])}</div>
+  </div>
+  <div class="mh-right">
+    <div>{_h.escape(_HDR_RIGHT_LINES[0])}</div>
+    <div>{_h.escape(_HDR_RIGHT_LINES[1])}</div>
+  </div>
+</div>
+<div class="mh-title">{_h.escape(_HDR_MAIN_TITLE)}</div>
+<div class="mh-sub">កាលបរិច្ឆេទ ជាចន្ទគតិ: {_h.escape(lunar_str)}</div>'''
 
     return f'''<!DOCTYPE html>
 <html lang="km"><head><meta charset="UTF-8"><style>{css}
 @media print {{ @page {{ size: A4 landscape; margin: 10mm; }} }}
 </style></head><body>
+
+{ministry_header}
 
 <div class="header">
   <div class="hdr-top">
@@ -2911,6 +2987,107 @@ def _make_export_html(monks, type_label, subtitle, report_type):
   <span>{_h.escape(subtitle)}</span>
 </div>
 </body></html>'''
+
+
+# ---- Unified export: build excel ----------------------------------
+
+def _make_export_excel(monks, type_label, subtitle, report_type):
+    import io
+    from datetime import date as _d
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    if report_type == 'daily':
+        headers = ['#', 'ឈ្មោះ', 'ប្រភេទ', 'តួនាទី', 'វស្សា', 'ស្នាក់នៅ', 'ស្ថានភាព']
+        widths  = [5, 24, 12, 20, 8, 18, 16]
+    elif report_type == 'biweekly':
+        headers = ['#', 'ឈ្មោះ', 'តួនាទី', 'វស្សា', 'ស្នាក់នៅ', 'ការសិក្សា', '❌', '📋', 'ថ្ងៃ', 'ស្ថានភាព']
+        widths  = [5, 24, 20, 8, 18, 14, 6, 6, 24, 16]
+    else:
+        headers = ['#', 'ឈ្មោះ', 'ប្រភេទ', 'តួនាទី', 'វស្សា', '❌', '📋', 'ចន្លោះ', 'ស្ថានភាព']
+        widths  = [5, 24, 12, 20, 8, 6, 6, 24, 16]
+
+    n = len(headers)
+    half = (n + 1) // 2
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = 'របាយការណ៍'
+
+    blue  = Font(color='2B6CB0', size=10)
+    bold  = Font(bold=True, size=11)
+    bold_big = Font(bold=True, size=15)
+    gray  = Font(color='718096', size=10)
+    center = Alignment(horizontal='center', vertical='center', wrap_text=True)
+
+    def merged(row, c1, c2, text, font, height=16):
+        ws.merge_cells(start_row=row, start_column=c1, end_row=row, end_column=c2)
+        cell = ws.cell(row=row, column=c1, value=text)
+        cell.font = font
+        cell.alignment = center
+        ws.row_dimensions[row].height = height
+
+    merged(1, 1, half,     '[ និមិត្តសញ្ញាក្រសួង ]', blue)
+    merged(1, half + 1, n, _HDR_RIGHT_LINES[0], bold)
+    merged(2, 1, half,     _HDR_LEFT_LINES[0], blue)
+    merged(2, half + 1, n, _HDR_RIGHT_LINES[1], bold)
+    merged(3, 1, half,     _HDR_LEFT_LINES[1], blue)
+    merged(4, 1, half,     _HDR_LEFT_LINES[2], blue)
+    merged(5, 1, n, '', Font())
+    merged(6, 1, n, _HDR_MAIN_TITLE, bold_big, height=24)
+    merged(7, 1, n, f"កាលបរិច្ឆេទ ជាចន្ទគតិ: {khmer_lunar_date(_d.today())}", gray)
+    merged(8, 1, n, f"របាយការណ៍វត្តមាន ({type_label})  |  ចន្លោះ: {subtitle}", Font(bold=True, size=10))
+    merged(9, 1, n, '', Font())
+
+    hdr_row = 10
+    hfill = PatternFill(start_color='4A5568', end_color='4A5568', fill_type='solid')
+    hfont = Font(bold=True, color='FFFFFF', size=10)
+    thin  = Side(border_style='thin', color='D1D5DB')
+    bdr   = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+    for col, h in enumerate(headers, 1):
+        c = ws.cell(row=hdr_row, column=col, value=h)
+        c.font = hfont; c.fill = hfill; c.border = bdr; c.alignment = center
+    ws.row_dimensions[hdr_row].height = 20
+
+    row_i = hdr_row + 1
+    for idx, m in enumerate(monks, 1):
+        ab = m['absent_count']     >= DISC_ABSENT_MIN
+        pr = m['permission_count'] >= DISC_PERM_MIN
+        fill = PatternFill(start_color='FFF5F5' if ab else 'FFFAF0' if pr else 'FFFFFF',
+                            end_color='FFF5F5' if ab else 'FFFAF0' if pr else 'FFFFFF', fill_type='solid')
+        status_text = 'លើសអវត្តមាន' if ab else ('លើសច្បាប់' if pr else 'ប្រក្រតី')
+
+        if report_type == 'daily':
+            s = 'អវត្តមាន' if m.get('status') == 'absent' else 'ច្បាប់'
+            vals = [idx, m['fullname'], m['monk_type'], m['position'], m['vassa_years'], m['residence'], s]
+        elif report_type == 'biweekly':
+            edu = f"{m['education_level']} {m['academic_year']}".strip()
+            dp = []
+            if m['absent_dates']: dp.append(f"❌ {m['absent_dates']}")
+            if m['perm_dates']:   dp.append(f"📋 {m['perm_dates']}")
+            vals = [idx, m['fullname'], m['position'], m['vassa_years'], m['residence'], edu,
+                     m['absent_count'] or '—', m['permission_count'] or '—',
+                     '\n'.join(dp) if dp else '—', status_text]
+        else:
+            vals = [idx, m['fullname'], m['monk_type'], m['position'], m['vassa_years'],
+                     m['absent_count'] or '—', m['permission_count'] or '—',
+                     m['perm_dates'] or '—', status_text]
+
+        for col, val in enumerate(vals, 1):
+            c = ws.cell(row=row_i, column=col, value=val)
+            c.fill = fill; c.border = bdr
+            c.font = Font(bold=True, size=10) if col == 2 else Font(size=10)
+            c.alignment = Alignment(horizontal='center' if col != 2 else 'left',
+                                     vertical='center', wrap_text=True)
+        row_i += 1
+
+    for col, w in enumerate(widths, 1):
+        ws.column_dimensions[get_column_letter(col)].width = w
+
+    buf = io.BytesIO(); wb.save(buf); buf.seek(0)
+    return buf
 
 
 # ---- Unified export route ----------------------------------------
@@ -2994,6 +3171,10 @@ def unified_export():
             html = _make_export_html(monks, type_label, subtitle, report_type)
             html += '<script>window.onload = function() { setTimeout(function(){ window.print(); }, 500); }</script>'
             return html
+        elif fmt == 'excel':
+            buf      = _make_export_excel(monks, type_label, subtitle, report_type)
+            fname    = f"report_{report_type}_{period_start}.xlsx"
+            mimetype = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         else:
             buf      = _make_export_docx(monks, type_label, subtitle, report_type)
             fname    = f"report_{report_type}_{period_start}.docx"

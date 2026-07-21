@@ -634,12 +634,41 @@ async function _downloadHtmlAsPdf(html, filename) {
 
 async function _doExport(btn, type, fmt, action) {
   const isTg    = action === 'telegram-both' || action === 'telegram';
-  const isPdf   = fmt === 'pdf' && !isTg;
+  const isPdf   = fmt === 'pdf'   && !isTg;
+  const isExcel = fmt === 'excel' && !isTg;
+  const isImg   = fmt === 'image' && !isTg;
   const origTxt = btn.textContent;
   btn.disabled  = true;
   btn.textContent = isTg ? 'កំពុងបញ្ជូន...' : 'កំពុងបង្កើត...';
 
   try {
+    if (isImg) {
+      const url  = _buildExportUrl(type, 'html', action);
+      const res  = await fetch(url);
+      if (!res.ok) { const j = await res.json(); throw new Error(j.message); }
+      const html = await res.text();
+      const iframe = document.createElement('iframe');
+      iframe.style.cssText = 'position:fixed; top:-99999px; left:-99999px; width:1400px; border:0;';
+      document.body.appendChild(iframe);
+      try {
+        await new Promise((resolve) => { iframe.onload = resolve; iframe.srcdoc = html; });
+        const doc = iframe.contentDocument;
+        iframe.style.height = doc.body.scrollHeight + 'px';
+        await new Promise(r => setTimeout(r, 200));
+        const canvas = await html2canvas(doc.body, { scale: 2, useCORS: true, backgroundColor: '#ffffff', windowWidth: 1400 });
+        const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `report_${type}.png`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+        toast(`✓ រូបភាពបានដំណើរការ!`);
+      } finally {
+        document.body.removeChild(iframe);
+      }
+      return;
+    }
+
     const url = _buildExportUrl(type, fmt, action);
     const res = await fetch(url);
     if (isTg) {
@@ -656,10 +685,10 @@ async function _doExport(btn, type, fmt, action) {
       const blob = await res.blob();
       const a    = document.createElement('a');
       a.href     = URL.createObjectURL(blob);
-      a.download = `report_${type}.docx`;
+      a.download = `report_${type}.${isExcel ? 'xlsx' : 'docx'}`;
       a.click();
       URL.revokeObjectURL(a.href);
-      toast(`✓ ឯកសារ DOCX បានដំណើរការ!`);
+      toast(isExcel ? `✓ ឯកសារ Excel បានដំណើរការ!` : `✓ ឯកសារ DOCX បានដំណើរការ!`);
     }
   } catch (e) {
     toast(`⚠ ${e.message}`, 4000);
@@ -679,10 +708,9 @@ window.flatDownload = function (type, fmt, action = 'download') {
 function bookExport(fmt, action = 'download') {
   const typeMap = { 0: 'daily', 1: 'daily', 2: 'monthly', 3: 'triennial' };
   const type    = typeMap[currentSpread] ?? 'daily';
+  const btnMap  = { pdf: 'bk-dl-pdf', excel: 'bk-dl-excel', image: 'bk-dl-image' };
   const btn     = document.getElementById(
-    action === 'download' && fmt === 'pdf' ? 'bk-dl-pdf'
-    : action !== 'download' ? 'bk-dl-tg'
-    : 'bk-dl-docx'
+    action !== 'download' ? 'bk-dl-tg' : (btnMap[fmt] ?? 'bk-dl-docx')
   );
   if (btn) _doExport(btn, type, fmt, action);
 }
@@ -784,9 +812,11 @@ document.addEventListener('DOMContentLoaded', () => {
     dlWrap?.classList.toggle('open');
   });
   document.addEventListener('click', () => dlWrap?.classList.remove('open'));
-  document.getElementById('bk-dl-docx')?.addEventListener('click', () => { dlWrap?.classList.remove('open'); bookExport('docx', 'download'); });
-  document.getElementById('bk-dl-pdf')?.addEventListener('click',  () => { dlWrap?.classList.remove('open'); bookExport('pdf',  'download'); });
-  document.getElementById('bk-dl-tg')?.addEventListener('click',   () => { dlWrap?.classList.remove('open'); bookExport('docx', 'telegram-both'); });
+  document.getElementById('bk-dl-docx')?.addEventListener('click',  () => { dlWrap?.classList.remove('open'); bookExport('docx',  'download'); });
+  document.getElementById('bk-dl-pdf')?.addEventListener('click',   () => { dlWrap?.classList.remove('open'); bookExport('pdf',   'download'); });
+  document.getElementById('bk-dl-excel')?.addEventListener('click', () => { dlWrap?.classList.remove('open'); bookExport('excel', 'download'); });
+  document.getElementById('bk-dl-image')?.addEventListener('click', () => { dlWrap?.classList.remove('open'); bookExport('image', 'download'); });
+  document.getElementById('bk-dl-tg')?.addEventListener('click',    () => { dlWrap?.classList.remove('open'); bookExport('docx', 'telegram-both'); });
 
   // Set default context date
   const ctxDate = document.getElementById('ctx-date');

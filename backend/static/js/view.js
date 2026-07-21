@@ -347,7 +347,7 @@ function formatDate(iso) {
 
 // ============ EXPORT ============
 
-function exportData(fmt) {
+function _exportParams(fmt) {
     const params = new URLSearchParams({ fmt });
     if (filters.name)            params.set('name',            filters.name);
     if (filters.vassa_years)     params.set('vassa_years',     filters.vassa_years);
@@ -357,8 +357,126 @@ function exportData(fmt) {
     if (filters.education_level) params.set('education_level', filters.education_level);
     if (filters.academic_year)   params.set('academic_year',   filters.academic_year);
     if (filters.sort_vassa)      params.set('sort_vassa',      filters.sort_vassa);
+    return params;
+}
+
+async function exportData(fmt) {
     document.getElementById('export-menu').classList.remove('open');
-    window.location.href = `/api/monks/export?${params.toString()}`;
+
+    // DOCX/Excel are generated server-side and can be downloaded directly.
+    if (fmt === 'docx' || fmt === 'excel') {
+        window.location.href = `/api/monks/export?${_exportParams(fmt)}`;
+        return;
+    }
+
+    // PDF is generated client-side (html2canvas + jsPDF) from the same
+    // export HTML used for the image export, matching the /report page.
+    if (fmt === 'pdf') {
+        const btn  = document.querySelector(".export-item[onclick=\"exportData('pdf')\"]");
+        const orig = btn.innerHTML;
+        btn.disabled    = true;
+        btn.textContent = 'កំពុងបង្កើត...';
+        try {
+            const res = await fetch(`/api/monks/export?${_exportParams('html')}`);
+            if (!res.ok) { const j = await res.json(); throw new Error(j.message); }
+            const html = await res.text();
+            await _downloadHtmlAsPdf(html, `monks_${new Date().toISOString().slice(0, 10)}.pdf`);
+            showToast('ឯកសារ PDF បានដំណើរការ!', 'success');
+        } catch (err) {
+            showToast('មានបញ្ហា: ' + err.message, 'error');
+        } finally {
+            btn.disabled  = false;
+            btn.innerHTML = orig;
+        }
+    }
+}
+
+// ============ EXPORT AS IMAGE / PDF (client-side rendering) ============
+
+const _EXPORT_IMG_PAGE_W_PX = 1400;
+
+// Renders the export HTML (as returned by /api/monks/export?fmt=html) off-screen
+// and returns the rasterized canvas. Mirrors report.js's _renderExportHtmlToCanvas.
+async function _renderMonksHtmlToCanvas(html) {
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = `position:fixed; top:-99999px; left:-99999px; width:${_EXPORT_IMG_PAGE_W_PX}px; border:0;`;
+    document.body.appendChild(iframe);
+
+    try {
+        await new Promise((resolve) => {
+            iframe.onload = resolve;
+            iframe.srcdoc = html;
+        });
+
+        const doc = iframe.contentDocument;
+        iframe.style.height = doc.body.scrollHeight + 'px';
+        await new Promise(r => setTimeout(r, 200)); // let fonts/layout settle
+
+        return await html2canvas(doc.body, {
+            scale: 2,
+            useCORS: true,
+            backgroundColor: '#ffffff',
+            windowWidth: _EXPORT_IMG_PAGE_W_PX
+        });
+    } finally {
+        document.body.removeChild(iframe);
+    }
+}
+
+// Renders the export HTML and saves it as a real, downloadable A4-landscape PDF file.
+async function _downloadHtmlAsPdf(html, filename) {
+    const canvas = await _renderMonksHtmlToCanvas(html);
+
+    const { jsPDF } = window.jspdf;
+    const pdf   = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    const pageW = pdf.internal.pageSize.getWidth();
+    const pageH = pdf.internal.pageSize.getHeight();
+    const imgW  = pageW;
+    const imgH  = (canvas.height * imgW) / canvas.width;
+    const imgData = canvas.toDataURL('image/jpeg', 0.95);
+
+    let heightLeft = imgH;
+    let position    = 0;
+    pdf.addImage(imgData, 'JPEG', 0, position, imgW, imgH);
+    heightLeft -= pageH;
+
+    while (heightLeft > 0) {
+        position -= pageH;
+        pdf.addPage();
+        pdf.addImage(imgData, 'JPEG', 0, position, imgW, imgH);
+        heightLeft -= pageH;
+    }
+
+    pdf.save(filename);
+}
+
+async function exportImage() {
+    const btn = document.getElementById('btn-export-image');
+    const orig = btn.innerHTML;
+    btn.disabled    = true;
+    btn.textContent = 'កំពុងបង្កើត...';
+    document.getElementById('export-menu').classList.remove('open');
+
+    try {
+        const res = await fetch(`/api/monks/export?${_exportParams('html')}`);
+        if (!res.ok) { const j = await res.json(); throw new Error(j.message); }
+        const html = await res.text();
+
+        const canvas = await _renderMonksHtmlToCanvas(html);
+        const blob   = await new Promise(r => canvas.toBlob(r, 'image/png'));
+
+        const a = document.createElement('a');
+        a.href     = URL.createObjectURL(blob);
+        a.download = `monks_${new Date().toISOString().slice(0, 10)}.png`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+        showToast('រូបភាពបានដំណើរការ!', 'success');
+    } catch (err) {
+        showToast('មានបញ្ហា: ' + err.message, 'error');
+    } finally {
+        btn.disabled  = false;
+        btn.innerHTML = orig;
+    }
 }
 
 // ============ SEND TO TELEGRAM ============
@@ -370,21 +488,28 @@ async function sendToTelegram() {
     btn.textContent = 'កំពុងបញ្ជូន...';
     document.getElementById('export-menu').classList.remove('open');
 
-    const params = new URLSearchParams({ fmt: 'pdf', action: 'telegram' });
-    if (filters.name)            params.set('name',            filters.name);
-    if (filters.vassa_years)     params.set('vassa_years',     filters.vassa_years);
-    if (filters.monk_type)       params.set('monk_type',       filters.monk_type);
-    if (filters.residence)       params.set('residence',       filters.residence);
-    if (filters.position)        params.set('position',        filters.position);
-    if (filters.education_level) params.set('education_level', filters.education_level);
-    if (filters.academic_year)   params.set('academic_year',   filters.academic_year);
-    if (filters.sort_vassa)      params.set('sort_vassa',      filters.sort_vassa);
-
     try {
-        const res  = await fetch(`/api/monks/export?${params}`);
-        const json = await res.json();
+        const res = await fetch(`/api/monks/export?${_exportParams('html')}`);
+        if (!res.ok) { const j = await res.json(); throw new Error(j.message); }
+        const html = await res.text();
+
+        const canvas = await _renderMonksHtmlToCanvas(html);
+        const blob   = await new Promise(r => canvas.toBlob(r, 'image/png'));
+
+        const total = _viewFiltered.length;
+        const bCount = _viewFiltered.filter(m => m.monk_type === 'ភិក្ខុ').length;
+        const sCount = total - bCount;
+        const today  = formatDate(new Date().toISOString());
+        const caption = `📋 បញ្ជីព្រះសង្ឃ — ${today}\n📊 សរុប ${total} នាក់  |  ភិក្ខុ ${bCount}  |  សាមណេរ ${sCount}`;
+
+        const form = new FormData();
+        form.append('image', blob, 'monks.png');
+        form.append('caption', caption);
+
+        const tgRes  = await fetch('/api/reports/submit-image', { method: 'POST', body: form });
+        const json = await tgRes.json();
         if (!json.success) throw new Error(json.message);
-        showToast(`បានបញ្ជូន ${json.total} នាក់ ទៅ Telegram ជោគជ័យ!`, 'success');
+        showToast(`បានបញ្ជូន ${total} នាក់ ទៅ Telegram ជោគជ័យ!`, 'success');
     } catch (err) {
         showToast('មានបញ្ហា: ' + err.message, 'error');
     } finally {
