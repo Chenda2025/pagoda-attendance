@@ -29,10 +29,9 @@
 
 body {
   font-family: 'Battambang', 'Kantumruy Pro', sans-serif;
-  background: #1a0f08;
-  background-image:
-    radial-gradient(ellipse at 20% 50%, rgba(90,40,10,0.35) 0%, transparent 60%),
-    radial-gradient(ellipse at 80% 50%, rgba(60,30,5,0.25) 0%, transparent 60%);
+  background:
+    radial-gradient(ellipse 80% 50% at 10% -10%, rgba(201, 162, 39, 0.1), transparent 50%),
+    linear-gradient(180deg, #0c2d5a 0%, #071e3d 35%, #1a0f08 70%);
   min-height: 100vh;
   color: var(--text-ink);
   user-select: none;
@@ -44,8 +43,8 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 10px 24px;
-  background: rgba(0,0,0,0.55);
-  border-bottom: 1px solid rgba(200,150,12,0.3);
+  background: linear-gradient(180deg, #071e3d 0%, #0c2d5a 100%);
+  border-bottom: 1px solid rgba(201,162,39,0.45);
   position: sticky;
   top: 0;
   z-index: 100;
@@ -840,3 +839,9 @@ body {
   body { background: #fff; color: #000; }
   .flat-table, .flat-table td, .flat-table th { color: #000; border-color: #ccc; }
 }
+
+body > .gov-masthead {
+  margin: 12px 16px 0;
+  border-radius: 12px;
+}
+.topbar-logo { border: 2px solid #c9a227 !important; }

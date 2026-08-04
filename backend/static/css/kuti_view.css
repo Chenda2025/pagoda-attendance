@@ -1,0 +1,457 @@
+/* Phone-first kuti leader view */
+.kuti-view-page {
+    --font: 'Battambang', sans-serif;
+    --display: 'Moul', 'Battambang', serif;
+    font-family: var(--font);
+}
+
+.kuti-view-page .gov-page-title,
+.kuti-view-page .gov-pagoda,
+.kuti-view-page .gov-kingdom {
+    font-family: var(--display);
+}
+
+.scope-pill, .count-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 12.5px;
+    font-weight: 600;
+    font-family: var(--font);
+}
+.scope-pill {
+    background: #e8eef8;
+    color: var(--navy);
+    border: 1px solid var(--line);
+}
+.count-pill {
+    background: #f7efd4;
+    color: #8a6d12;
+    border: 1px solid rgba(201, 162, 39, 0.4);
+}
+
+.toolbar-panel {
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.toolbar-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: stretch;
+}
+.search-input {
+    width: 100%;
+    min-height: 48px;
+    padding: 12px 14px;
+    border: 1.5px solid var(--line);
+    border-radius: 10px;
+    font-family: var(--font);
+    font-size: 16px;
+    background: #fafbfd;
+}
+.search-input:focus {
+    outline: none;
+    border-color: var(--navy-mid);
+    box-shadow: 0 0 0 3px rgba(22, 63, 115, 0.12);
+    background: #fff;
+}
+#btn-add-monk {
+    flex: 1;
+    min-height: 48px;
+    justify-content: center;
+    font-family: var(--font);
+    font-weight: 700;
+}
+
+/* Export dropdown */
+.export-dropdown {
+    position: relative;
+    flex: 1;
+}
+.btn-export-trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    width: 100%;
+    min-height: 48px;
+    padding: 10px 14px;
+    background: #fafbfd;
+    border: 1.5px solid var(--line);
+    border-radius: 10px;
+    color: var(--navy);
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: var(--font);
+    transition: background 0.15s, border-color 0.15s;
+    white-space: nowrap;
+}
+.btn-export-trigger:hover {
+    background: #eef3f9;
+    border-color: rgba(12, 45, 90, 0.3);
+}
+.chevron-icon { transition: transform 0.18s; flex-shrink: 0; }
+#export-dropdown:has(.export-menu.open) .chevron-icon { transform: rotate(180deg); }
+
+.export-menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    background: #fff;
+    border: 1.5px solid var(--line);
+    border-radius: 12px;
+    box-shadow: 0 8px 28px rgba(7, 30, 61, 0.14);
+    z-index: 50;
+    padding: 6px;
+}
+.export-menu.open { display: block; }
+
+.export-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 12px 12px;
+    border: none;
+    background: transparent;
+    border-radius: 8px;
+    font-family: var(--font);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink);
+    cursor: pointer;
+    text-align: left;
+}
+.export-item:hover { background: #f5f8fc; }
+.export-item:disabled { opacity: 0.6; cursor: wait; }
+
+.desktop-table { display: none; }
+.table-wrap { overflow-x: auto; }
+.kuti-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+    font-family: var(--font);
+}
+.kuti-table thead {
+    background: linear-gradient(135deg, var(--navy-deep), var(--navy-mid));
+    color: #fff;
+}
+.kuti-table th {
+    padding: 12px 14px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 12.5px;
+    white-space: nowrap;
+}
+.kuti-table td {
+    padding: 11px 14px;
+    border-bottom: 1px solid #eef2f6;
+    vertical-align: middle;
+}
+.kuti-table tbody tr:hover { background: #f5f8fc; }
+.muted { color: var(--muted); text-align: center; padding: 28px !important; }
+.card-empty { margin: 0; }
+
+.type-pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    font-weight: 600;
+}
+.type-bhikkhu { background: #f7efd4; color: #8a6d12; }
+.type-samanera { background: #e4f1f7; color: #2f6f8f; }
+
+.badge-living {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    font-family: var(--font);
+}
+.badge-living-active { background: #e6f5ee; color: #1f6b4a; }
+.badge-living-left { background: #fff0f0; color: #c92a2a; }
+.badge-living-home { background: #fff8e6; color: #9a6b00; }
+.row-departed td { opacity: 0.72; }
+
+.row-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.row-actions .gov-btn {
+    flex: 1;
+    min-height: 40px;
+    justify-content: center;
+    font-family: var(--font);
+    font-size: 13px;
+}
+
+.monk-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px 14px 16px;
+}
+.monk-card {
+    background: #fafbfd;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 14px;
+}
+.monk-card.is-off { opacity: 0.72; }
+.monk-card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+.monk-card-top strong {
+    font-family: var(--display);
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--navy);
+}
+.monk-card-meta {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.5;
+    margin-bottom: 12px;
+}
+
+.lock-note {
+    font-size: 12.5px;
+    color: var(--muted);
+    text-align: center;
+    padding: 4px 8px 0;
+    font-family: var(--font);
+}
+.lock-note strong { color: var(--navy); }
+
+.invalid-panel {
+    padding: 40px 24px;
+    text-align: center;
+}
+.invalid-panel h1 {
+    font-family: var(--display);
+    color: var(--navy);
+    font-size: 22px;
+    margin-bottom: 10px;
+}
+.invalid-panel p { color: var(--muted); }
+
+/* Forms / modal */
+.form-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+    max-width: 100%;
+}
+.form-field label {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--navy);
+    line-height: 1.35;
+}
+.form-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 12px;
+    align-items: start;
+}
+.form-field input,
+.form-field select {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    min-height: 48px;
+    padding: 12px 14px;
+    border: 1.5px solid var(--line);
+    border-radius: 10px;
+    font-family: var(--font);
+    font-size: 16px;
+    background: #fafbfd;
+}
+.form-field select {
+    -webkit-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%235c6b7a' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    padding-right: 36px;
+}
+.form-field input[type="number"] {
+    -moz-appearance: textfield;
+}
+.form-field input[type="number"]::-webkit-outer-spin-button,
+.form-field input[type="number"]::-webkit-inner-spin-button {
+    margin: 0;
+}
+.readonly-input {
+    background: #eef1f5 !important;
+    color: var(--muted);
+}
+.form-field input:focus,
+.form-field select:focus {
+    outline: none;
+    border-color: var(--navy-mid);
+    box-shadow: 0 0 0 3px rgba(22, 63, 115, 0.12);
+    background: #fff;
+}
+
+.kv-modal[hidden] { display: none !important; }
+.kv-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+}
+.kv-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(7, 30, 61, 0.45);
+}
+.kv-modal-box {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 560px;
+    max-height: 92vh;
+    overflow-y: auto;
+    background: #fff;
+    border-radius: 16px 16px 0 0;
+    padding: 18px 16px 20px;
+    box-shadow: 0 -8px 32px rgba(7, 30, 61, 0.18);
+    font-family: var(--font);
+}
+.kv-modal-sm { max-width: 400px; }
+.kv-modal-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+.kv-modal-head h2 {
+    margin: 0;
+    font-family: var(--display);
+    font-size: 16px;
+    font-weight: 400;
+    color: var(--navy);
+}
+.kv-modal-x {
+    border: none;
+    background: #f1f3f5;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+    color: var(--muted);
+}
+.kv-modal-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.kv-modal-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+.kv-modal-actions .gov-btn {
+    flex: 1;
+    min-height: 44px;
+    justify-content: center;
+    font-family: var(--font);
+}
+.status-monk-name {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--navy);
+    margin: 0 0 12px;
+}
+.status-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+.status-option-btn {
+    min-height: 48px;
+    padding: 12px 14px;
+    border: 1.5px solid var(--line);
+    border-radius: 10px;
+    background: #fafbfd;
+    font-family: var(--font);
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--ink);
+    cursor: pointer;
+    text-align: left;
+}
+.status-option-btn:hover {
+    border-color: var(--navy-mid);
+    background: #fff;
+}
+.status-option-btn.is-current {
+    border-color: var(--navy);
+    background: #eef3fa;
+    color: var(--navy);
+}
+
+@media (min-width: 720px) {
+    .toolbar-panel {
+        flex-direction: row;
+        align-items: center;
+        padding: 12px 16px;
+    }
+    .search-input { max-width: 360px; }
+    .toolbar-actions {
+        margin-left: auto;
+        flex-wrap: nowrap;
+    }
+    .export-dropdown {
+        flex: 0 0 auto;
+        min-width: 140px;
+    }
+    .export-menu {
+        left: auto;
+        right: 0;
+        min-width: 180px;
+    }
+    #btn-add-monk {
+        flex: 0 0 auto;
+        width: auto;
+        min-width: 160px;
+    }
+    .desktop-table { display: block; }
+    .monk-cards { display: none; }
+    .row-actions .gov-btn {
+        flex: 0 0 auto;
+        min-height: 36px;
+    }
+    .kv-modal {
+        align-items: center;
+        padding: 24px;
+    }
+    .kv-modal-box {
+        border-radius: 14px;
+        padding: 22px;
+    }
+}

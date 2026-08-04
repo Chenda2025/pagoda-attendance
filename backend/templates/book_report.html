@@ -7,23 +7,41 @@
   <link rel="icon" type="image/jpeg" href="/static/logo.jpg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&family=Kantumruy+Pro:wght@300;400;500;600;700&display=swap"
+  <link href="https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&family=Kantumruy+Pro:wght@300;400;500;600;700&family=Moul&display=swap"
         rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/gov-shell.css">
   <link rel="stylesheet" href="/static/css/book_report.css">
 </head>
 <body>
 
+  <header class="gov-masthead">
+    <div class="gov-masthead-inner">
+      <div class="gov-col gov-col-left">
+        <p>មន្ទីរធម្មការ និងសាសនា រាជធានីភ្នំពេញ</p>
+        <p>សាលាពុទ្ធិកអនុវិទ្យាល័យសង្ឃ</p>
+        <p class="gov-pagoda">វត្តនិរោធរង្សី</p>
+      </div>
+      <div class="gov-col gov-col-center">
+        <img src="/static/logo.jpg" alt="វត្តនិរោធរង្សី" class="gov-seal">
+      </div>
+      <div class="gov-col gov-col-right">
+        <p class="gov-kingdom">ព្រះរាជាណាចក្រកម្ពុជា</p>
+        <p class="gov-motto">ជាតិ សាសនា ព្រះមហាក្សត្រ</p>
+      </div>
+    </div>
+  </header>
+
   <!-- ===== TOP BAR ===== -->
   <nav class="topbar">
-    <a href="/report" class="btn-back-link">
+    <a href="/" class="btn-back-link">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
            stroke="currentColor" stroke-width="2.5">
         <polyline points="15 18 9 12 15 6"/>
       </svg>
-      ត្រឡប់ក្រោយ
+      ផ្ទាំងគ្រប់គ្រង
     </a>
-    <img src="/static/logo.jpg" alt="logo" class="topbar-logo">
-    <span class="topbar-title">សៀវភៅរបាយការណ៌អវត្តមាន — វត្តនិរោធរង្សី</span>
+    <a href="/report" class="btn-back-link">របាយការណ៍</a>
+    <span class="topbar-title">សៀវភៅរបាយការណ៌អវត្តមាន</span>
     <div class="topbar-actions">
       <button class="btn-flat-toggle" id="btn-flat-toggle">☰ ទិដ្ឋភាពតារាង</button>
       <div class="bk-dl-wrap" id="bk-dl-wrap">

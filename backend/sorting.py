@@ -33,6 +33,7 @@ ROLE_RANK = {
     'ព្រះគ្រូអនុប្រធានការកទី២':     _UNRANKED_TIER,   # Deputy Head of Working Committee No.2
 
     'ព្រះសង្ឃធម្មតា':              11,  # Ordinary Monk
+    'សមណសិស្ស':                   11,  # Disciple / student monk
 }
 
 # Anything not in ROLE_RANK (missing/unrecognized) sorts after every known role.

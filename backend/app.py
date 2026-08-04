@@ -1,7 +1,7 @@
 import os
 from flask import Flask
 from routes import main_bp
-from create_table import create_monks_table, create_summaries_tables, create_pending_submissions_table, create_seat_order_table, create_permission_table
+from create_table import create_monks_table, create_summaries_tables, create_pending_submissions_table, create_seat_order_table, create_permission_table, create_kuti_share_table
 from conn import connect_db
 
 app = Flask(__name__)
@@ -39,6 +39,12 @@ def _auto_setup():
         print('[startup] Permission table created / verified.')
     except Exception as e:
         print(f'[startup] permission warning: {e}')
+
+    try:
+        create_kuti_share_table()
+        print('[startup] Kuti share links table created / verified.')
+    except Exception as e:
+        print(f'[startup] kuti-share warning: {e}')
 
     try:
         conn = connect_db()
@@ -88,23 +94,11 @@ def _run_scheduler():
             except Exception as e:
                 print(f'[scheduler] compile error: {e}')
 
-        def check_monthly_alert():
-            try:
-                from routes import _check_and_send_monthly_alert
-                from datetime import date as _d
-                _check_and_send_monthly_alert(_d.today().isoformat())
-                print(f'[scheduler] Checked monthly alert for {_d.today()}')
-            except Exception as e:
-                print(f'[scheduler] alert check error: {e}')
-
         sched = BackgroundScheduler(daemon=True)
         sched.add_job(check_and_compile, 'interval', hours=12, id='period_check',
                       misfire_grace_time=3600)
-        # Check every hour, it will only send once per day if it's the target day
-        sched.add_job(check_monthly_alert, 'interval', hours=1, id='monthly_alert_check',
-                      misfire_grace_time=3600)
         sched.start()
-        print('[scheduler] APScheduler started (period 12h, check 1h).')
+        print('[scheduler] APScheduler started (period 12h).')
     except ImportError:
         print('[scheduler] APScheduler not installed — skipping.')
     except Exception as e:

@@ -9,61 +9,73 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
-        href="https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&family=Kantumruy+Pro:wght@300;400;500;600;700&family=Siemreap&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&family=Kantumruy+Pro:wght@300;400;500;600;700&family=Moul&display=swap"
         rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/gov-shell.css">
     <link rel="stylesheet" href="/static/css/style.css">
     <style>
-        .public-page-header {
-            text-align: center;
-            padding: 28px 16px 8px;
-
-        }
-        .public-page-header img {
-            width: 64px;
-            height: 64px;
-            border-radius: 50%;
-            object-fit: cover;
-            margin-bottom: 10px;
-            box-shadow: 0 2px 8px rgba(0,0,0,.18);
-        }
-        .public-page-header h1 {
-            font-size: 1.35rem;
-            font-weight: 700;
-            color: white;
-            margin: 0 0 4px;
-        }
-        .public-page-header p {
-            color: white;
-            font-size: .88rem;
-            margin: 0 0 20px;
+        .public-shell { max-width: 1100px; }
+        .public-note {
+            font-size: 13px;
+            color: var(--muted);
+            margin: 0;
         }
         #success-message {
             display: none;
             align-items: center;
             gap: 10px;
-            background: #fffbeb;
-            color: #92400e;
-            border: 1px solid #fcd34d;
+            background: #fff8eb;
+            color: #7d4e00;
+            border: 1px solid rgba(180, 83, 9, 0.35);
+            border-left: 4px solid #b45309;
             border-radius: 10px;
-            padding: 14px 20px;
-            margin: 0 auto 20px;
-            max-width: 900px;
+            padding: 14px 18px;
             font-size: .95rem;
             font-weight: 600;
         }
-        .color-text {
-            color: white;
-            
+        .action-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: center;
+            background: var(--paper);
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            padding: 12px 16px;
+            box-shadow: var(--shadow);
         }
+        .container { width: 100%; }
     </style>
 </head>
 
 <body>
-    <div class="public-page-header">
-        <img src="/static/logo.jpg" alt="វត្តនិរោធរង្សី">
-        <h1 class="color-text">បញ្ជូលព័ត៌មានព្រះសង្ឃ — វត្តនិរោធរង្សី</h1>
-        <p>សូមបំពេញព័ត៌មានឱ្យបានត្រឹមត្រូវ មុនពេលរក្សាទុក</p>
-    </div>
+    <div class="entry-shell public-shell">
+
+        <header class="gov-masthead">
+            <div class="gov-masthead-inner">
+                <div class="gov-col gov-col-left">
+                    <p>មន្ទីរធម្មការ និងសាសនា រាជធានីភ្នំពេញ</p>
+                    <p>សាលាពុទ្ធិកអនុវិទ្យាល័យសង្ឃ</p>
+                    <p class="gov-pagoda">វត្តនិរោធរង្សី</p>
+                </div>
+                <div class="gov-col gov-col-center">
+                    <img src="/static/logo.jpg" alt="វត្តនិរោធរង្សី" class="gov-seal">
+                </div>
+                <div class="gov-col gov-col-right">
+                    <p class="gov-kingdom">ព្រះរាជាណាចក្រកម្ពុជា</p>
+                    <p class="gov-motto">ជាតិ សាសនា ព្រះមហាក្សត្រ</p>
+                </div>
+            </div>
+        </header>
+
+        <div class="entry-topbar">
+            <div class="topbar-left">
+                <div class="topbar-titles">
+                    <h1 class="entry-title">បញ្ជូលព័ត៌មានព្រះសង្ឃ</h1>
+                    <p class="entry-sub">សូមបំពេញព័ត៌មានឱ្យបានត្រឹមត្រូវ — រង់ចាំអនុម័តពីអ្នកគ្រប់គ្រង</p>
+                </div>
+            </div>
+        </div>
 
     <div class="container">
         <div id="forms-container">
@@ -124,10 +136,8 @@
                             <label for="position-1">តួនាទីក្នុងវត្ត <span class="required">*</span></label>
                             <select name="position" id="position-1">
                                 <option value="">-- ជ្រើសរើសតួនាទី --</option>
+                                <option value="សមណសិស្ស">សមណសិស្ស</option>
                                 <option value="ព្រះអធិការ">ព្រះអធិការ</option>
-                                <option value="ព្រះសង្ឃធម្មតា">ព្រះសង្ឃធម្មតា</option>
-                                <option value="មេក្រុម">មេក្រុម</option>
-                                <option value="អនុមេក្រុម">អនុមេក្រុម</option>
                                 <option value="ព្រះគ្រូសូត្រស្តាំ">ព្រះគ្រូសូត្រស្តាំ</option>
                                 <option value="ព្រះគ្រូសូត្រឆ្វេង">ព្រះគ្រូសូត្រឆ្វេង</option>
                                 <option value="ព្រះគ្រូវិន័យធរ">ព្រះគ្រូវិន័យធរ</option>
@@ -226,10 +236,8 @@
                             <label for="position-2">តួនាទីក្នុងវត្ត <span class="required">*</span></label>
                             <select name="position" id="position-2">
                                 <option value="">-- ជ្រើសរើសតួនាទី --</option>
+                                <option value="សមណសិស្ស">សមណសិស្ស</option>
                                 <option value="ព្រះអធិការ">ព្រះអធិការ</option>
-                                <option value="ព្រះសង្ឃធម្មតា">ព្រះសង្ឃធម្មតា</option>
-                                <option value="មេក្រុម">មេក្រុម</option>
-                                <option value="អនុមេក្រុម">អនុមេក្រុម</option>
                                 <option value="ព្រះគ្រូសូត្រស្តាំ">ព្រះគ្រូសូត្រស្តាំ</option>
                                 <option value="ព្រះគ្រូសូត្រឆ្វេង">ព្រះគ្រូសូត្រឆ្វេង</option>
                                 <option value="ព្រះគ្រូវិន័យធរ">ព្រះគ្រូវិន័យធរ</option>
@@ -303,6 +311,11 @@
             <polyline points="12 6 12 12 16 14"></polyline>
         </svg>
         <span>ទិន្នន័យត្រូវបានដាក់ស្នើ ហើយកំពុង​រង់ចាំ​ការ​អនុម័ត​ពី​អ្នក​គ្រប់​គ្រង!</span>
+    </div>
+
+    <footer class="entry-footer">
+        <span>© វត្តនិរោធរង្សី — ទំព័រសាធារណៈ</span>
+    </footer>
     </div>
 
     <script>
@@ -450,10 +463,8 @@
                         <label for="position-${index}">តួនាទីក្នុងវត្ត <span class="required">*</span></label>
                         <select name="position" id="position-${index}">
                             <option value="">-- ជ្រើសរើសតួនាទី --</option>
+                            <option value="សមណសិស្ស">សមណសិស្ស</option>
                             <option value="ព្រះអធិការ">ព្រះអធិការ</option>
-                            <option value="ព្រះសង្ឃធម្មតា">ព្រះសង្ឃធម្មតា</option>
-                            <option value="មេក្រុម">មេក្រុម</option>
-                            <option value="អនុមេក្រុម">អនុមេក្រុម</option>
                             <option value="ព្រះគ្រូសូត្រស្តាំ">ព្រះគ្រូសូត្រស្តាំ</option>
                             <option value="ព្រះគ្រូសូត្រឆ្វេង">ព្រះគ្រូសូត្រឆ្វេង</option>
                             <option value="ព្រះគ្រូវិន័យធរ">ព្រះគ្រូវិន័យធរ</option>
@@ -506,7 +517,7 @@
     function removeForm(formId) {
         const card = document.getElementById(`form-card-${formId}`);
         if (!card) return;
-        if (document.querySelectorAll('.form-card').length <= 2) {
+        if (document.querySelectorAll('.form-card').length <= 1) {
             alert('មិនអាចលុបទម្រង់ចុងក្រោយបានទេ!');
             return;
         }

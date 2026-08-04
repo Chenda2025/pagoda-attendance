@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="km">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ផ្ទាំងគ្រប់គ្រង — វត្តនិរោធរង្សី</title>
+    <link rel="icon" type="image/jpeg" href="/static/logo.jpg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&family=Kantumruy+Pro:wght@300;400;500;600;700&family=Moul&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+</head>
+
+<body>
+    <div class="dash-shell">
+
+        <!-- Official header strip -->
+        <header class="gov-masthead">
+            <div class="gov-masthead-inner">
+                <div class="gov-col gov-col-left">
+                    <p>មន្ទីរធម្មការ និងសាសនា រាជធានីភ្នំពេញ</p>
+                    <p>សាលាពុទ្ធិកអនុវិទ្យាល័យសង្ឃ</p>
+                    <p class="gov-pagoda">វត្តនិរោធរង្សី</p>
+                </div>
+                <div class="gov-col gov-col-center">
+                    <img src="/static/logo.jpg" alt="វត្តនិរោធរង្សី" class="gov-seal">
+                </div>
+                <div class="gov-col gov-col-right">
+                    <p class="gov-kingdom">ព្រះរាជាណាចក្រកម្ពុជា</p>
+                    <p class="gov-motto">ជាតិ សាសនា ព្រះមហាក្សត្រ</p>
+                </div>
+            </div>
+        </header>
+
+        <!-- Top bar -->
+        <div class="dash-topbar">
+            <div class="topbar-left">
+                <h1 class="dash-title">ផ្ទាំងគ្រប់គ្រងរដ្ឋាភិបាលវត្ត</h1>
+                <p class="dash-subtitle">ប្រព័ន្ធគ្រប់គ្រងព័ត៌មានព្រះសង្ឃ — វត្តនិរោធរង្សី</p>
+            </div>
+            <div class="topbar-right">
+                <div class="date-block" id="date-block">
+                    <span class="date-label" id="solar-date">—</span>
+                    <span class="date-lunar" id="lunar-date">—</span>
+                </div>
+                <div class="user-chip">
+                    <span class="user-avatar">{{ username[:1]|upper if username else 'A' }}</span>
+                    <div class="user-meta">
+                        <span class="user-name">{{ username or 'admin' }}</span>
+                        <span class="user-role">អ្នកគ្រប់គ្រង</span>
+                    </div>
+                </div>
+                <a href="/logout" class="btn-logout" title="ចាកចេញ">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                        <polyline points="16 17 21 12 16 7" />
+                        <line x1="21" y1="12" x2="9" y2="12" />
+                    </svg>
+                    ចាកចេញ
+                </a>
+            </div>
+        </div>
+
+        <main class="dash-main">
+
+            <!-- KPI cards -->
+            <section class="kpi-grid" id="kpi-grid" aria-label="ស្ថិតិសង្ខេប">
+                <article class="kpi-card kpi-total">
+                    <div class="kpi-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                            <circle cx="9" cy="7" r="4" />
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                        </svg>
+                    </div>
+                    <div class="kpi-body">
+                        <span class="kpi-value" id="stat-total">—</span>
+                        <span class="kpi-label">សរុបព្រះសង្ឃ</span>
+                    </div>
+                </article>
+
+                <article class="kpi-card kpi-bhikkhu">
+                    <div class="kpi-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polygon
+                                points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                        </svg>
+                    </div>
+                    <div class="kpi-body">
+                        <span class="kpi-value" id="stat-bhikkhu">—</span>
+                        <span class="kpi-label">ភិក្ខុ</span>
+                    </div>
+                </article>
+
+                <article class="kpi-card kpi-samanera">
+                    <div class="kpi-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="8" r="7" />
+                            <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88" />
+                        </svg>
+                    </div>
+                    <div class="kpi-body">
+                        <span class="kpi-value" id="stat-samanera">—</span>
+                        <span class="kpi-label">សាមណេរ</span>
+                    </div>
+                </article>
+
+                <article class="kpi-card kpi-pending">
+                    <div class="kpi-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10" />
+                            <polyline points="12 6 12 12 16 14" />
+                        </svg>
+                    </div>
+                    <div class="kpi-body">
+                        <span class="kpi-value" id="stat-pending">—</span>
+                        <span class="kpi-label">រង់ចាំអនុម័ត</span>
+                    </div>
+                </article>
+
+                <article class="kpi-card kpi-present">
+                    <div class="kpi-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                            <polyline points="22 4 12 14.01 9 11.01" />
+                        </svg>
+                    </div>
+                    <div class="kpi-body">
+                        <span class="kpi-value" id="stat-present">—</span>
+                        <span class="kpi-label">វត្តមានថ្ងៃនេះ</span>
+                    </div>
+                </article>
+
+                <article class="kpi-card kpi-absent">
+                    <div class="kpi-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10" />
+                            <line x1="15" y1="9" x2="9" y2="15" />
+                            <line x1="9" y1="9" x2="15" y2="15" />
+                        </svg>
+                    </div>
+                    <div class="kpi-body">
+                        <span class="kpi-value" id="stat-absent">—</span>
+                        <span class="kpi-label">អវត្តមាន / ច្បាប់</span>
+                    </div>
+                </article>
+            </section>
+
+            <!-- Modules + side panels -->
+            <div class="dash-grid">
+
+                <section class="panel modules-panel">
+                    <div class="panel-head">
+                        <h2>មុខងាររដ្ឋាភិបាល</h2>
+                        <span class="panel-hint">ជ្រើសរើសសេវាកម្ម</span>
+                    </div>
+                    <div class="module-grid">
+
+                        <a href="/entry" class="module-card">
+                            <span class="mod-icon mod-entry">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+                                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round">
+                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                                </svg>
+                            </span>
+                            <span class="mod-text">
+                                <strong>បញ្ចូលទិន្នន័យ</strong>
+                                <small>ចុះឈ្មោះព្រះសង្ឃថ្មី</small>
+                            </span>
+                        </a>
+
+                        <a href="/view" class="module-card">
+                            <span class="mod-icon mod-view">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+                                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                    <circle cx="12" cy="12" r="3" />
+                                </svg>
+                            </span>
+                            <span class="mod-text">
+                                <strong>មើលទិន្នន័យ</strong>
+                                <small>បញ្ជីព្រះសង្ឃពេញលេញ</small>
+                            </span>
+                        </a>
+
+                        <a href="/layout" class="module-card">
+                            <span class="mod-icon mod-layout">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+                                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round">
+                                    <rect x="3" y="3" width="7" height="7" />
+                                    <rect x="14" y="3" width="7" height="7" />
+                                    <rect x="14" y="14" width="7" height="7" />
+                                    <rect x="3" y="14" width="7" height="7" />
+                                </svg>
+                            </span>
+                            <span class="mod-text">
+                                <strong>ប្លង់អាសនៈ</strong>
+                                <small>វត្តមាន និងច្បាប់</small>
+                            </span>
+                        </a>
+
+                        <a href="/approve" class="module-card module-card-alert" id="mod-approve">
+                            <span class="mod-icon mod-approve">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+                                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round">
+                                    <path d="M9 11l3 3L22 4" />
+                                    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+                                </svg>
+                            </span>
+                            <span class="mod-text">
+                                <strong>អនុម័ត</strong>
+                                <small>ពិនិត្យសំណើសាធារណៈ</small>
+                            </span>
+                            <span class="mod-badge" id="pending-badge" style="display:none">0</span>
+                        </a>
+
+                        <a href="/report" class="module-card">
+                            <span class="mod-icon mod-report">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+                                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                    <polyline points="14 2 14 8 20 8" />
+                                    <line x1="16" y1="13" x2="8" y2="13" />
+                                    <line x1="16" y1="17" x2="8" y2="17" />
+                                </svg>
+                            </span>
+                            <span class="mod-text">
+                                <strong>របាយការណ៍</strong>
+                                <small>អវត្តមាន និងច្បាប់</small>
+                            </span>
+                        </a>
+
+                        <a href="/report/book" class="module-card">
+                            <span class="mod-icon mod-book">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+                                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round">
+                                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                                </svg>
+                            </span>
+                            <span class="mod-text">
+                                <strong>សៀវភៅរបាយការណ៍</strong>
+                                <small>បោះពុម្ពផ្លូវការ</small>
+                            </span>
+                        </a>
+
+                        <a href="/kuti-links" class="module-card">
+                            <span class="mod-icon mod-kuti">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+                                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round">
+                                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                                </svg>
+                            </span>
+                            <span class="mod-text">
+                                <strong>តំណមេកុដិ</strong>
+                                <small>ផ្ញើតំណ — មើលតែកុដិខ្លួន</small>
+                            </span>
+                        </a>
+
+                        <a href="/submit" class="module-card" target="_blank" rel="noopener">
+                            <span class="mod-icon mod-public">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+                                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round">
+                                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                                    <polyline points="15 3 21 3 21 9" />
+                                    <line x1="10" y1="14" x2="21" y2="3" />
+                                </svg>
+                            </span>
+                            <span class="mod-text">
+                                <strong>ទំព័រសាធារណៈ</strong>
+                                <small>សំណើចុះឈ្មោះភ្ញៀវ</small>
+                            </span>
+                        </a>
+
+                    </div>
+                </section>
+
+                <aside class="side-stack">
+
+                    <section class="panel">
+                        <div class="panel-head">
+                            <h2>ស្ថិតិតាមកុដិ</h2>
+                        </div>
+                        <div class="bar-list" id="residence-list">
+                            <div class="loading-inline">កំពុងផ្ទុក...</div>
+                        </div>
+                    </section>
+
+                    <section class="panel">
+                        <div class="panel-head">
+                            <h2>កម្រិតសិក្សា</h2>
+                        </div>
+                        <div class="chip-list" id="education-list">
+                            <div class="loading-inline">កំពុងផ្ទុក...</div>
+                        </div>
+                    </section>
+
+                </aside>
+
+                <section class="panel recent-panel">
+                    <div class="panel-head">
+                        <h2>បញ្ចូលថ្មីៗ</h2>
+                        <a href="/view" class="panel-link">មើលទាំងអស់ →</a>
+                    </div>
+                    <div class="table-wrap">
+                        <table class="recent-table">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>នាម</th>
+                                    <th>ប្រភេទ</th>
+                                    <th>តួនាទី</th>
+                                    <th>ថ្ងៃ</th>
+                                </tr>
+                            </thead>
+                            <tbody id="recent-body">
+                                <tr>
+                                    <td colspan="5" class="loading-inline">កំពុងផ្ទុក...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+            </div>
+        </main>
+
+        <footer class="dash-footer">
+            <span>© វត្តនិរោធរង្សី — ប្រព័ន្ធគ្រប់គ្រងព័ត៌មានព្រះសង្ឃ</span>
+            <span id="footer-clock"></span>
+        </footer>
+    </div>
+
+    <script src="/static/js/dashboard.js"></script>
+</body>
+
+</html>

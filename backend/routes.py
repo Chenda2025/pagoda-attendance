@@ -1,9 +1,11 @@
 import time
+import secrets
 from collections import defaultdict
 from flask import request, render_template, Blueprint, jsonify, send_file, session, redirect, url_for, abort
 from conn import connect_db
 from create_table import (create_monks_table, insert_monk, get_all_monks,
-                          update_monk, delete_monk, insert_pending_submission)
+                          update_monk, delete_monk, insert_pending_submission,
+                          update_monk_living_status)
 from datetime import date as _date
 from sorting import sort_attendance_monks
 from khmer_lunar import khmer_lunar_date
@@ -25,15 +27,18 @@ _VALID_RESIDENCES       = {
     'កុដិហោត្រៃ', 'សាលាបាលីចាស់', 'សាលាពុទ្ធិក',
 }
 _VALID_POSITIONS        = {
-    'ព្រះអធិការ',
-    'ព្រះសង្ឃធម្មតា', 'មេក្រុម', 'អនុមេក្រុម',
+    'សមណសិស្ស', 'ព្រះអធិការ',
     'ព្រះគ្រូសូត្រស្តាំ', 'ព្រះគ្រូសូត្រឆ្វេង', 'ព្រះគ្រូវិន័យធរ',
     'ព្រះគ្រូលេខា', 'ព្រះគ្រូប្រធានការក',
     'ព្រះគ្រូអនុប្រធានការកទី១', 'ព្រះគ្រូអនុប្រធានការកទី២',
     'មេកុដិ', 'អនុកុដិ',
+    # legacy values still present in existing records
+    'ព្រះសង្ឃធម្មតា', 'មេក្រុម', 'អនុមេក្រុម',
 }
 _VALID_EDUCATION_LEVELS = {'បឋមសិក្សា', 'អនុវិទ្យាល័យ', 'វិទ្យាល័យ', 'មហាវិទ្យាល័យ'}
 _VALID_ACADEMIC_YEARS   = {'ឆ្នាំទី១', 'ឆ្នាំទី២', 'ឆ្នាំទី៣', 'ឆ្នាំទី៤'}
+_VALID_LIVING_STATUSES  = {'កំពុងស្នាក់នៅ', 'ឈប់ស្នាក់នៅ', 'នៅស្រុក'}
+_ACTIVE_LIVING_STATUS   = 'កំពុងស្នាក់នៅ'
 
 # ============ RATE LIMITER (in-memory, per IP, 10 req/min) ============
 
@@ -75,7 +80,9 @@ def check_auth():
     path = request.path
     if (path.startswith('/static')
             or path in ('/login', '/logout', '/submit')
-            or path in ('/public/submit', '/api/monks/check-duplicate')):
+            or path in ('/public/submit', '/api/monks/check-duplicate')
+            or path.startswith('/kuti/')
+            or path.startswith('/api/kuti/')):
         return
 
     role = session.get('role')
@@ -126,7 +133,829 @@ def logout():
 
 @main_bp.route('/')
 def index():
+    """Admin home — professional government dashboard."""
+    return render_template(
+        'dashboard.html',
+        username=session.get('username', ''),
+        role=session.get('role', ''),
+    )
+
+
+@main_bp.route('/entry')
+def entry_page():
+    """Monk data entry forms (admin)."""
     return render_template('index.html')
+
+
+@main_bp.route('/api/dashboard/stats', methods=['GET'])
+def dashboard_stats():
+    """Aggregate stats for the admin dashboard."""
+    try:
+        conn = connect_db()
+        cur = conn.cursor()
+
+        cur.execute("SELECT COUNT(*) FROM monk_tbl")
+        total = cur.fetchone()[0]
+
+        cur.execute("SELECT COUNT(*) FROM monk_tbl WHERE monk_type = %s", ('ភិក្ខុ',))
+        bhikkhu = cur.fetchone()[0]
+
+        cur.execute("SELECT COUNT(*) FROM monk_tbl WHERE monk_type = %s", ('សាមណេរ',))
+        samanera = cur.fetchone()[0]
+
+        cur.execute("SELECT COUNT(*) FROM pending_submissions WHERE status = 'pending'")
+        pending = cur.fetchone()[0]
+
+        today = _date.today()
+        cur.execute(
+            "SELECT status, COUNT(*) FROM attendance_tbl WHERE date = %s GROUP BY status",
+            (today,),
+        )
+        att = {row[0]: row[1] for row in cur.fetchall()}
+        absent_today = att.get('absent', 0)
+        permission_today = att.get('permission', 0)
+
+        cur.execute("""
+            SELECT residence, COUNT(*) AS cnt
+            FROM monk_tbl
+            GROUP BY residence
+            ORDER BY cnt DESC, residence
+        """)
+        by_residence = [{'name': r[0], 'count': r[1]} for r in cur.fetchall()]
+
+        cur.execute("""
+            SELECT education_level, COUNT(*) AS cnt
+            FROM monk_tbl
+            GROUP BY education_level
+            ORDER BY cnt DESC
+        """)
+        by_education = [{'name': r[0], 'count': r[1]} for r in cur.fetchall()]
+
+        cur.execute("""
+            SELECT fullname, monk_type, position, created_at
+            FROM monk_tbl
+            ORDER BY created_at DESC NULLS LAST
+            LIMIT 8
+        """)
+        recent = [{
+            'fullname': r[0],
+            'monk_type': r[1],
+            'position': r[2],
+            'created_at': r[3].isoformat() if r[3] else None,
+        } for r in cur.fetchall()]
+
+        cur.close()
+        conn.close()
+
+        return jsonify({
+            'success': True,
+            'stats': {
+                'total': total,
+                'bhikkhu': bhikkhu,
+                'samanera': samanera,
+                'pending': pending,
+                'absent_today': absent_today,
+                'permission_today': permission_today,
+                'present_today': max(0, total - absent_today - permission_today),
+            },
+            'by_residence': by_residence,
+            'by_education': by_education,
+            'recent': recent,
+            'date': today.isoformat(),
+            'lunar': khmer_lunar_date(today),
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+# ============ KUTI SHARE LINKS (leader can view own kuti only) ============
+
+def _residence_label(residence: str) -> str:
+    return (residence or '').replace('_', ' ')
+
+
+def _get_share_by_token(token: str):
+    """Return active share row or None."""
+    conn = connect_db()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT id, residence, token, label, is_active, created_at
+        FROM kuti_share_links
+        WHERE token = %s AND is_active = TRUE
+    """, (token,))
+    row = cur.fetchone()
+    if row:
+        cur.execute(
+            "UPDATE kuti_share_links SET last_used_at = NOW() WHERE id = %s",
+            (row[0],),
+        )
+        conn.commit()
+    cur.close()
+    conn.close()
+    if not row:
+        return None
+    return {
+        'id': row[0],
+        'residence': row[1],
+        'token': row[2],
+        'label': row[3],
+        'is_active': row[4],
+        'created_at': row[5],
+    }
+
+
+@main_bp.route('/kuti-links')
+def kuti_links_page():
+    """Admin page — generate share links for each kuti leader."""
+    if session.get('role') != 'admin':
+        abort(403)
+    return render_template(
+        'kuti_links.html',
+        residences=sorted(_VALID_RESIDENCES),
+        username=session.get('username', ''),
+    )
+
+
+@main_bp.route('/api/kuti-links/monks', methods=['GET'])
+def kuti_links_monks():
+    """Admin: list all monks in one residence (including departed statuses)."""
+    if session.get('role') != 'admin':
+        return jsonify({'success': False, 'message': 'Forbidden'}), 403
+    residence = (request.args.get('residence') or '').strip()
+    if residence not in _VALID_RESIDENCES:
+        return jsonify({'success': False, 'message': 'កុដិមិនត្រឹមត្រូវ'}), 400
+    try:
+        conn = connect_db()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT id, fullname, vassa_years, monk_type, residence, position,
+                   education_level, academic_year, living_status, created_at, updated_at
+            FROM monk_tbl
+            WHERE residence = %s
+            ORDER BY
+                CASE living_status WHEN 'កំពុងស្នាក់នៅ' THEN 0 ELSE 1 END,
+                monk_type, position, vassa_years DESC, fullname
+        """, (residence,))
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        monks = [{
+            'id': r[0],
+            'fullname': r[1],
+            'vassa_years': r[2],
+            'monk_type': r[3],
+            'residence': r[4],
+            'residence_label': _residence_label(r[4]),
+            'position': r[5],
+            'education_level': r[6],
+            'academic_year': r[7],
+            'living_status': r[8] or _ACTIVE_LIVING_STATUS,
+            'created_at': r[9].isoformat() if r[9] else None,
+            'updated_at': r[10].isoformat() if r[10] else None,
+        } for r in rows]
+        return jsonify({
+            'success': True,
+            'residence': residence,
+            'residence_label': _residence_label(residence),
+            'count': len(monks),
+            'monks': monks,
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@main_bp.route('/api/kuti-links/leaders', methods=['GET'])
+def kuti_leaders_for_residence():
+    """Return monks with position មេកុដិ (and អនុកុដិ) in one residence."""
+    if session.get('role') != 'admin':
+        return jsonify({'success': False, 'message': 'Forbidden'}), 403
+    residence = (request.args.get('residence') or '').strip()
+    if residence not in _VALID_RESIDENCES:
+        return jsonify({'success': False, 'message': 'កុដិមិនត្រឹមត្រូវ'}), 400
+    try:
+        conn = connect_db()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT id, fullname, position
+            FROM monk_tbl
+            WHERE residence = %s
+              AND position IN ('មេកុដិ', 'អនុកុដិ')
+            ORDER BY
+                CASE position WHEN 'មេកុដិ' THEN 0 ELSE 1 END,
+                fullname
+        """, (residence,))
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        leaders = [{
+            'id': r[0],
+            'fullname': r[1],
+            'position': r[2],
+        } for r in rows]
+        return jsonify({'success': True, 'leaders': leaders})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@main_bp.route('/api/kuti-links', methods=['GET'])
+def list_kuti_links():
+    if session.get('role') != 'admin':
+        return jsonify({'success': False, 'message': 'Forbidden'}), 403
+    try:
+        conn = connect_db()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT id, residence, token, label, is_active, created_at, last_used_at
+            FROM kuti_share_links
+            ORDER BY residence, created_at DESC
+        """)
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        base = request.host_url.rstrip('/')
+        links = [{
+            'id': r[0],
+            'residence': r[1],
+            'residence_label': _residence_label(r[1]),
+            'token': r[2],
+            'label': r[3] or '',
+            'is_active': r[4],
+            'created_at': r[5].isoformat() if r[5] else None,
+            'last_used_at': r[6].isoformat() if r[6] else None,
+            'url': f'{base}/kuti/{r[2]}',
+        } for r in rows]
+        return jsonify({'success': True, 'links': links})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@main_bp.route('/api/kuti-links', methods=['POST'])
+def create_kuti_link():
+    """Create (or recreate) an active share link for one residence."""
+    if session.get('role') != 'admin':
+        return jsonify({'success': False, 'message': 'Forbidden'}), 403
+    data = request.get_json(silent=True) or {}
+    residence = str(data.get('residence', '') or '').strip()
+    label = str(data.get('label', '') or '').strip() or None
+    if residence not in _VALID_RESIDENCES:
+        return jsonify({'success': False, 'message': 'កុដិមិនត្រឹមត្រូវ'}), 400
+    try:
+        token = secrets.token_urlsafe(24)
+        conn = connect_db()
+        cur = conn.cursor()
+        # Deactivate previous active links for this kuti
+        cur.execute("""
+            UPDATE kuti_share_links SET is_active = FALSE
+            WHERE residence = %s AND is_active = TRUE
+        """, (residence,))
+        cur.execute("""
+            INSERT INTO kuti_share_links (residence, token, label, is_active)
+            VALUES (%s, %s, %s, TRUE)
+            RETURNING id, residence, token, label, created_at
+        """, (residence, token, label))
+        row = cur.fetchone()
+        conn.commit()
+        cur.close()
+        conn.close()
+        base = request.host_url.rstrip('/')
+        return jsonify({
+            'success': True,
+            'link': {
+                'id': row[0],
+                'residence': row[1],
+                'residence_label': _residence_label(row[1]),
+                'token': row[2],
+                'label': row[3] or '',
+                'is_active': True,
+                'created_at': row[4].isoformat() if row[4] else None,
+                'url': f'{base}/kuti/{row[2]}',
+            },
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@main_bp.route('/api/kuti-links/<int:link_id>', methods=['DELETE'])
+def delete_kuti_link(link_id):
+    """Permanently remove a share-link record."""
+    if session.get('role') != 'admin':
+        return jsonify({'success': False, 'message': 'Forbidden'}), 403
+    try:
+        conn = connect_db()
+        cur = conn.cursor()
+        cur.execute("DELETE FROM kuti_share_links WHERE id = %s", (link_id,))
+        conn.commit()
+        deleted = cur.rowcount
+        cur.close()
+        conn.close()
+        if not deleted:
+            return jsonify({'success': False, 'message': 'រកមិនឃើញតំណ'}), 404
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@main_bp.route('/kuti/<token>')
+def kuti_public_view(token):
+    """Public kuti leader view (via share link) — manage monks in this kuti only."""
+    share = _get_share_by_token(token)
+    if not share:
+        return render_template('kuti_view.html', invalid=True, share=None), 404
+    positions = [
+        'សមណសិស្ស', 'ព្រះអធិការ',
+        'ព្រះគ្រូសូត្រស្តាំ', 'ព្រះគ្រូសូត្រឆ្វេង', 'ព្រះគ្រូវិន័យធរ',
+        'ព្រះគ្រូលេខា', 'ព្រះគ្រូប្រធានការក',
+        'ព្រះគ្រូអនុប្រធានការកទី១', 'ព្រះគ្រូអនុប្រធានការកទី២',
+        'មេកុដិ', 'អនុកុដិ',
+    ]
+    return render_template(
+        'kuti_view.html',
+        invalid=False,
+        share=share,
+        residence=share['residence'],
+        residence_label=_residence_label(share['residence']),
+        positions=positions,
+        education_levels=['បឋមសិក្សា', 'អនុវិទ្យាល័យ', 'វិទ្យាល័យ', 'មហាវិទ្យាល័យ'],
+        academic_years=['ឆ្នាំទី១', 'ឆ្នាំទី២', 'ឆ្នាំទី៣', 'ឆ្នាំទី៤'],
+        living_statuses=['កំពុងស្នាក់នៅ', 'ឈប់ស្នាក់នៅ', 'នៅស្រុក'],
+    )
+
+
+@main_bp.route('/api/kuti/<token>/monks', methods=['GET'])
+def kuti_public_monks(token):
+    """Return monks for the token's residence only — never other kutis."""
+    share = _get_share_by_token(token)
+    if not share:
+        return jsonify({'success': False, 'message': 'តំណភ្ជាប់មិនត្រឹមត្រូវ ឬត្រូវបានបិទ'}), 404
+    residence = share['residence']
+    try:
+        conn = connect_db()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT id, fullname, vassa_years, monk_type, residence, position,
+                   education_level, academic_year, created_at, living_status
+            FROM monk_tbl
+            WHERE residence = %s
+            ORDER BY
+                CASE living_status WHEN 'កំពុងស្នាក់នៅ' THEN 0 ELSE 1 END,
+                monk_type, position, vassa_years DESC, fullname
+        """, (residence,))
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        monks = [{
+            'id': r[0],
+            'fullname': r[1],
+            'vassa_years': r[2],
+            'monk_type': r[3],
+            'residence': r[4],
+            'residence_label': _residence_label(r[4]),
+            'position': r[5],
+            'education_level': r[6],
+            'academic_year': r[7],
+            'created_at': r[8].isoformat() if r[8] else None,
+            'living_status': r[9] or _ACTIVE_LIVING_STATUS,
+        } for r in rows]
+        monks = sort_attendance_monks(monks)
+        monks = [m for m in monks if m['residence'] == residence]
+        return jsonify({
+            'success': True,
+            'residence': residence,
+            'residence_label': _residence_label(residence),
+            'label': share.get('label') or '',
+            'count': len(monks),
+            'monks': monks,
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+def _kuti_monk_payload(data, forced_residence):
+    """Parse monk JSON for token-scoped writes; residence is always forced."""
+    fullname = (data.get('fullname') or '').strip()
+    vassa_years = data.get('total-monk')
+    monk_type = data.get('type')
+    position = data.get('position')
+    education_level = data.get('education_level')
+    academic_year = data.get('academic_level')
+    living_status = data.get('living_status') or _ACTIVE_LIVING_STATUS
+    try:
+        vassa_years = int(vassa_years)
+    except (TypeError, ValueError):
+        return None, 'ចំនួនវស្សាមិនត្រឹមត្រូវ'
+    if not all([fullname, monk_type, position, education_level, academic_year]):
+        return None, 'Missing required fields'
+    if monk_type not in _VALID_MONK_TYPES:
+        return None, 'ប្រភេទមិនត្រឹមត្រូវ'
+    if position not in _VALID_POSITIONS:
+        return None, 'តួនាទីមិនត្រឹមត្រូវ'
+    if education_level not in _VALID_EDUCATION_LEVELS:
+        return None, 'កម្រិតសិក្សាមិនត្រឹមត្រូវ'
+    if academic_year not in _VALID_ACADEMIC_YEARS:
+        return None, 'ថ្នាក់មិនត្រឹមត្រូវ'
+    if living_status not in _VALID_LIVING_STATUSES:
+        return None, 'ស្ថានភាពមិនត្រឹមត្រូវ'
+    return {
+        'fullname': fullname,
+        'vassa_years': vassa_years,
+        'monk_type': monk_type,
+        'residence': forced_residence,
+        'position': position,
+        'education_level': education_level,
+        'academic_year': academic_year,
+        'living_status': living_status,
+    }, None
+
+
+def _monk_in_residence(monk_id, residence):
+    conn = connect_db()
+    cur = conn.cursor()
+    cur.execute("SELECT id FROM monk_tbl WHERE id = %s AND residence = %s", (monk_id, residence))
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    return bool(row)
+
+
+@main_bp.route('/api/kuti/<token>/monks', methods=['POST'])
+def kuti_public_add_monk(token):
+    """មេកុដិ: add a monk into this token's residence only."""
+    share = _get_share_by_token(token)
+    if not share:
+        return jsonify({'success': False, 'message': 'តំណភ្ជាប់មិនត្រឹមត្រូវ ឬត្រូវបានបិទ'}), 404
+    data = request.get_json(silent=True) or {}
+    payload, err = _kuti_monk_payload(data, share['residence'])
+    if err:
+        return jsonify({'success': False, 'message': err}), 400
+    monk_id = insert_monk(
+        payload['fullname'], payload['vassa_years'], payload['monk_type'],
+        payload['residence'], payload['position'], payload['education_level'],
+        payload['academic_year'], payload['living_status'],
+    )
+    if not monk_id:
+        return jsonify({'success': False, 'message': 'Failed to insert monk'}), 500
+    return jsonify({'success': True, 'monk_id': monk_id})
+
+
+@main_bp.route('/api/kuti/<token>/monks/<int:monk_id>', methods=['PUT'])
+def kuti_public_update_monk(token, monk_id):
+    """មេកុដិ: update a monk only if they belong to this token's residence."""
+    share = _get_share_by_token(token)
+    if not share:
+        return jsonify({'success': False, 'message': 'តំណភ្ជាប់មិនត្រឹមត្រូវ ឬត្រូវបានបិទ'}), 404
+    residence = share['residence']
+    if not _monk_in_residence(monk_id, residence):
+        return jsonify({'success': False, 'message': 'មិនមានសិទ្ធិកែព្រះសង្ឃនេះ'}), 403
+    data = request.get_json(silent=True) or {}
+    payload, err = _kuti_monk_payload(data, residence)
+    if err:
+        return jsonify({'success': False, 'message': err}), 400
+    ok = update_monk(
+        monk_id, payload['fullname'], payload['vassa_years'], payload['monk_type'],
+        payload['residence'], payload['position'], payload['education_level'],
+        payload['academic_year'], payload['living_status'],
+    )
+    if not ok:
+        return jsonify({'success': False, 'message': 'Failed to update'}), 500
+    return jsonify({'success': True})
+
+
+@main_bp.route('/api/kuti/<token>/monks/<int:monk_id>/living-status', methods=['PATCH'])
+def kuti_public_patch_living_status(token, monk_id):
+    """មេកុដិ: change living status for a monk in this kuti only."""
+    share = _get_share_by_token(token)
+    if not share:
+        return jsonify({'success': False, 'message': 'តំណភ្ជាប់មិនត្រឹមត្រូវ ឬត្រូវបានបិទ'}), 404
+    residence = share['residence']
+    if not _monk_in_residence(monk_id, residence):
+        return jsonify({'success': False, 'message': 'មិនមានសិទ្ធិកែព្រះសង្ឃនេះ'}), 403
+    data = request.get_json(silent=True) or {}
+    living_status = (data.get('living_status') or '').strip()
+    if living_status not in _VALID_LIVING_STATUSES:
+        return jsonify({'success': False, 'message': 'ស្ថានភាពមិនត្រឹមត្រូវ'}), 400
+    ok = update_monk_living_status(monk_id, living_status)
+    if not ok:
+        return jsonify({'success': False, 'message': 'រកមិនឃើញព្រះសង្ឃ'}), 404
+    return jsonify({'success': True, 'living_status': living_status})
+
+
+@main_bp.route('/api/kuti/<token>/export', methods=['GET'])
+def kuti_public_export(token):
+    """Export monks for this share-link residence only (docx / excel / html→PDF)."""
+    import io
+    import html as _html
+    from datetime import date
+
+    share = _get_share_by_token(token)
+    if not share:
+        return jsonify({'success': False, 'message': 'តំណភ្ជាប់មិនត្រឹមត្រូវ ឬត្រូវបានបិទ'}), 404
+
+    fmt = (request.args.get('fmt') or 'docx').strip().lower()
+    if fmt not in ('docx', 'excel', 'html'):
+        return jsonify({'success': False, 'message': 'Invalid format'}), 400
+
+    residence = share['residence']
+    residence_label = _residence_label(residence)
+    try:
+        conn = connect_db()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT fullname, vassa_years, monk_type, residence, position,
+                   education_level, academic_year, living_status, created_at
+            FROM monk_tbl
+            WHERE residence = %s
+            ORDER BY
+                CASE living_status WHEN 'កំពុងស្នាក់នៅ' THEN 0 ELSE 1 END,
+                monk_type, position, vassa_years DESC, fullname
+        """, (residence,))
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+    monks = [{
+        'fullname': r[0],
+        'vassa_years': r[1],
+        'monk_type': r[2],
+        'residence': (r[3] or '').replace('_', ' '),
+        'position': r[4] or '',
+        'education_level': r[5] or '',
+        'academic_year': r[6] or '',
+        'living_status': r[7] or _ACTIVE_LIVING_STATUS,
+        'created_at': r[8],
+    } for r in rows]
+    monks = sort_attendance_monks(monks)
+
+    today = date.today().strftime('%d/%m/%Y')
+    safe_name = residence.replace(' ', '_').replace('/', '-')
+    fname_base = f"kuti_{safe_name}_{date.today().isoformat()}"
+    leader = share.get('label') or ''
+    title = f'បញ្ជីព្រះសង្ឃ — {residence_label}'
+
+    if fmt == 'docx':
+        from docx import Document
+        from docx.shared import Pt, Cm, RGBColor
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+        from docx.oxml.ns import qn
+        from docx.oxml import OxmlElement
+
+        def _shade(cell, hex_color):
+            tc = cell._tc
+            tcPr = tc.get_or_add_tcPr()
+            shd = OxmlElement('w:shd')
+            shd.set(qn('w:val'), 'clear')
+            shd.set(qn('w:color'), 'auto')
+            shd.set(qn('w:fill'), hex_color)
+            tcPr.append(shd)
+
+        doc = Document()
+        sec = doc.sections[0]
+        sec.page_width = Cm(21.0)   # A4
+        sec.page_height = Cm(29.7)
+        sec.left_margin = sec.right_margin = Cm(1.5)
+        sec.top_margin = sec.bottom_margin = Cm(1.5)
+
+        h = doc.add_heading(title, 0)
+        h.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        sub_txt = f"ថ្ងៃទី {today}  |  ចំនួនសរុប: {len(monks)} នាក់"
+        if leader:
+            sub_txt += f"  |  មេកុដិ: {leader}"
+        sub = doc.add_paragraph(sub_txt)
+        sub.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        sub.runs[0].font.size = Pt(10)
+        sub.runs[0].font.color.rgb = RGBColor(0x71, 0x80, 0x96)
+        doc.add_paragraph()
+
+        hdrs = ['#', 'ឈ្មោះ', 'វស្សា', 'ប្រភេទ', 'តួនាទី', 'ស្ថានភាព', 'កម្រិតសិក្សា']
+        widths = [0.8, 3.6, 1.3, 1.6, 3.0, 2.4, 2.6]
+        tbl = doc.add_table(rows=1, cols=len(hdrs))
+        tbl.style = 'Table Grid'
+        for i, (hdr, w) in enumerate(zip(hdrs, widths)):
+            cell = tbl.rows[0].cells[i]
+            cell.width = Cm(w)
+            _shade(cell, '0C2D5A')
+            p = cell.paragraphs[0]
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            run = p.add_run(hdr)
+            run.bold = True
+            run.font.size = Pt(8.5)
+            run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+
+        for idx, m in enumerate(monks, 1):
+            bg = 'FFF8E1' if m['monk_type'] == 'ភិក្ខុ' else 'F1F8E9'
+            if m['living_status'] != _ACTIVE_LIVING_STATUS:
+                bg = 'F8F9FA'
+            vals = [
+                str(idx), m['fullname'], f"{m['vassa_years']} ឆ្នាំ", m['monk_type'],
+                m['position'], m['living_status'], m['education_level'],
+            ]
+            row = tbl.add_row()
+            for j, (val, w) in enumerate(zip(vals, widths)):
+                cell = row.cells[j]
+                cell.width = Cm(w)
+                _shade(cell, bg)
+                p = cell.paragraphs[0]
+                p.alignment = WD_ALIGN_PARAGRAPH.CENTER if j in (0, 2) else WD_ALIGN_PARAGRAPH.LEFT
+                run = p.add_run(val)
+                run.font.size = Pt(8.5)
+                if j == 1:
+                    run.bold = True
+
+        buf = io.BytesIO()
+        doc.save(buf)
+        buf.seek(0)
+        return send_file(
+            buf,
+            mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            as_attachment=True,
+            download_name=f"{fname_base}.docx",
+        )
+
+    if fmt == 'excel':
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        from openpyxl.utils import get_column_letter
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = 'កុដិ'
+        hdrs = ['#', 'ឈ្មោះ', 'វស្សា', 'ប្រភេទ', 'តួនាទី', 'ស្ថានភាព',
+                'កម្រិតសិក្សា', 'ថ្នាក់', 'ថ្ងៃបញ្ចូល']
+        hfill = PatternFill(start_color='0C2D5A', end_color='0C2D5A', fill_type='solid')
+        hfont = Font(bold=True, color='FFFFFF', size=11, name='Calibri')
+        thin = Side(border_style='thin', color='D1D5DB')
+        bdr = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+        ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(hdrs))
+        title_cell = ws.cell(row=1, column=1, value=title)
+        title_cell.font = Font(bold=True, size=14, color='0C2D5A', name='Calibri')
+        title_cell.alignment = Alignment(horizontal='center', vertical='center')
+        ws.row_dimensions[1].height = 24
+
+        meta = f"ថ្ងៃទី {today}  |  សរុប {len(monks)} នាក់"
+        if leader:
+            meta += f"  |  មេកុដិ: {leader}"
+        ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=len(hdrs))
+        meta_cell = ws.cell(row=2, column=1, value=meta)
+        meta_cell.alignment = Alignment(horizontal='center')
+        meta_cell.font = Font(size=10, color='718096', name='Calibri')
+
+        for col, h in enumerate(hdrs, 1):
+            c = ws.cell(row=3, column=col, value=h)
+            c.font = hfont
+            c.fill = hfill
+            c.border = bdr
+            c.alignment = Alignment(horizontal='center', vertical='center')
+        ws.row_dimensions[3].height = 22
+
+        bfill = PatternFill(start_color='FFF8E1', end_color='FFF8E1', fill_type='solid')
+        sfill = PatternFill(start_color='F1F8E9', end_color='F1F8E9', fill_type='solid')
+        gfill = PatternFill(start_color='F8F9FA', end_color='F8F9FA', fill_type='solid')
+        dfont = Font(size=10, name='Calibri')
+
+        for row_i, m in enumerate(monks, 4):
+            if m['living_status'] != _ACTIVE_LIVING_STATUS:
+                fill = gfill
+            else:
+                fill = bfill if m['monk_type'] == 'ភិក្ខុ' else sfill
+            cre = m['created_at'].strftime('%d/%m/%Y') if m['created_at'] else '—'
+            vals = [
+                row_i - 3, m['fullname'], m['vassa_years'], m['monk_type'],
+                m['position'], m['living_status'], m['education_level'],
+                m['academic_year'], cre,
+            ]
+            for col, val in enumerate(vals, 1):
+                c = ws.cell(row=row_i, column=col, value=val)
+                c.fill = fill
+                c.border = bdr
+                c.font = dfont
+                c.alignment = Alignment(
+                    horizontal='center' if col in (1, 3, 9) else 'left',
+                    vertical='center',
+                )
+
+        for col, w in enumerate([5, 24, 8, 12, 18, 16, 15, 10, 13], 1):
+            ws.column_dimensions[get_column_letter(col)].width = w
+
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        return send_file(
+            buf,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=f"{fname_base}.xlsx",
+        )
+
+    # html → used by client PDF export
+    bhikkhus = [m for m in monks if m['monk_type'] == 'ភិក្ខុ']
+    samaneras = [m for m in monks if m['monk_type'] == 'សាមណេរ']
+
+    def _trow(m, idx, stripe):
+        bg = '#f8fafc' if stripe else '#ffffff'
+        if m['living_status'] != _ACTIVE_LIVING_STATUS:
+            bg = '#f1f3f5'
+        return (
+            f'<tr style="background:{bg}">'
+            f'<td class="c">{idx}</td>'
+            f'<td class="name">{_html.escape(m["fullname"])}</td>'
+            f'<td class="c">{m["vassa_years"]}</td>'
+            f'<td>{_html.escape(m["monk_type"])}</td>'
+            f'<td>{_html.escape(m["position"])}</td>'
+            f'<td>{_html.escape(m["living_status"])}</td>'
+            f'<td>{_html.escape(m["education_level"])}</td>'
+            f'</tr>'
+        )
+
+    def _section(section_monks, sec_title, hdr_bg):
+        if not section_monks:
+            return ''
+        rows = ''.join(_trow(m, i + 1, i % 2 == 1) for i, m in enumerate(section_monks))
+        return f'''
+        <div class="sec-title" style="background:{hdr_bg}">{_html.escape(sec_title)}
+            <span class="sec-count">({len(section_monks)} នាក់)</span></div>
+        <table>
+            <thead><tr>
+                <th class="c">#</th><th>ឈ្មោះ</th><th class="c">វស្សា</th>
+                <th>ប្រភេទ</th><th>តួនាទី</th><th>ស្ថានភាព</th><th>កម្រិតសិក្សា</th>
+            </tr></thead>
+            <tbody>{rows}</tbody>
+        </table>'''
+
+    leader_html = f' · មេកុដិ៖ {_html.escape(leader)}' if leader else ''
+    html_out = f'''<!DOCTYPE html><html lang="km"><head><meta charset="UTF-8">
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&display=swap');
+    @page {{ size: A4 portrait; margin: 12mm; }}
+    * {{ box-sizing: border-box; }}
+    html, body {{
+      margin: 0; padding: 0;
+      background: #fff;
+      font-family: 'Battambang', sans-serif;
+      color: #1a2332;
+      font-size: 11px;
+    }}
+    .page {{
+      width: 210mm;
+      min-height: 297mm;
+      margin: 0 auto;
+      padding: 14mm 12mm;
+      background: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      justify-content: flex-start;
+    }}
+    .page-inner {{
+      width: 100%;
+      margin: 0 auto;
+    }}
+    .header {{
+      background: linear-gradient(135deg, #0c2d5a, #163f73);
+      color: #fff;
+      padding: 14px 18px;
+      border-radius: 10px;
+      margin-bottom: 14px;
+      text-align: center;
+    }}
+    .header h1 {{ font-size: 17px; margin: 0 0 6px; font-weight: 700; }}
+    .header p {{ margin: 0; opacity: .9; font-size: 11px; }}
+    .chips {{ display: flex; gap: 10px; margin-bottom: 14px; justify-content: center; }}
+    .chip {{
+      flex: 1; max-width: 160px; padding: 10px; border-radius: 8px;
+      text-align: center; background: #f0f4fa;
+    }}
+    .chip strong {{ display: block; font-size: 18px; color: #0c2d5a; }}
+    .sec-title {{
+      padding: 8px 12px; border-radius: 6px; color: #fff;
+      font-weight: 700; margin: 14px 0 8px; text-align: center;
+    }}
+    .sec-count {{ font-weight: 400; opacity: .9; }}
+    table {{ width: 100%; border-collapse: collapse; margin: 0 auto 8px; }}
+    th {{
+      background: #0c2d5a; color: #fff; padding: 8px 10px;
+      text-align: center; font-size: 11px;
+    }}
+    td {{ padding: 7px 10px; border-bottom: 1px solid #e8edf3; vertical-align: middle; }}
+    td.c, th.c {{ text-align: center; }}
+    td.name {{ font-weight: 700; text-align: left; }}
+    </style></head><body>
+    <div class="page"><div class="page-inner">
+    <div class="header">
+      <h1>{_html.escape(title)}</h1>
+      <p>ថ្ងៃទី {today}{leader_html} · វត្តនិរោធរង្សី</p>
+    </div>
+    <div class="chips">
+      <div class="chip"><span>សរុប</span><strong>{len(monks)}</strong></div>
+      <div class="chip"><span>ភិក្ខុ</span><strong>{len(bhikkhus)}</strong></div>
+      <div class="chip"><span>សាមណេរ</span><strong>{len(samaneras)}</strong></div>
+    </div>
+    {_section(bhikkhus, 'ភិក្ខុ', '#8a6d12')}
+    {_section(samaneras, 'សាមណេរ', '#1f6b4a')}
+    </div></div>
+    </body></html>'''
+    return html_out, 200, {'Content-Type': 'text/html; charset=utf-8'}
 
 
 # ============ PUBLIC SUBMISSION ROUTES ============
@@ -356,7 +1185,7 @@ def add_monk():
     """API endpoint to add a new monk"""
     try:
         data = request.get_json()
-        
+
         # Extract form data
         fullname = data.get('fullname')
         vassa_years = data.get('total-monk')  # Match form field name
@@ -365,31 +1194,44 @@ def add_monk():
         position = data.get('position')
         education_level = data.get('education_level')
         academic_year = data.get('academic_level')
-        
+        living_status = data.get('living_status') or _ACTIVE_LIVING_STATUS
+
         # Validate required fields
         if not all([fullname, vassa_years, monk_type, residence, position, education_level, academic_year]):
             return jsonify({'success': False, 'message': 'Missing required fields'}), 400
-        
+        if living_status not in _VALID_LIVING_STATUSES:
+            return jsonify({'success': False, 'message': 'ស្ថានភាពមិនត្រឹមត្រូវ'}), 400
+
         # Insert into database
-        monk_id = insert_monk(fullname, vassa_years, monk_type, residence, position, education_level, academic_year)
-        
+        monk_id = insert_monk(
+            fullname, vassa_years, monk_type, residence, position,
+            education_level, academic_year, living_status,
+        )
+
         if monk_id:
             return jsonify({'success': True, 'monk_id': monk_id})
         else:
             return jsonify({'success': False, 'message': 'Failed to insert monk'}), 500
-            
+
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
 @main_bp.route('/api/monks', methods=['GET'])
 def list_monks():
-    """API endpoint to get all monks"""
+    """API endpoint to get all monks.
+    Pass ?residing=1 to exclude monks who left (layout / attendance seats).
+    """
     try:
+        residing_only = request.args.get('residing', '').strip() in ('1', 'true', 'yes')
         monks = get_all_monks()
         # Convert to list of dictionaries
         monks_list = []
         for monk in monks:
+            living = monk[10] if len(monk) > 10 else _ACTIVE_LIVING_STATUS
+            living = living or _ACTIVE_LIVING_STATUS
+            if residing_only and living != _ACTIVE_LIVING_STATUS:
+                continue
             monks_list.append({
                 'id': monk[0],
                 'fullname': monk[1],
@@ -400,7 +1242,8 @@ def list_monks():
                 'education_level': monk[6],
                 'academic_year': monk[7],
                 'created_at': monk[8].isoformat() if monk[8] else None,
-                'updated_at': monk[9].isoformat() if monk[9] else None
+                'updated_at': monk[9].isoformat() if monk[9] else None,
+                'living_status': living,
             })
         monks_list = sort_attendance_monks(monks_list)
         return jsonify({'success': True, 'monks': monks_list})
@@ -419,14 +1262,37 @@ def update_monk_route(monk_id):
         position = data.get('position')
         education_level = data.get('education_level')
         academic_year = data.get('academic_level')
+        living_status = data.get('living_status')
 
         if not all([fullname, vassa_years, monk_type, residence, position, education_level, academic_year]):
             return jsonify({'success': False, 'message': 'Missing required fields'}), 400
+        if living_status is not None and living_status not in _VALID_LIVING_STATUSES:
+            return jsonify({'success': False, 'message': 'ស្ថានភាពមិនត្រឹមត្រូវ'}), 400
 
-        success = update_monk(monk_id, fullname, vassa_years, monk_type, residence, position, education_level, academic_year)
+        success = update_monk(
+            monk_id, fullname, vassa_years, monk_type, residence, position,
+            education_level, academic_year, living_status,
+        )
         if success:
             return jsonify({'success': True})
         return jsonify({'success': False, 'message': 'Failed to update'}), 500
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@main_bp.route('/api/monks/<int:monk_id>/living-status', methods=['PATCH'])
+def patch_monk_living_status(monk_id):
+    if session.get('role') != 'admin':
+        return jsonify({'success': False, 'message': 'Forbidden'}), 403
+    data = request.get_json(silent=True) or {}
+    living_status = (data.get('living_status') or '').strip()
+    if living_status not in _VALID_LIVING_STATUSES:
+        return jsonify({'success': False, 'message': 'ស្ថានភាពមិនត្រឹមត្រូវ'}), 400
+    try:
+        ok = update_monk_living_status(monk_id, living_status)
+        if not ok:
+            return jsonify({'success': False, 'message': 'រកមិនឃើញព្រះសង្ឃ'}), 404
+        return jsonify({'success': True, 'living_status': living_status})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 
@@ -769,10 +1635,6 @@ def set_attendance():
                     threading.Thread(target=send_tg).start()
                     
         cursor.close(); conn.close()
-        
-        # Check and send monthly alert
-        _check_and_send_monthly_alert(date_str)
-        
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
@@ -786,21 +1648,35 @@ def add_permission():
         start_date = data.get('start_date')
         end_date = data.get('end_date')
         reason = data.get('reason', '')
-        
+
+        if not monk_id or not start_date or not end_date:
+            return jsonify({'success': False, 'message': 'Missing required fields'}), 400
+
         s_date = _date.fromisoformat(start_date)
         e_date = _date.fromisoformat(end_date)
-        
+
         if e_date < s_date:
             return jsonify({'success': False, 'message': 'ថ្ងៃបញ្ចប់ត្រូវតែក្រោយថ្ងៃចាប់ផ្តើម'}), 400
-            
+
         conn = connect_db()
         cursor = conn.cursor()
-        
+
+        # Sync SERIAL if it fell behind (fixes duplicate key on monk_permission_pkey)
+        cursor.execute("""
+            SELECT setval(
+                pg_get_serial_sequence('monk_permission', 'id'),
+                COALESCE((SELECT MAX(id) FROM monk_permission), 1),
+                true
+            );
+        """)
+
+        # Replace any existing leave range for this monk (one active leave record)
+        cursor.execute("DELETE FROM monk_permission WHERE monk_id = %s", (monk_id,))
         cursor.execute("""
             INSERT INTO monk_permission (monk_id, reason, start_date, end_date)
             VALUES (%s, %s, %s, %s)
         """, (monk_id, reason, start_date, end_date))
-        
+
         from datetime import timedelta
         current_date = s_date
         while current_date <= e_date:
@@ -810,8 +1686,10 @@ def add_permission():
                 ON CONFLICT (monk_id, date) DO UPDATE SET status = EXCLUDED.status;
             """, (monk_id, current_date.isoformat()))
             current_date += timedelta(days=1)
-            
-        conn.commit(); cursor.close(); conn.close()
+
+        conn.commit()
+        cursor.close()
+        conn.close()
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
@@ -856,98 +1734,6 @@ def remove_attendance(monk_id):
 @main_bp.route('/report')
 def report():
     return render_template('report.html')
-
-
-def _check_and_send_monthly_alert(date_str):
-    import os, calendar
-    try:
-        d = _date.fromisoformat(date_str)
-    except:
-        return
-        
-    last_day = calendar.monthrange(d.year, d.month)[1]
-    is_target_day = d.day == 15 or d.day == 30 or (d.day == last_day and last_day < 30)
-    
-    if not is_target_day:
-        return
-        
-    flag_file = os.path.join(os.path.dirname(__file__), 'last_monthly_alert.txt')
-    try:
-        if os.path.exists(flag_file):
-            with open(flag_file, 'r') as f:
-                if f.read().strip() == date_str:
-                    return
-    except:
-        pass
-        
-    import requests as req
-    import threading
-    import io
-    from collections import Counter
-    TELEGRAM_TOKEN   = '8950898077:AAHNR0tTgtJWy17wMXooKwg4nfQLGdfe5aw'
-    TELEGRAM_CHAT_ID = -1003960014484
-    
-    def send_tg():
-        try:
-            # 1. Fetch data
-            monks, start_date, end_date = _fetch_report_rows({'date': date_str})
-            
-            # 2. Filter violators
-            ABSENT_LIMIT = 2
-            PERM_LIMIT = 3
-            violators = []
-            for m in monks:
-                ab = m['absent_count'] >= ABSENT_LIMIT
-                pr = m['permission_count'] >= PERM_LIMIT
-                if ab or pr:
-                    violators.append(m)
-                    
-            # 3. Sort by Kuti frequency then Kuti name then absences/permissions
-            kuti_counts = Counter(m['residence'] for m in violators)
-            violators.sort(key=lambda m: (
-                -kuti_counts[m['residence']],
-                m['residence'],
-                -m['absent_count'],
-                -m['permission_count']
-            ))
-            
-            # 4. Generate DOCX
-            docx_buf = _make_export_docx(violators, 'អ្នកដែលមានបញ្ហា (អវត្តមាន/ច្បាប់លើសដែន)', '', 'biweekly')
-            
-            # 5. Send to Telegram
-            fname_docx = f"attendance_report_{end_date.isoformat()}.docx"
-            
-            caption = (
-                f"🔔 របាយការណ៍បូកសរុប ១៥ថ្ងៃ 🔔\n"
-                f"កាលបរិច្ឆេទ៖ {start_date.strftime('%d/%m/%Y')} - {end_date.strftime('%d/%m/%Y')}\n"
-                f"ចំនួនអ្នកដែលមានបញ្ហា៖ {len(violators)} អង្គ\n"
-                f"សូមមេកុដិ និងអនុកុដិសួរនាំជាបន្ទាន់។"
-            )
-            
-            tg_docx = req.post(
-                f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendDocument',
-                data={'chat_id': TELEGRAM_CHAT_ID, 'caption': caption},
-                files={'document': (fname_docx, docx_buf, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')},
-                timeout=25
-            ).json()
-            
-            # Send Photo (PNG) with Caption
-            tg_png = req.post(
-                f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto',
-                data={'chat_id': TELEGRAM_CHAT_ID, 'caption': caption},
-                files={'photo': (fname_png, io.BytesIO(png_bytes), 'image/png')},
-                timeout=25
-            ).json()
-            
-            if tg_png.get('ok') or tg_pdf.get('ok'):
-                with open(flag_file, 'w') as f:
-                    f.write(date_str)
-                    
-        except Exception as e:
-            print(f"Failed to send monthly alert: {e}")
-            
-    threading.Thread(target=send_tg).start()
-
 
 
 def _get_block_dates(date_str):
@@ -1461,7 +2247,12 @@ def submit_attendance():
 
     try:
         import requests as req
-        today = _date.today().isoformat()
+        data = request.get_json(silent=True) or {}
+        date_str = (data.get('date') or '').strip() or _date.today().isoformat()
+        try:
+            report_day = _date.fromisoformat(date_str)
+        except ValueError:
+            return jsonify({'success': False, 'message': 'កាលបរិច្ឆេទមិនត្រឹមត្រូវ'}), 400
 
         conn = connect_db()
         cursor = conn.cursor()
@@ -1471,7 +2262,7 @@ def submit_attendance():
             JOIN monk_tbl m ON m.id = a.monk_id
             WHERE a.date = %s
             ORDER BY m.monk_type, a.status, m.fullname;
-        """, (today,))
+        """, (date_str,))
         rows = cursor.fetchall()
         cursor.close(); conn.close()
 
@@ -1481,34 +2272,38 @@ def submit_attendance():
         absent_count     = sum(1 for r in rows if r[5] == 'absent')
         permission_count = sum(1 for r in rows if r[5] == 'permission')
 
-        def fmt_group(monks):
+        def fmt_group(monks, show_position=True):
             lines = []
             for i, (name, _, position, vassa, kuti, status) in enumerate(monks, 1):
                 icon  = '❌' if status == 'absent' else '📋'
                 label = 'អវត្តមាន' if status == 'absent' else 'ច្បាប់'
-                kuti_display = kuti.replace('_', ' ')
-                lines.append(
-                    f'{i}. {icon} {name}\n'
-                    f'   ▸ តួនាទី: {position}\n'
-                    f'   ▸ វស្សា: {vassa} ឆ្នាំ\n'
-                    f'   ▸ កុដិ: {kuti_display}\n'
-                    f'   ▸ ស្ថានភាព: {label}'
-                )
+                kuti_display = (kuti or '').replace('_', ' ')
+                block = [
+                    f'{i}. {icon} {name}',
+                ]
+                if show_position:
+                    block.append(f'   ▸ តួនាទី: {position}')
+                block += [
+                    f'   ▸ វស្សា: {vassa} ឆ្នាំ',
+                    f'   ▸ កុដិ: {kuti_display}',
+                    f'   ▸ ស្ថានភាព: {label}',
+                ]
+                lines.append('\n'.join(block))
             return '\n\n'.join(lines)
 
         bhikkhus  = [r for r in rows if r[1] == 'ភិក្ខុ']
         samaneras = [r for r in rows if r[1] == 'សាមណេរ']
 
-        d_fmt = _date.today().strftime('%d/%m/%Y')
+        d_fmt = report_day.strftime('%d/%m/%Y')
         parts = [
             f'🏛 វត្តនិរោធរង្សី',
             f'📋 ព័ត៌មានថ្វាយបង្គំប្រចាំថ្ងៃ — {d_fmt}',
             '═' * 15,
         ]
         if bhikkhus:
-            parts += ['\n📿 ភិក្ខុ', '─' * 15, fmt_group(bhikkhus)]
+            parts += ['\n📿 ភិក្ខុ', '─' * 15, fmt_group(bhikkhus, show_position=False)]
         if samaneras:
-            parts += ['\n🔰 សាមណេរ', '─' * 15, fmt_group(samaneras)]
+            parts += ['\n🔰 សាមណេរ', '─' * 15, fmt_group(samaneras, show_position=True)]
         parts += [
             '\n' + '═' * 15,
             f'📊 សរុបចំនួន : {len(rows)} នាក់',
@@ -1539,7 +2334,12 @@ def submit_attendance_image():
             return jsonify({'success': False, 'message': 'No image provided'}), 400
 
         image_bytes = request.files['image'].read()
-        caption = f'📋 បញ្ជីអវត្តមាន/ច្បាប់ — {_date.today().strftime("%d/%m/%Y")}'
+        date_str = (request.form.get('date') or '').strip() or _date.today().isoformat()
+        try:
+            d_fmt = _date.fromisoformat(date_str).strftime('%d/%m/%Y')
+        except ValueError:
+            d_fmt = _date.today().strftime('%d/%m/%Y')
+        caption = f'📋 បញ្ជីអវត្តមាន/ច្បាប់ — {d_fmt}'
 
         resp = req.post(
             f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto',
@@ -1892,6 +2692,7 @@ def export_layout():
         'មេកុដិ':                     8,
         'អនុកុដិ':                    9,
         'ព្រះសង្ឃធម្មតា':            10,
+        'សមណសិស្ស':                 10,
     }
 
     def clamp(val, lo, hi):
@@ -1970,6 +2771,7 @@ def export_layout():
         all_monks = [
             {'fullname': m[1], 'vassa_years': m[2], 'monk_type': m[3], 'position': m[5]}
             for m in raw
+            if (m[10] if len(m) > 10 and m[10] else _ACTIVE_LIVING_STATUS) == _ACTIVE_LIVING_STATUS
         ]
 
         bhikkhus = sorted(
@@ -2063,6 +2865,7 @@ def export_layout_pdf():
         'ព្រះគ្រូប្រធានការក':        5, 'ព្រះគ្រូអនុប្រធានការកទី១':  6,
         'ព្រះគ្រូអនុប្រធានការកទី២':  7, 'មេកុដិ':                     8,
         'អនុកុដិ':                    9, 'ព្រះសង្ឃធម្មតា':            10,
+        'សមណសិស្ស':                 10,
     }
     SAMANERA_ADMIN_RANK = {'មេកុដិ': 1, 'អនុកុដិ': 2}
 
@@ -2080,6 +2883,7 @@ def export_layout_pdf():
         all_monks = [
             {'fullname': m[1], 'vassa_years': m[2], 'monk_type': m[3], 'position': m[5]}
             for m in raw
+            if (m[10] if len(m) > 10 and m[10] else _ACTIVE_LIVING_STATUS) == _ACTIVE_LIVING_STATUS
         ]
 
         bhikkhus = sorted(

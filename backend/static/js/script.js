@@ -1,7 +1,7 @@
 'use strict';
 
 // Global counter for form indices (starts at 2 since 2 forms are already in HTML)
-let formCounter = 2;
+let formCounter = 1;
 
 // ---- Duplicate validation state ----
 const _dupTimers  = {};
@@ -82,6 +82,11 @@ function _scheduleDupCheck(form) {
     _dupTimers[formIndex] = setTimeout(() => _checkDbForDup(form), 420);
 }
 
+const _KHMER_DIGITS = '០១២៣៤៥៦៧៨៩';
+function _toKhmerNum(n) {
+    return String(n).replace(/\d/g, (d) => _KHMER_DIGITS[d]);
+}
+
 // Helper function to create a form card element
 function createFormCard(index) {
     const formCard = document.createElement('div');
@@ -90,9 +95,15 @@ function createFormCard(index) {
 
     formCard.innerHTML = `
         <div class="form-header">
-            <span class="form-number">លេខរៀង #${index}</span>
+            <div class="form-header-left">
+                <span class="form-badge">${_toKhmerNum(index)}</span>
+                <div>
+                    <span class="form-number">ទម្រង់លេខរៀង #${index}</span>
+                    <span class="form-caption">ព័ត៌មានព្រះសង្ឃ</span>
+                </div>
+            </div>
             <button type="button" class="btn-remove" onclick="removeForm(${index})" title="លុបទម្រង់">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                     <line x1="18" y1="6" x2="6" y2="18"></line>
                     <line x1="6" y1="6" x2="18" y2="18"></line>
                 </svg>
@@ -101,85 +112,75 @@ function createFormCard(index) {
         <div class="dup-alert" style="display:none;"></div>
         <form class="monk-form" data-form-index="${index}">
             <div class="form-row">
-                <div class="form-group">
+                <div class="form-group form-group-grow">
                     <label for="fullname-${index}">នាមត្រកូល និង នាម <span class="required">*</span></label>
                     <input type="text" id="fullname-${index}" name="fullname" placeholder="បញ្ចូលនាមព្រះសង្ឃ" required>
                 </div>
             </div>
-
             <div class="form-row">
                 <div class="form-group">
-                     <label for="total-monk-${index}">ចំនួនវស្សា <span class="required">*</span></label>
-                    <input type="number" id="total-monk-${index}" name="total-monk" min="1" placeholder="បញ្ចូលចំនួន" required>
+                    <label for="total-monk-${index}">ចំនួនវស្សា <span class="required">*</span></label>
+                    <input type="number" id="total-monk-${index}" name="total-monk" min="1" placeholder="ឧ. ៥" required>
                 </div>
-
-            </div>
-
-            <div class="form-row">
                 <div class="form-group">
-                    <label for="type-${index}"> សាមណេរ / ភិក្ខុ <span class="required">*</span></label>
-                    <select name="type" id="type-${index}">
-                        <option value="">-- ជ្រើសរើសបួសជា --</option>
+                    <label for="type-${index}">សាមណេរ / ភិក្ខុ <span class="required">*</span></label>
+                    <select name="type" id="type-${index}" required>
+                        <option value="">-- ជ្រើសរើស --</option>
                         <option value="សាមណេរ">សាមណេរ</option>
                         <option value="ភិក្ខុ">ភិក្ខុ</option>
                     </select>
                 </div>
             </div>
-
             <div class="form-row">
                 <div class="form-group">
                     <label for="home-${index}">ស្នាក់នៅកុដិ <span class="required">*</span></label>
-                    <select name="home" id="home-${index}">
-                         <option value="">-- ជ្រើសរើសកុដិ --</option>
+                    <select name="home" id="home-${index}" required>
+                        <option value="">-- ជ្រើសរើសកុដិ --</option>
                         <option value="កុដិលេខ១">កុដិលេខ១</option>
-                        <option value="កុដិលេខ២_ជាន់ក្រោម">កុដិលេខ២​ ជាន់ក្រោម</option>
-                        <option value="កុដិលេខ២_ជាន់លើ">កុដិលេខ២​ ជាន់លើ</option>
+                        <option value="កុដិលេខ២_ជាន់ក្រោម">កុដិលេខ២ ជាន់ក្រោម</option>
+                        <option value="កុដិលេខ២_ជាន់លើ">កុដិលេខ២ ជាន់លើ</option>
                         <option value="កុដិលេខ៤">កុដិលេខ៤</option>
                         <option value="កុដិធំ_ជាន់ទី១">កុដិធំ ជាន់ទី១</option>
                         <option value="កុដិធំ_ជាន់ទី២">កុដិធំ ជាន់ទី២</option>
                         <option value="កុដិធំ_ជាន់ទី៣">កុដិធំ ជាន់ទី៣</option>
                         <option value="កុដិហោត្រៃ">កុដិហោត្រៃ</option>
-                        <option value="សាលាបាលីចាស់">កុដិសលាបាលីចាស់</option>
+                        <option value="សាលាបាលីចាស់">សាលាបាលីចាស់</option>
                         <option value="សាលាពុទ្ធិក">សាលាពុទ្ធិក</option>
                     </select>
                 </div>
-
                 <div class="form-group">
                     <label for="position-${index}">តួនាទីក្នុងវត្ត <span class="required">*</span></label>
-                        <select name="position" id="position-${index}">
-                            <option value="">-- ជ្រើសរើសតួនាទី --</option>
-                            <option value="ព្រះសង្ឃធម្មតា">ព្រះសង្ឃធម្មតា</option>
-                            <option value="មេក្រុម">មេក្រុម</option>
-                            <option value="អនុមេក្រុម">អនុមេក្រុម</option>
-                            <option value="ព្រះគ្រូសូត្រស្តាំ">ព្រះគ្រូសូត្រស្តាំ</option>
-                            <option value="ព្រះគ្រូសូត្រឆ្វេង">ព្រះគ្រូសូត្រឆ្វេង</option>
-                            <option value="ព្រះគ្រូវិន័យធរ">ព្រះគ្រូវិន័យធរ</option>
-                            <option value="ព្រះគ្រូលេខា">ព្រះគ្រូលេខា</option>
-                            <option value="ព្រះគ្រូប្រធានការក">ព្រះគ្រូប្រធានការក</option>
-                            <option value="ព្រះគ្រូអនុប្រធានការកទី១">ព្រះគ្រូអនុប្រធានការកទី១</option>
-                            <option value="ព្រះគ្រូអនុប្រធានការកទី២">ព្រះគ្រូអនុប្រធានការកទី២</option>
-                            <option value="មេកុដិ">មេកុដិ</option>
-                            <option value="អនុកុដិ">អនុកុដិ</option>
-                        </select>
+                    <select name="position" id="position-${index}" required>
+                        <option value="">-- ជ្រើសរើសតួនាទី --</option>
+                        <option value="សមណសិស្ស">សមណសិស្ស</option>
+                        <option value="ព្រះអធិការ">ព្រះអធិការ</option>
+                        <option value="ព្រះគ្រូសូត្រស្តាំ">ព្រះគ្រូសូត្រស្តាំ</option>
+                        <option value="ព្រះគ្រូសូត្រឆ្វេង">ព្រះគ្រូសូត្រឆ្វេង</option>
+                        <option value="ព្រះគ្រូវិន័យធរ">ព្រះគ្រូវិន័យធរ</option>
+                        <option value="ព្រះគ្រូលេខា">ព្រះគ្រូលេខា</option>
+                        <option value="ព្រះគ្រូប្រធានការក">ព្រះគ្រូប្រធានការក</option>
+                        <option value="ព្រះគ្រូអនុប្រធានការកទី១">ព្រះគ្រូអនុប្រធានការកទី១</option>
+                        <option value="ព្រះគ្រូអនុប្រធានការកទី២">ព្រះគ្រូអនុប្រធានការកទី២</option>
+                        <option value="មេកុដិ">មេកុដិ</option>
+                        <option value="អនុកុដិ">អនុកុដិ</option>
+                    </select>
                 </div>
             </div>
-
             <div class="form-row">
                 <div class="form-group">
                     <label for="education_level-${index}">កម្រិតសិក្សា <span class="required">*</span></label>
-                    <select id="education_level-${index}" name="education_level">
-                        <option value="">-- ជ្រើសរើសកម្រិតសិក្សា --</option>
+                    <select id="education_level-${index}" name="education_level" required>
+                        <option value="">-- ជ្រើសរើស --</option>
                         <option value="បឋមសិក្សា">បឋមសិក្សា</option>
                         <option value="អនុវិទ្យាល័យ">អនុវិទ្យាល័យ</option>
                         <option value="វិទ្យាល័យ">វិទ្យាល័យ</option>
                         <option value="មហាវិទ្យាល័យ">មហាវិទ្យាល័យ</option>
                     </select>
                 </div>
-
                 <div class="form-group">
                     <label for="academic_level-${index}">សិក្សាថ្នាក់ <span class="required">*</span></label>
-                    <select name="academic_level" id="academic_level-${index}">
-                         <option value="">-- ជ្រើសរើសឆ្នាំសិក្សា --</option>
+                    <select name="academic_level" id="academic_level-${index}" required>
+                        <option value="">-- ជ្រើសរើសឆ្នាំ --</option>
                         <option value="ឆ្នាំទី១">ឆ្នាំទី ១</option>
                         <option value="ឆ្នាំទី២">ឆ្នាំទី ២</option>
                         <option value="ឆ្នាំទី៣">ឆ្នាំទី ៣</option>
@@ -187,7 +188,6 @@ function createFormCard(index) {
                     </select>
                 </div>
             </div>
-
         </form>
     `;
 
@@ -219,7 +219,7 @@ function removeForm(formId) {
     if (formCard) {
         // Check if this is the last form
         const allForms = document.querySelectorAll('.form-card');
-        if (allForms.length <= 2) {
+        if (allForms.length <= 1) {
             alert('មិនអាចលុបទម្រង់ចុងក្រោយបានទេ!');
             return;
         }
@@ -244,13 +244,23 @@ function removeForm(formId) {
 function updateFormNumbers() {
     const allForms = document.querySelectorAll('.form-card');
     allForms.forEach((form, index) => {
+        const n = index + 1;
         const numberSpan = form.querySelector('.form-number');
         if (numberSpan) {
-            numberSpan.textContent = `លេខរៀង #${index + 1}`;
+            numberSpan.textContent = `ទម្រង់លេខរៀង #${n}`;
+        }
+        const badge = form.querySelector('.form-badge');
+        if (badge) {
+            badge.textContent = _toKhmerNum(n);
         }
         const formElement = form.querySelector('.monk-form');
         if (formElement) {
-            formElement.setAttribute('data-form-index', index + 1);
+            formElement.setAttribute('data-form-index', n);
+        }
+        form.id = `form-card-${n}`;
+        const removeBtn = form.querySelector('.btn-remove');
+        if (removeBtn) {
+            removeBtn.setAttribute('onclick', `removeForm(${n})`);
         }
     });
 }

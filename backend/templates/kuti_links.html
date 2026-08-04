@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="km">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>តំណភ្ជាប់កុដិ — វត្តនិរោធរង្សី</title>
+    <link rel="icon" type="image/jpeg" href="/static/logo.jpg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&family=Moul&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/gov-shell.css">
+    <link rel="stylesheet" href="/static/css/kuti_links.css">
+</head>
+<body>
+<div class="gov-shell kuti-links-page">
+
+    <header class="gov-masthead">
+        <div class="gov-masthead-inner">
+            <div class="gov-col gov-col-left">
+                <p>មន្ទីរធម្មការ និងសាសនា រាជធានីភ្នំពេញ</p>
+                <p>សាលាពុទ្ធិកអនុវិទ្យាល័យសង្ឃ</p>
+                <p class="gov-pagoda">វត្តនិរោធរង្សី</p>
+            </div>
+            <div class="gov-col gov-col-center">
+                <img src="/static/logo.jpg" alt="វត្តនិរោធរង្សី" class="gov-seal">
+            </div>
+            <div class="gov-col gov-col-right">
+                <p class="gov-kingdom">ព្រះរាជាណាចក្រកម្ពុជា</p>
+                <p class="gov-motto">ជាតិ សាសនា ព្រះមហាក្សត្រ</p>
+            </div>
+        </div>
+    </header>
+
+    <div class="gov-topbar">
+        <div class="gov-topbar-left">
+            <a href="/" class="gov-btn">← ផ្ទាំងគ្រប់គ្រង</a>
+            <div class="gov-topbar-titles">
+                <h1 class="gov-page-title">តំណភ្ជាប់មេកុដិ</h1>
+                <p class="gov-page-sub">បង្កើតតំណ ផ្ញើឱ្យមេកុដិ — មើលបានតែសមាជិកក្នុងកុដិរបស់ខ្លួន</p>
+            </div>
+        </div>
+    </div>
+
+    <section class="gov-panel create-panel">
+        <h2 class="panel-title">បង្កើតតំណថ្មី</h2>
+        <p class="panel-desc">ជ្រើសរើសកុដិ រួចចម្លងតំណផ្ញើទៅមេកុដិ។ ពួកគេមើលបានតែបញ្ជីព្រះសង្ឃក្នុងកុដិនោះប៉ុណ្ណោះ។</p>
+        <form id="create-form" class="create-form">
+            <div class="form-row">
+                <div class="form-field">
+                    <label for="residence">កុដិ</label>
+                    <select id="residence" required>
+                        <option value="">-- ជ្រើសរើសកុដិ --</option>
+                        {% for r in residences %}
+                        <option value="{{ r }}">{{ r.replace('_', ' ') }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label for="label">ឈ្មោះមេកុដិ</label>
+                    <select id="label" disabled>
+                        <option value="">-- ជ្រើសរើសកុដិជាមុន --</option>
+                    </select>
+                </div>
+            </div>
+            <p id="leader-hint" class="field-hint" aria-live="polite"></p>
+            <button type="submit" class="gov-btn gov-btn-primary" id="btn-create">បង្កើតតំណ</button>
+        </form>
+        <div id="new-link-box" class="new-link-box" style="display:none">
+            <label for="new-link-url">តំណសម្រាប់ចម្លង</label>
+            <div class="copy-row">
+                <input type="text" id="new-link-url" readonly>
+                <button type="button" class="gov-btn gov-btn-gold" id="btn-copy-new">ចម្លង</button>
+            </div>
+            <p class="copy-hint">ផ្ញើតំណនេះទៅមេកុដិ — ពួកគេមិនចាំបាច់ចូលប្រព័ន្ធទេ</p>
+        </div>
+    </section>
+
+    <section class="gov-panel">
+        <div class="list-head">
+            <h2 class="panel-title">តំណដែលមាន</h2>
+            <button type="button" class="gov-btn" id="btn-refresh">ផ្ទុកឡើងវិញ</button>
+        </div>
+        <div class="table-wrap desktop-table">
+            <table class="links-table">
+                <thead>
+                    <tr>
+                        <th>កុដិ</th>
+                        <th>មេកុដិ</th>
+                        <th>តំណ</th>
+                        <th>ស្ថានភាព</th>
+                        <th>សកម្មភាព</th>
+                    </tr>
+                </thead>
+                <tbody id="links-body">
+                    <tr><td colspan="5" class="muted">កំពុងផ្ទុក...</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div id="links-cards" class="links-cards" aria-live="polite"></div>
+    </section>
+
+    <footer class="gov-footer">© វត្តនិរោធរង្សី — តំណភ្ជាប់មេកុដិ</footer>
+</div>
+<script src="/static/js/kuti_links.js"></script>
+</body>
+</html>

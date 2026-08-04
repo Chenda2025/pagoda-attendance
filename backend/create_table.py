@@ -19,12 +19,24 @@ def create_monks_table():
             position  VARCHAR(100) NOT NULL,
             education_level VARCHAR(50) NOT NULL,
             academic_year VARCHAR(20) NOT NULL,
+            living_status VARCHAR(50) NOT NULL DEFAULT 'កំពុងស្នាក់នៅ',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         """
         cursor.execute(create_table_query)
-        
+
+        # Migrate existing DBs that predate living_status
+        cursor.execute("""
+            ALTER TABLE monk_tbl
+            ADD COLUMN IF NOT EXISTS living_status VARCHAR(50)
+                NOT NULL DEFAULT 'កំពុងស្នាក់នៅ';
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_monks_living_status
+            ON monk_tbl(living_status);
+        """)
+
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS attendance_tbl (
                 id       SERIAL PRIMARY KEY,
@@ -75,30 +87,33 @@ def create_monks_table():
         if conn is not None:
             conn.close()
 
-def insert_monk(fullname, vassa_years, monk_type, residence, position, education_level, academic_year):
+def insert_monk(fullname, vassa_years, monk_type, residence, position, education_level, academic_year,
+                living_status='កំពុងស្នាក់នៅ'):
     """Insert a new monk record into the database"""
     conn = None
     try:
         conn = connect_db()
         cursor = conn.cursor()
-        
-        # កែសម្រួល៖ បន្ថែម %s ឱ្យគ្រប់ ៧ និងរៀបលំដាប់លំដោយឱ្យត្រូវ
+
         insert_query = """
-        INSERT INTO monk_tbl (fullname, vassa_years, monk_type, residence, position, education_level, academic_year)
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO monk_tbl (fullname, vassa_years, monk_type, residence, position,
+                              education_level, academic_year, living_status)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         RETURNING id;
         """
-        
-        # បញ្ជូនទិន្នន័យឱ្យត្រូវតាមលំដាប់ Column
-        cursor.execute(insert_query, (fullname, vassa_years, monk_type, residence, position, education_level, academic_year))
-        
+
+        cursor.execute(insert_query, (
+            fullname, vassa_years, monk_type, residence, position,
+            education_level, academic_year, living_status or 'កំពុងស្នាក់នៅ',
+        ))
+
         result = cursor.fetchone()
         monk_id = result[0] if result else None
         conn.commit()
         print(f"Monk inserted successfully with ID: {monk_id}")
         cursor.close()
         return monk_id
-        
+
     except psycopg2.Error as e:
         print(f"Database error: {e}")
         if conn is not None:
@@ -108,22 +123,59 @@ def insert_monk(fullname, vassa_years, monk_type, residence, position, education
         if conn is not None:
             conn.close()
 
-def update_monk(monk_id, fullname, vassa_years, monk_type, residence, position, education_level, academic_year):
-    """Update an existing monk record"""
+def update_monk(monk_id, fullname, vassa_years, monk_type, residence, position, education_level, academic_year,
+                living_status=None):
+    """Update an existing monk record. If living_status is None, leave it unchanged."""
+    conn = None
+    try:
+        conn = connect_db()
+        cursor = conn.cursor()
+        if living_status is None:
+            cursor.execute("""
+                UPDATE monk_tbl
+                SET fullname = %s, vassa_years = %s, monk_type = %s, residence = %s,
+                    position = %s, education_level = %s, academic_year = %s,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s;
+            """, (fullname, vassa_years, monk_type, residence, position, education_level, academic_year, monk_id))
+        else:
+            cursor.execute("""
+                UPDATE monk_tbl
+                SET fullname = %s, vassa_years = %s, monk_type = %s, residence = %s,
+                    position = %s, education_level = %s, academic_year = %s,
+                    living_status = %s,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s;
+            """, (fullname, vassa_years, monk_type, residence, position, education_level, academic_year,
+                  living_status, monk_id))
+        conn.commit()
+        cursor.close()
+        return True
+    except psycopg2.Error as e:
+        print(f"Database error: {e}")
+        if conn:
+            conn.rollback()
+        return False
+    finally:
+        if conn:
+            conn.close()
+
+
+def update_monk_living_status(monk_id, living_status):
+    """Update only living_status for a monk."""
     conn = None
     try:
         conn = connect_db()
         cursor = conn.cursor()
         cursor.execute("""
             UPDATE monk_tbl
-            SET fullname = %s, vassa_years = %s, monk_type = %s, residence = %s,
-                position = %s, education_level = %s, academic_year = %s,
-                updated_at = CURRENT_TIMESTAMP
+            SET living_status = %s, updated_at = CURRENT_TIMESTAMP
             WHERE id = %s;
-        """, (fullname, vassa_years, monk_type, residence, position, education_level, academic_year, monk_id))
+        """, (living_status, monk_id))
+        updated = cursor.rowcount
         conn.commit()
         cursor.close()
-        return True
+        return updated > 0
     except psycopg2.Error as e:
         print(f"Database error: {e}")
         if conn:
@@ -160,9 +212,10 @@ def get_all_monks():
     try:
         conn = connect_db()
         cursor = conn.cursor()
-        
+
         select_query = """
-        SELECT id, fullname, vassa_years, monk_type, residence, position, education_level, academic_year, created_at, updated_at
+        SELECT id, fullname, vassa_years, monk_type, residence, position,
+               education_level, academic_year, created_at, updated_at, living_status
         FROM monk_tbl
         ORDER BY created_at DESC;
         """
@@ -334,6 +387,14 @@ def create_permission_table():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         """)
+        # Keep SERIAL in sync (avoids duplicate key on id after imports / manual inserts)
+        cursor.execute("""
+            SELECT setval(
+                pg_get_serial_sequence('monk_permission', 'id'),
+                COALESCE((SELECT MAX(id) FROM monk_permission), 1),
+                true
+            );
+        """)
         conn.commit()
         print("Table 'monk_permission' created / verified.")
         cursor.close()
@@ -342,6 +403,44 @@ def create_permission_table():
         if conn: conn.rollback()
     finally:
         if conn: conn.close()
+
+
+def create_kuti_share_table():
+    """Share links so a kuti leader can view only their own residence members."""
+    conn = None
+    try:
+        conn = connect_db()
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS kuti_share_links (
+                id          SERIAL PRIMARY KEY,
+                residence   VARCHAR(100) NOT NULL,
+                token       VARCHAR(64)  NOT NULL UNIQUE,
+                label       VARCHAR(255),
+                is_active   BOOLEAN NOT NULL DEFAULT TRUE,
+                created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_used_at TIMESTAMP
+            );
+        """)
+        cursor.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_kuti_share_residence_active
+            ON kuti_share_links (residence)
+            WHERE is_active = TRUE;
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_kuti_share_token
+            ON kuti_share_links (token);
+        """)
+        conn.commit()
+        print("Table 'kuti_share_links' created / verified.")
+        cursor.close()
+    except Exception as e:
+        print(f"Database error creating kuti_share_links: {e}")
+        if conn:
+            conn.rollback()
+    finally:
+        if conn:
+            conn.close()
 
 
 if __name__ == "__main__":

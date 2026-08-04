@@ -11,6 +11,7 @@ const BHIKKHU_RANK = {
     'មេកុដិ':                     8,  // Kuti Head
     'អនុកុដិ':                    9,  // Deputy Kuti Head
     'ព្រះសង្ឃធម្មតា':            10, // Regular monk
+    'សមណសិស្ស':                 10, // Disciple / student monk
 };
 
 const SAMANERA_ADMIN_RANK = {
@@ -109,7 +110,7 @@ async function loadData() {
     try {
         const today = getActiveDate();
         const [monkRes, attRes, orderRes] = await Promise.all([
-            fetch('/api/monks'),
+            fetch('/api/monks?residing=1'),
             fetch(`/api/attendance?date=${today}`),
             fetch('/api/seat-order')
         ]);
@@ -666,20 +667,16 @@ async function pollSeatOrder() {
 }
 
 function scheduleNewDayReset() {
-    const now = new Date();
-    const reset = new Date(now);
-    reset.setHours(23, 59, 0, 0);
-
-    let msUntil = reset - now;
-    if (msUntil <= 0) msUntil += 24 * 60 * 60 * 1000; // already past — aim for tomorrow
+    // Auto-clear absent/permission seat marks every 3 hours (UI map).
+    const CLEAR_EVERY_MS = 3 * 60 * 60 * 1000;
 
     setTimeout(() => {
         attendanceMap.clear();
         generateBhikkhu();
         generateSamanera();
-        showToast('ថ្ងៃថ្មី — ការចុះឈ្មោះត្រូវបានសម្អាតរួចរាល់', 'success');
-        scheduleNewDayReset(); // reschedule for next night
-    }, msUntil);
+        showToast('បានសម្អាតអវត្តមាន/ច្បាប់ (រៀងរាល់ ៣ ម៉ោង)', 'success');
+        scheduleNewDayReset();
+    }, CLEAR_EVERY_MS);
 }
 
 let activeMonkId = null;
@@ -843,7 +840,11 @@ function initPopover() {
             if (document.getElementById('att-list-modal').style.display !== 'none')
                 await showAttList();
         } catch (err) {
-            showToast('មានបញ្ហា: ' + err.message, 'error');
+            const msg = String(err.message || '');
+            const friendly = /duplicate key|unique constraint/i.test(msg)
+                ? 'មិនអាចរក្សាទុកការសុំច្បាប់បាន។ សូមព្យាយាមម្តងទៀត។'
+                : msg;
+            showToast('មានបញ្ហា: ' + friendly, 'error');
         } finally {
             btn.disabled = false;
             btn.textContent = 'រក្សាទុក';
@@ -870,7 +871,12 @@ async function submitAttendance() {
     btn.disabled = true;
     btn.textContent = 'កំពុងបញ្ជូន...';
     try {
-        const res  = await fetch('/api/attendance/submit', { method: 'POST' });
+        const date = getActiveDate();
+        const res  = await fetch('/api/attendance/submit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ date }),
+        });
         const json = await res.json();
         if (!json.success) throw new Error(json.message);
         showToast(`បានបញ្ជូន ${json.total} នាក់ ទៅ Telegram ជោគជ័យ!`, 'success');
@@ -1125,6 +1131,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
             const form = new FormData();
             form.append('image', blob, 'attendance.png');
+            form.append('date', getActiveDate());
             const res  = await fetch('/api/attendance/submit-image', { method: 'POST', body: form });
             const json = await res.json();
             if (!json.success) throw new Error(json.message);
