@@ -1107,13 +1107,18 @@ body {
 .modal-body .form-group-row {
     display: flex;
     gap: 12px;
+    min-width: 0;
 }
-.modal-body .form-group-row .form-group { flex: 1; }
+.modal-body .form-group-row .form-group {
+    flex: 1;
+    min-width: 0;
+}
 
 .modal-body .form-group {
     display: flex;
     flex-direction: column;
     gap: 6px;
+    min-width: 0;
 }
 
 .modal-body .form-group label {
@@ -1122,16 +1127,63 @@ body {
     color: #4a5568;
 }
 
+/* Override header .ctrl-input fixed widths (54–68px) inside modals */
+#permission-modal .modal-content {
+    width: calc(100% - 24px);
+    max-width: 400px;
+    margin: 12px;
+    box-sizing: border-box;
+}
+
+#permission-modal .ctrl-input,
 .modal-body .ctrl-input {
     width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
     text-align: left;
-    padding: 8px 12px;
+    padding: 10px 12px;
+    font-size: 16px; /* avoids iOS zoom on focus */
+}
+
+#permission-modal input[type="date"].ctrl-input {
+    min-height: 44px;
+    -webkit-appearance: none;
+    appearance: none;
 }
 
 .modal-actions {
     display: flex;
     justify-content: flex-end;
     gap: 10px;
+    flex-wrap: wrap;
+}
+
+.modal-actions .att-btn {
+    flex: 1 1 auto;
+    min-width: 120px;
+}
+
+@media (max-width: 480px) {
+    .modal-body .form-group-row {
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    #permission-modal .modal-title {
+        font-size: 15px;
+        line-height: 1.4;
+        word-break: break-word;
+    }
+
+    .modal-actions {
+        flex-direction: column-reverse;
+    }
+
+    .modal-actions .att-btn {
+        width: 100%;
+        min-width: 0;
+    }
 }
 
 /* ============ PERMISSION PREVIEW ICON & TOOLTIP ============ */
@@ -1277,7 +1329,7 @@ body {
 
     .section-header { padding: 12px 14px; }
     .section-title  { font-size: 14px; }
-    .ctrl-input     { width: 54px; font-size: 13px; }
+    .controls-bar .ctrl-input { width: 54px; font-size: 13px; }
     .ctrl-label     { font-size: 11px; }
     .seat-cell      { min-width: 80px; min-height: 58px; padding: 4px 5px; }
     .seat-name      { font-size: 11px; }
@@ -1289,7 +1341,7 @@ body {
 @media (max-width: 640px) {
     .page-title   { font-size: 13px; }
     .controls-bar { gap: 8px; }
-    .ctrl-input   { width: 58px; }
+    .controls-bar .ctrl-input { width: 58px; }
     .btn-back, .btn-report, .btn-submit-att,
     .btn-print, .btn-logout { font-size: 12px; padding: 6px 10px; }
 }
