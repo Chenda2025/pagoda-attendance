@@ -884,11 +884,9 @@ async function submitAttendance() {
         showToast('មានបញ្ហា: ' + err.message, 'error');
     } finally {
         btn.disabled = false;
-        btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="22" y1="2" x2="11" y2="13"></line>
-            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-        </svg> បញ្ជូន Telegram`;
+        btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M11.944 0A12 12 0 1 0 24 12 12 12 0 0 0 11.944 0zm5.992 8.194-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.94z"/>
+        </svg> Telegram`;
     }
 }
 
@@ -1153,11 +1151,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('btn-gen-bhikkhu')?.addEventListener('click', () => { generateBhikkhu(); saveGridConfig(); });
     document.getElementById('btn-gen-samanera')?.addEventListener('click', () => { generateSamanera(); saveGridConfig(); });
-    document.getElementById('btn-submit-att').addEventListener('click', () => {
-        const dd = document.getElementById('lay-export-dd');
-        if (dd) dd.classList.remove('open');
-        submitAttendance();
-    });
+    document.getElementById('btn-submit-att').addEventListener('click', submitAttendance);
     // Export dropdown
     const _layDd = document.getElementById('lay-export-dd');
     document.getElementById('btn-lay-export-trigger').addEventListener('click', (e) => {

@@ -95,7 +95,7 @@ body {
     align-items: center;
     gap: 7px;
     padding: 8px 18px;
-    background: #2b6cb0;
+    background: #2CA5E0;
     color: #fff;
     border: none;
     border-radius: 10px;
@@ -106,7 +106,7 @@ body {
     white-space: nowrap;
     font-family: inherit;
 }
-.btn-submit-att:hover:not(:disabled) { background: #2c5282; }
+.btn-submit-att:hover:not(:disabled) { background: #229ed9; }
 .btn-submit-att:disabled { opacity: 0.65; cursor: not-allowed; }
 
 .lay-export-dd {

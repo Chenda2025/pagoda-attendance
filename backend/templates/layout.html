@@ -12,7 +12,7 @@
         href="https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&family=Kantumruy+Pro:wght@300;400;500;600;700&family=Moul&display=swap"
         rel="stylesheet">
     <link rel="stylesheet" href="/static/css/gov-shell.css">
-    <link rel="stylesheet" href="/static/css/layout.css?v=8">
+    <link rel="stylesheet" href="/static/css/layout.css?v=9">
 </head>
 
 <body>
@@ -101,15 +101,14 @@
                         </svg>
                         PDF
                     </button>
-                    <div class="lay-export-divider"></div>
-                    <button class="lay-export-item" id="btn-submit-att" type="button">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="#2CA5E0">
-                            <path d="M11.944 0A12 12 0 1 0 24 12 12 12 0 0 0 11.944 0zm5.992 8.194-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.94z"/>
-                        </svg>
-                        Telegram
-                    </button>
                 </div>
             </div>
+            <button class="btn-submit-att" id="btn-submit-att" type="button">
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M11.944 0A12 12 0 1 0 24 12 12 12 0 0 0 11.944 0zm5.992 8.194-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.94z"/>
+                </svg>
+                Telegram
+            </button>
             <a href="/logout" class="btn-logout">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
                     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -366,7 +365,7 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script>const PAGE_ROLE = "{{ role }}";</script>
-    <script src="/static/js/layout.js?v=6"></script>
+    <script src="/static/js/layout.js?v=7"></script>
 </body>
 
 </html>

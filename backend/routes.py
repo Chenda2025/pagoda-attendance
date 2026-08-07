@@ -2257,9 +2257,13 @@ def submit_attendance():
         conn = connect_db()
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT m.fullname, m.monk_type, m.position, m.vassa_years, m.residence, a.status
+            SELECT m.fullname, m.monk_type, m.position, m.vassa_years, m.residence,
+                   a.status, p.reason
             FROM attendance_tbl a
             JOIN monk_tbl m ON m.id = a.monk_id
+            LEFT JOIN monk_permission p
+                   ON p.monk_id = a.monk_id
+                  AND a.date BETWEEN p.start_date AND p.end_date
             WHERE a.date = %s
             ORDER BY m.monk_type, a.status, m.fullname;
         """, (date_str,))
@@ -2274,7 +2278,7 @@ def submit_attendance():
 
         def fmt_group(monks, show_position=True):
             lines = []
-            for i, (name, _, position, vassa, kuti, status) in enumerate(monks, 1):
+            for i, (name, _, position, vassa, kuti, status, reason) in enumerate(monks, 1):
                 icon  = '❌' if status == 'absent' else '📋'
                 label = 'អវត្តមាន' if status == 'absent' else 'ច្បាប់'
                 kuti_display = (kuti or '').replace('_', ' ')
@@ -2288,6 +2292,8 @@ def submit_attendance():
                     f'   ▸ កុដិ: {kuti_display}',
                     f'   ▸ ស្ថានភាព: {label}',
                 ]
+                if status == 'permission' and (reason or '').strip():
+                    block.append(f'   ▸ មូលហេតុ: {reason.strip()}')
                 lines.append('\n'.join(block))
             return '\n\n'.join(lines)
 
