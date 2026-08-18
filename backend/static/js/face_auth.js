@@ -27,13 +27,56 @@ async function loadFaceModels(statusEl) {
 }
 
 async function startCamera(videoEl) {
-    const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
-        audio: false,
-    });
-    videoEl.srcObject = stream;
-    await videoEl.play();
-    return stream;
+    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+        const err = new Error('INSECURE_CONTEXT');
+        err.name = 'SecurityError';
+        throw err;
+    }
+
+    videoEl.setAttribute('playsinline', '');
+    videoEl.setAttribute('webkit-playsinline', '');
+    videoEl.muted = true;
+    videoEl.autoplay = true;
+
+    const attempts = [
+        { video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }, audio: false },
+        { video: { facingMode: { ideal: 'user' } }, audio: false },
+        { video: true, audio: false },
+    ];
+
+    let lastError = null;
+    for (const constraints of attempts) {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            videoEl.srcObject = stream;
+            await videoEl.play();
+            return stream;
+        } catch (e) {
+            lastError = e;
+            if (e && (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError' || e.name === 'SecurityError')) {
+                throw e;
+            }
+        }
+    }
+    throw lastError || new Error('CAMERA_UNAVAILABLE');
+}
+
+function cameraErrorMessage(err) {
+    const name = err && err.name ? err.name : '';
+    const msg = String((err && err.message) || '');
+    if (name === 'SecurityError' || msg === 'INSECURE_CONTEXT' || !window.isSecureContext) {
+        return 'ទូរសព្ទត្រូវការ HTTPS ដើម្បីបើកកាមេរ៉ា — សូមបើកតំណ https:// មិនមែន http://';
+    }
+    if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+        return 'កាមេរ៉ាត្រូវបានបិទ — សូមអនុញ្ញាតកាមេរ៉ាក្នុង Settings របស់ទូរសព្ទ';
+    }
+    if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+        return 'រកមិនឃើញកាមេរ៉ា នៅលើឧបករណ៍នេះ';
+    }
+    if (name === 'NotReadableError' || name === 'TrackStartError') {
+        return 'កាមេរ៉ាកំពុងប្រើដោយកម្មវិធីផ្សេង — សូមបិទកម្មវិធីនោះ រួចព្យាយាមម្តងទៀត';
+    }
+    return 'មិនអាចបើកកាមេរ៉ា — សូមអនុញ្ញាតកាមេរ៉ា ឬប្រើលេខសម្ងាត់';
 }
 
 function stopCamera(stream) {

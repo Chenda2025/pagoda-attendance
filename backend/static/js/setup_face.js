@@ -164,7 +164,7 @@ document.addEventListener('DOMContentLoaded', () => {
             loop();
         } catch (e) {
             showStage('intro');
-            introError.textContent = 'មិនអាចបើកកាមេរ៉ា — សូមអនុញ្ញាតកាមេរ៉ា';
+            introError.textContent = cameraErrorMessage(e);
             btnStart.disabled = false;
             btnStart.textContent = 'ចាប់ផ្តើម';
         }

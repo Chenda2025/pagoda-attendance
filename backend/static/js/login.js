@@ -194,7 +194,7 @@ document.addEventListener('DOMContentLoaded', () => {
             running = true;
             loop();
         } catch (e) {
-            showIntroPanel('មិនអាចបើកកាមេរ៉ា — សូមអនុញ្ញាតកាមេរ៉ា ឬប្រើលេខសម្ងាត់');
+            showIntroPanel(cameraErrorMessage(e));
             return;
         }
         resetStartButton();
