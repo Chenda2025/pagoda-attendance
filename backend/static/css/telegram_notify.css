@@ -1150,11 +1150,132 @@
     color: #229ED9;
 }
 
-.col-hide-sm { }
+/* ── Responsive: computer / tablet / phone ── */
+@media (max-width: 1100px) {
+    .tg-summary { grid-template-columns: repeat(3, 1fr); }
+}
 
-@media (max-width: 900px) {
+@media (max-width: 960px) {
+    .tg-summary { grid-template-columns: repeat(3, 1fr); }
     .col-hide-sm { display: none; }
     .tg-report-table .col-hide-sm { display: none; }
+}
+
+@media (max-width: 720px) {
+    .tg-summary { grid-template-columns: repeat(2, 1fr); }
+    .tg-list-head,
+    .tg-report-head { padding: 16px 14px; flex-direction: column; }
+    .tg-list-wrap,
+    .tg-report-wrap { margin: 12px; }
+    .tg-list-stats,
+    .tg-report-stats { margin-top: 12px; }
+    .tg-list-actions-top,
+    .tg-report-actions { width: 100%; justify-content: stretch; }
+    .tg-list-actions-top .tg-btn,
+    .tg-report-actions .tg-btn { flex: 1; justify-content: center; }
+    .tg-list-toolbar { padding: 12px; }
+    .tg-filter-row { flex-direction: column; align-items: stretch; }
+    .tg-filter-item { width: 100%; }
+    .tg-input-iconed { width: 100%; min-width: 0; }
+    .tg-segments,
+    .tg-period-segs { width: 100%; }
+    .tg-segment,
+    .tg-period-seg { flex: 1; text-align: center; padding: 9px 8px; font-size: 12px; }
+    .tg-search-wrap .tg-search { min-width: 0; width: 100%; }
+    .tg-toolbar { flex-direction: column; align-items: stretch; }
+    .tg-filters, .tg-actions { width: 100%; }
+    .tg-field-search .tg-search { min-width: 0; width: 100%; }
+    .tg-select { min-width: 0; width: 100%; }
+    .tg-panel .table-wrap { margin: 0 12px 14px; }
+    .tg-export-menu { right: 0; left: 0; min-width: 0; }
+    .tg-contract-select { min-width: 0; width: 100%; }
+
+    .tg-list-table thead,
+    .tg-report-table thead { display: none; }
+    .tg-list-table,
+    .tg-report-table,
+    .tg-list-table tbody,
+    .tg-report-table tbody { display: block; width: 100%; }
+    .tg-list-table tr,
+    .tg-report-table tr {
+        display: block;
+        padding: 12px 14px 10px;
+        margin: 0;
+        border-bottom: 1px solid var(--line);
+        border-left: 3px solid transparent;
+        background: #fff;
+    }
+    .tg-list-table tbody tr.is-selected { border-left-color: var(--tg-blue); }
+    .tg-report-table tbody tr.is-editing { border-left-color: var(--navy); }
+    .tg-list-table td,
+    .tg-report-table td {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        width: 100%;
+        padding: 7px 0;
+        border: none;
+        text-align: right;
+    }
+    .tg-list-table td::before,
+    .tg-report-table td::before {
+        content: attr(data-label);
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        text-align: left;
+        flex-shrink: 0;
+    }
+    .tg-list-table td.col-check,
+    .tg-list-table td.col-num,
+    .tg-report-table td.col-num {
+        display: inline-flex;
+        width: auto;
+        padding: 0 8px 8px 0;
+    }
+    .tg-list-table td.col-check::before,
+    .tg-list-table td.col-num::before,
+    .tg-report-table td.col-num::before { display: none; }
+    .tg-list-table td.tg-cell-name,
+    .tg-report-table td.tg-cell-name {
+        display: block;
+        text-align: left;
+        padding-bottom: 10px;
+        margin-bottom: 4px;
+        border-bottom: 1px dashed #edf1f6;
+    }
+    .tg-list-table td.tg-cell-name::before,
+    .tg-report-table td.tg-cell-name::before { display: none; }
+    .col-hide-sm,
+    .tg-report-table .col-hide-sm {
+        display: flex !important;
+    }
+    .tg-table td.col-actions {
+        justify-content: flex-end;
+        padding-top: 10px;
+    }
+    .tg-table td.col-actions::before { display: none; }
+    .tg-empty-cell,
+    .tg-loading,
+    .tg-empty {
+        display: block !important;
+        text-align: center;
+    }
+    .tg-empty-cell::before,
+    .tg-loading::before,
+    .tg-empty::before { display: none !important; }
+    .tg-panel .table-wrap { overflow: hidden; }
+}
+
+@media (max-width: 480px) {
+    .tg-summary { grid-template-columns: 1fr 1fr; }
+    .tg-sum-card { padding: 12px 12px; gap: 10px; }
+    .tg-sum-val { font-size: 20px; }
+    .tg-title-row { flex-wrap: wrap; }
+    .tg-sum-card:last-child { grid-column: 1 / -1; }
 }
 
 /* ── Row action icons ── */
@@ -1313,39 +1434,3 @@
 .toast-success { background: #27ae60; }
 .toast-error { background: #e74c3c; }
 
-/* ── Responsive ── */
-@media (max-width: 960px) {
-    .tg-summary { grid-template-columns: repeat(3, 1fr); }
-}
-
-@media (max-width: 720px) {
-    .tg-summary { grid-template-columns: repeat(2, 1fr); }
-    .tg-list-head { padding: 16px 14px; }
-    .tg-list-wrap { margin: 12px; }
-    .tg-list-stats { margin-top: 12px; }
-    .tg-list-actions-top { width: 100%; justify-content: flex-end; }
-    .tg-list-toolbar { padding: 12px; }
-    .tg-filter-row { flex-direction: column; align-items: stretch; }
-    .tg-filter-item { width: 100%; }
-    .tg-input-iconed { width: 100%; min-width: 0; }
-    .tg-segments { width: 100%; }
-    .tg-segment { flex: 1; text-align: center; padding: 9px 8px; font-size: 12px; }
-    .tg-search-wrap .tg-search { min-width: 0; width: 100%; }
-    .tg-toolbar { flex-direction: column; align-items: stretch; }
-    .tg-filters, .tg-actions { width: 100%; }
-    .tg-field-search .tg-search { min-width: 0; width: 100%; }
-    .tg-select { min-width: 0; width: 100%; }
-    .tg-report-sub { margin-left: 0; }
-    .tg-report-head { padding: 16px 14px; }
-    .tg-report-wrap { margin: 12px; }
-    .tg-report-stats { margin-top: 12px; }
-    .tg-report-actions { width: 100%; justify-content: flex-end; }
-    .tg-panel .table-wrap { margin: 0 12px 14px; }
-    .tg-panel-head, .tg-toolbar, .tg-report-head { padding-left: 14px; padding-right: 14px; }
-}
-
-@media (max-width: 480px) {
-    .tg-summary { grid-template-columns: 1fr; }
-    .tg-sum-card { padding: 12px 14px; }
-    .tg-title-row { flex-wrap: wrap; }
-}

@@ -177,14 +177,14 @@ function renderTable() {
         return `<tr${rowCls} data-id="${m.id}">
             <td class="col-check"><input type="checkbox" class="row-check" data-id="${m.id}"${checked}></td>
             <td class="col-num">${i + 1}</td>
-            <td>${monkNameCell(m)}</td>
-            <td class="col-hide-sm">${escapeHtml(m.monk_type)}</td>
-            <td><span class="tg-residence-tag">${escapeHtml(m.residence)}</span></td>
-            <td class="col-num"><span class="tg-count-absent${absentCls}">${m.absent_count}</span></td>
-            <td class="col-num"><span class="tg-count-perm${permCls}">${m.perm_count}</span></td>
-            <td class="col-hide-sm"><span class="tg-violation">${escapeHtml(violationLabel(m))}</span></td>
-            <td>${contractSelect(m)}</td>
-            <td>${telegramBadge(m)}</td>
+            <td class="tg-cell-name" data-label="នាម">${monkNameCell(m)}</td>
+            <td class="col-hide-sm" data-label="ប្រភេទ">${escapeHtml(m.monk_type)}</td>
+            <td data-label="កុដិ"><span class="tg-residence-tag">${escapeHtml(m.residence)}</span></td>
+            <td class="col-num" data-label="អវត្តមាន"><span class="tg-count-absent${absentCls}">${m.absent_count}</span></td>
+            <td class="col-num" data-label="ច្បាប់"><span class="tg-count-perm${permCls}">${m.perm_count}</span></td>
+            <td class="col-hide-sm" data-label="មូលហេតុ"><span class="tg-violation">${escapeHtml(violationLabel(m))}</span></td>
+            <td data-label="កិច្ចសន្យា">${contractSelect(m)}</td>
+            <td data-label="Telegram">${telegramBadge(m)}</td>
         </tr>`;
     }).join('');
 
@@ -215,14 +215,14 @@ function renderReport() {
         const editing = editingReportId === m.id;
         return `<tr class="${editing ? 'is-editing' : ''}" data-id="${m.id}">
             <td class="col-num">${i + 1}</td>
-            <td>${reportNameCell(m)}</td>
-            <td class="col-hide-sm">${escapeHtml(m.monk_type)}</td>
-            <td>${escapeHtml(m.residence)}</td>
-            <td class="col-num"><span class="tg-count-absent tg-over">${m.absent_count}</span></td>
-            <td class="col-num"><span class="tg-count-perm tg-over">${m.perm_count}</span></td>
-            <td class="col-hide-sm"><span class="tg-violation">${escapeHtml(violationLabel(m))}</span></td>
-            <td class="col-num"><span class="tg-count-contract">${m.contract_total ?? 0}</span></td>
-            <td>${reportDateCell(m)}</td>
+            <td class="tg-cell-name" data-label="នាម">${reportNameCell(m)}</td>
+            <td class="col-hide-sm" data-label="ប្រភេទ">${escapeHtml(m.monk_type)}</td>
+            <td data-label="កុដិ">${escapeHtml(m.residence)}</td>
+            <td class="col-num" data-label="អវត្តមាន"><span class="tg-count-absent tg-over">${m.absent_count}</span></td>
+            <td class="col-num" data-label="ច្បាប់"><span class="tg-count-perm tg-over">${m.perm_count}</span></td>
+            <td class="col-hide-sm" data-label="មូលហេតុ"><span class="tg-violation">${escapeHtml(violationLabel(m))}</span></td>
+            <td class="col-num" data-label="ចំនួន"><span class="tg-count-contract">${m.contract_total ?? 0}</span></td>
+            <td data-label="ថ្ងៃធ្វើកិច្ចសន្យា">${reportDateCell(m)}</td>
             <td class="col-actions">${reportActions(m)}</td>
         </tr>`;
     }).join('');
