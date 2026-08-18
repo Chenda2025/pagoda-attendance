@@ -384,8 +384,13 @@ def create_permission_table():
                 reason     TEXT,
                 start_date DATE NOT NULL,
                 end_date   DATE NOT NULL,
+                shift      VARCHAR(20),
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
+        """)
+        cursor.execute("""
+            ALTER TABLE monk_permission
+            ADD COLUMN IF NOT EXISTS shift VARCHAR(20);
         """)
         # Keep SERIAL in sync (avoids duplicate key on id after imports / manual inserts)
         cursor.execute("""
@@ -436,6 +441,144 @@ def create_kuti_share_table():
         cursor.close()
     except Exception as e:
         print(f"Database error creating kuti_share_links: {e}")
+        if conn:
+            conn.rollback()
+    finally:
+        if conn:
+            conn.close()
+
+
+def create_app_users_table():
+    """Staff accounts, face login, permissions."""
+    conn = None
+    try:
+        conn = connect_db()
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS app_users (
+                id              SERIAL PRIMARY KEY,
+                username        VARCHAR(80)  NOT NULL UNIQUE,
+                password_hash   VARCHAR(255) NOT NULL,
+                display_name    VARCHAR(120),
+                role            VARCHAR(40)  NOT NULL DEFAULT 'staff',
+                permissions     JSONB        NOT NULL DEFAULT '[]',
+                face_descriptor JSONB,
+                device_id       VARCHAR(128),
+                face_enrolled   BOOLEAN      NOT NULL DEFAULT FALSE,
+                is_active       BOOLEAN      NOT NULL DEFAULT TRUE,
+                created_at      TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+                last_login_at   TIMESTAMP,
+                created_by      VARCHAR(80)
+            );
+        """)
+        # Login security tracking — added after the table shipped, so patch existing installs
+        for column, ddl in (
+            ('failed_attempts', 'INTEGER NOT NULL DEFAULT 0'),
+            ('login_count',     'INTEGER NOT NULL DEFAULT 0'),
+            ('locked_at',       'TIMESTAMP'),
+            ('lock_reason',     'VARCHAR(160)'),
+            ('last_ip',         'VARCHAR(64)'),
+            ('last_location',   'VARCHAR(160)'),
+        ):
+            cursor.execute(
+                f'ALTER TABLE app_users ADD COLUMN IF NOT EXISTS {column} {ddl};'
+            )
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS activity_log (
+                id          SERIAL PRIMARY KEY,
+                user_id     INTEGER REFERENCES app_users(id) ON DELETE SET NULL,
+                username    VARCHAR(80),
+                action      VARCHAR(80) NOT NULL,
+                module      VARCHAR(80),
+                detail      TEXT,
+                ip_address  VARCHAR(64),
+                device_id   VARCHAR(128),
+                created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_activity_log_created
+            ON activity_log (created_at DESC);
+        """)
+        conn.commit()
+        print("Tables 'app_users' / 'activity_log' created / verified.")
+        cursor.close()
+    except Exception as e:
+        print(f"Database error creating app_users: {e}")
+        if conn:
+            conn.rollback()
+    finally:
+        if conn:
+            conn.close()
+
+
+def create_telegram_notify_table():
+    """Log monks whose names were sent to Telegram (absent alerts, daily submit)."""
+    conn = None
+    try:
+        conn = connect_db()
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS telegram_notify_log (
+                id            SERIAL PRIMARY KEY,
+                monk_id       INTEGER NOT NULL REFERENCES monk_tbl(id) ON DELETE CASCADE,
+                fullname      VARCHAR(255) NOT NULL,
+                notify_type   VARCHAR(40) NOT NULL,
+                absent_count  INTEGER NOT NULL DEFAULT 0,
+                perm_count    INTEGER NOT NULL DEFAULT 0,
+                ref_date      DATE NOT NULL,
+                detail        TEXT,
+                sent_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_tg_notify_monk_date
+            ON telegram_notify_log (monk_id, ref_date DESC);
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_tg_notify_sent
+            ON telegram_notify_log (sent_at DESC);
+        """)
+        conn.commit()
+        print("Table 'telegram_notify_log' created / verified.")
+        cursor.close()
+    except Exception as e:
+        print(f"Database error creating telegram_notify_log: {e}")
+        if conn:
+            conn.rollback()
+    finally:
+        if conn:
+            conn.close()
+
+
+def create_telegram_contract_table():
+    """Track contract completion per monk per 15-day block."""
+    conn = None
+    try:
+        conn = connect_db()
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS telegram_contract_tbl (
+                id              SERIAL PRIMARY KEY,
+                monk_id         INTEGER NOT NULL REFERENCES monk_tbl(id) ON DELETE CASCADE,
+                block_start     DATE NOT NULL,
+                block_end       DATE NOT NULL,
+                contract_status VARCHAR(20) NOT NULL DEFAULT 'pending'
+                    CHECK (contract_status IN ('pending', 'done')),
+                updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (monk_id, block_start)
+            );
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_tg_contract_block
+            ON telegram_contract_tbl (block_start, block_end);
+        """)
+        conn.commit()
+        print("Table 'telegram_contract_tbl' created / verified.")
+        cursor.close()
+    except Exception as e:
+        print(f"Database error creating telegram_contract_tbl: {e}")
         if conn:
             conn.rollback()
     finally:

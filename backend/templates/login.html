@@ -8,52 +8,112 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@300;400;500;600;700&family=Battambang:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/login.css">
+    <link rel="stylesheet" href="/static/css/login.css?v=6">
+    <link rel="stylesheet" href="/static/css/face_id.css?v=5">
 </head>
 <body>
     <div class="login-bg">
-        <div class="login-card">
+        <div class="login-card login-card-wide">
 
-            <!-- Logo -->
             <div class="login-logo-wrap">
                 <img src="/static/logo.jpg" alt="វត្តនិរោធរង្សី" class="login-logo">
             </div>
 
-            <h1 class="login-title">វត្តនិរោធរង្សី</h1>
-            <p class="login-sub">ប្រព័ន្ធគ្រប់គ្រងវត្តមានព្រះសង្ឃ</p>
+            <div class="login-brand">
+                <p class="login-eyebrow">សាលាពុទ្ធិកអនុវិទ្យាល័យសង្ឃ</p>
+                <h1 class="login-title">វត្តនិរោធរង្សី</h1>
+                <span class="login-divider" aria-hidden="true"></span>
+                <p class="login-subtitle">ប្រព័ន្ធគ្រប់គ្រងទិន្នន័យព្រះសង្ឃ</p>
+            </div>
+
+            <div id="login-error" class="login-error" style="display:none">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/>
+                    <line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                <span id="login-error-text"></span>
+            </div>
 
             {% if error %}
-            <div class="login-error">
+            <div class="login-error {% if locked %}login-error-locked{% endif %}">
+                {% if locked %}
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
-                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/>
-                    <line x1="12" y1="16" x2="12.01" y2="16"/>
-                </svg>
+                    stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                {% else %}
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/>
+                    <line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                {% endif %}
                 {{ error }}
             </div>
             {% endif %}
 
-            <form class="login-form" method="post">
+            <!-- Face ID intro (default) -->
+            <div class="fid-stage" id="face-intro">
+                <button type="button" class="fid-ring-btn" id="btn-face-ring"
+                        aria-label="ស្កេនមុខដើម្បីចូលប្រព័ន្ធ">
+                    <span class="fid-ring-wrap">
+                        <span class="fid-ticks" id="intro-ticks"></span>
+                        <svg class="fid-face-icon" viewBox="0 0 120 120" fill="none" stroke="currentColor"
+                            stroke-width="3" stroke-linecap="round">
+                            <path d="M18 42V30a12 12 0 0 1 12-12h12" />
+                            <path d="M102 42V30a12 12 0 0 0-12-12H78" />
+                            <path d="M18 78v12a12 12 0 0 0 12 12h12" />
+                            <path d="M102 78v12a12 12 0 0 1-12 12H78" />
+                            <circle cx="47" cy="52" r="3" fill="currentColor" stroke="none" />
+                            <circle cx="73" cy="52" r="3" fill="currentColor" stroke="none" />
+                            <path d="M60 52v14h-5" />
+                            <path d="M46 78c6 6 22 6 28 0" />
+                        </svg>
+                    </span>
+                </button>
+                <h2 class="fid-heading">Face ID</h2>
+                <p class="fid-sub">ចុចប៊ូតុងខាងក្រោម ដើម្បីស្កេនមុខចូលប្រព័ន្ធ</p>
+                <button type="button" class="btn-fid" id="btn-start-face">ស្កេនមុខ</button>
+                <p class="fid-error" id="face-intro-error"></p>
+                <button type="button" class="btn-fid-plain" id="btn-intro-password">
+                    ប្រើឈ្មោះ និងលេខសម្ងាត់
+                </button>
+            </div>
+
+            <!-- Face ID scan -->
+            <div class="fid-stage" id="face-panel" style="display:none">
+                <div class="fid-ring-wrap fid-dark">
+                    <div class="fid-ticks" id="login-ticks"></div>
+                    <div class="fid-video-wrap">
+                        <video id="face-video" autoplay playsinline muted></video>
+                    </div>
+                </div>
+                <h2 class="fid-heading" id="face-heading">Face ID</h2>
+                <p class="fid-progress" id="face-status">កំពុងបើកកាមេរ៉ា…</p>
+                <p class="fid-error" id="face-fail-hint"></p>
+                <button type="button" class="btn-fid-plain" id="btn-show-password">
+                    ប្រើឈ្មោះ និងលេខសម្ងាត់
+                </button>
+            </div>
+
+            <!-- Password fallback -->
+            <form class="login-form" id="password-panel" method="post" style="display:none"
+                  data-start-open="{{ '1' if error else '0' }}">
+                <input type="hidden" name="device_id" id="pw-device-id">
+                <input type="hidden" name="face_fails" id="pw-face-fails"
+                       value="{{ face_fails|default(0) }}">
                 <div class="form-group">
                     <label class="form-label">ឈ្មោះអ្នកប្រើ</label>
                     <div class="input-wrap">
                         <svg class="input-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16"
-                            viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                            stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                            <circle cx="12" cy="7" r="4"/>
+                            viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
                         </svg>
                         <input type="text" name="username" class="form-input" placeholder="username"
-                               autocomplete="username" required autofocus>
+                               autocomplete="username" required>
                     </div>
                 </div>
-
                 <div class="form-group">
                     <label class="form-label">លេខសម្ងាត់</label>
                     <div class="input-wrap">
                         <svg class="input-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16"
-                            viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                            stroke-linecap="round" stroke-linejoin="round">
+                            viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
                             <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
                         </svg>
@@ -61,19 +121,13 @@
                                autocomplete="current-password" required>
                     </div>
                 </div>
-
-                <button type="submit" class="btn-login">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
-                        <polyline points="10 17 15 12 10 7"/>
-                        <line x1="15" y1="12" x2="3" y2="12"/>
-                    </svg>
-                    ចូលប្រព័ន្ធ
-                </button>
+                <button type="submit" class="btn-login">ចូលប្រព័ន្ធ</button>
+                <button type="button" class="btn-fid-plain" id="btn-show-face">← ត្រឡប់ទៅ Face ID</button>
             </form>
         </div>
     </div>
-    <script src="/static/js/login.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.14/dist/face-api.js"></script>
+    <script src="/static/js/face_auth.js?v=2"></script>
+    <script src="/static/js/login.js?v=8"></script>
 </body>
 </html>

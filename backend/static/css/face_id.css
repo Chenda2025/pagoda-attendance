@@ -1,0 +1,318 @@
+/* iPhone Face ID style scanner */
+
+.fid-stage {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    width: 100%;
+}
+
+/* Tighter header so the scan ring stays the focus */
+.login-card-wide { padding: 30px 26px 26px; }
+.login-card-wide .login-logo { width: 62px; height: 62px; border-width: 2px; }
+.login-card-wide .login-logo-wrap { margin-bottom: 10px; }
+.login-card-wide .login-title { font-size: 24px; margin-bottom: 8px; }
+.login-card-wide .login-brand { margin-bottom: 14px; }
+
+.fid-ring-wrap {
+    --fid-size: 280px;
+    --fid-radius: calc(var(--fid-size) / 2 - 10px);
+    position: relative;
+    width: var(--fid-size);
+    height: var(--fid-size);
+    margin: 4px auto 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.fid-ring-wrap.fid-dark {
+    background:
+        radial-gradient(circle at 50% 36%, #2a2a33 0%, #101014 62%, #08080b 100%);
+    border-radius: 42px;
+    box-shadow:
+        0 18px 46px rgba(0, 0, 0, 0.34),
+        inset 0 1px 0 rgba(255, 255, 255, 0.07);
+    transition: box-shadow 0.3s ease;
+}
+
+/* Soft halo + hairline ring hugging the camera circle */
+.fid-ring-wrap.fid-dark::before,
+.fid-ring-wrap.fid-dark::after {
+    content: '';
+    position: absolute;
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+.fid-ring-wrap.fid-dark::before {
+    width: calc(var(--fid-size) - 52px);
+    height: calc(var(--fid-size) - 52px);
+    background: radial-gradient(circle, rgba(120, 190, 255, 0.16) 0%, transparent 66%);
+    animation: fid-halo 3.2s ease-in-out infinite;
+}
+
+.fid-ring-wrap.fid-dark::after {
+    width: calc(var(--fid-size) - 68px);
+    height: calc(var(--fid-size) - 68px);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    z-index: 3;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+@keyframes fid-halo {
+    0%, 100% { opacity: 0.55; transform: scale(0.98); }
+    50%      { opacity: 1;    transform: scale(1.02); }
+}
+
+/* Verified — ring turns green and the sweep stops */
+.fid-ring-wrap.fid-ok {
+    box-shadow:
+        0 0 0 2px rgba(48, 209, 88, 0.3),
+        0 18px 46px rgba(0, 0, 0, 0.34),
+        inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+.fid-ring-wrap.fid-ok::before { animation: none; opacity: 1; }
+.fid-ring-wrap.fid-ok::after {
+    border-color: rgba(48, 209, 88, 0.65);
+    box-shadow: 0 0 18px rgba(48, 209, 88, 0.35);
+}
+
+.fid-ring-wrap.fid-ok .fid-video-wrap::after { opacity: 0; animation: none; }
+
+/* Tick marks */
+.fid-ticks {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 2;
+}
+
+.fid-tick {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 3px;
+    height: 14px;
+    margin: -7px 0 0 -1.5px;
+    border-radius: 3px;
+    background: #d4d4d8;
+    transform-origin: 50% 50%;
+    transition: background-color 0.16s ease, height 0.16s ease,
+                box-shadow 0.16s ease, opacity 0.16s ease;
+}
+
+.fid-dark .fid-tick { background: #55555f; opacity: 0.75; }
+
+.fid-tick.lit {
+    background: #30d158;
+    height: 20px;
+    opacity: 1;
+    box-shadow: 0 0 10px rgba(48, 209, 88, 0.6);
+}
+
+.fid-tick.active {
+    background: #ffffff;
+    height: 22px;
+    opacity: 1;
+    box-shadow: 0 0 12px rgba(255, 255, 255, 0.85);
+}
+
+/* Circular camera preview — masked so WebKit clips the flipped video */
+.fid-video-wrap {
+    position: relative;
+    width: calc(var(--fid-size) - 76px);
+    height: calc(var(--fid-size) - 76px);
+    border-radius: 50%;
+    overflow: hidden;
+    background: #1c1c1e;
+    -webkit-mask-image: -webkit-radial-gradient(circle, #fff 99%, transparent 100%);
+    mask-image: radial-gradient(circle, #fff 99%, transparent 100%);
+    isolation: isolate;
+}
+
+.fid-video-wrap video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+    transform: scaleX(-1);
+    display: block;
+}
+
+/* Sweeping scan bar over the live preview */
+.fid-dark .fid-video-wrap::after {
+    content: '';
+    position: absolute;
+    left: -10%;
+    right: -10%;
+    height: 26%;
+    background: linear-gradient(
+        180deg,
+        transparent 0%,
+        rgba(120, 195, 255, 0.14) 40%,
+        rgba(180, 225, 255, 0.45) 50%,
+        rgba(120, 195, 255, 0.14) 60%,
+        transparent 100%
+    );
+    pointer-events: none;
+    z-index: 2;
+    animation: fid-scanline 2.8s ease-in-out infinite;
+    transition: opacity 0.3s ease;
+}
+
+@keyframes fid-scanline {
+    0%   { transform: translateY(-130%); opacity: 0; }
+    15%  { opacity: 1; }
+    85%  { opacity: 1; }
+    100% { transform: translateY(400%); opacity: 0; }
+}
+
+/* Placeholder face outline for the intro screen */
+.fid-face-icon {
+    width: calc(var(--fid-size) - 120px);
+    height: calc(var(--fid-size) - 120px);
+    color: #c7c7cc;
+}
+
+/* Tappable Face ID icon shown before the camera starts */
+.fid-ring-btn {
+    padding: 0;
+    border: none;
+    background: none;
+    cursor: pointer;
+    border-radius: 50%;
+    color: inherit;
+    font: inherit;
+    transition: transform 0.15s ease;
+}
+
+.fid-ring-btn .fid-face-icon { color: #007aff; }
+
+.fid-ring-btn:hover { transform: scale(1.02); }
+.fid-ring-btn:active { transform: scale(0.98); }
+.fid-ring-btn:focus-visible { outline: 3px solid rgba(0, 122, 255, 0.5); outline-offset: 6px; }
+
+.fid-ring-btn .fid-tick {
+    background: #c7c7cc;
+    animation: fid-tick-pulse 2.4s ease-in-out infinite;
+}
+
+.fid-ring-btn .fid-tick:nth-child(3n)   { animation-delay: 0.3s; }
+.fid-ring-btn .fid-tick:nth-child(3n+1) { animation-delay: 0.6s; }
+
+@keyframes fid-tick-pulse {
+    0%, 100% { background: #d4d4d8; }
+    50%      { background: #9ec9ff; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .fid-ring-btn .fid-tick { animation: none; }
+    .fid-ring-btn:hover, .fid-ring-btn:active { transform: none; }
+}
+
+/* Direction arrow shown while enrolling */
+.fid-arrow {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 46px;
+    height: 46px;
+    margin: -23px 0 0 -23px;
+    z-index: 3;
+    color: rgba(255, 255, 255, 0.92);
+    filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.6));
+    transition: transform 0.18s ease, opacity 0.2s ease;
+    pointer-events: none;
+    opacity: 0;
+}
+
+.fid-arrow.show { opacity: 1; }
+
+.fid-heading {
+    font-size: 20px;
+    font-weight: 700;
+    color: #1a202c;
+    margin-bottom: 6px;
+    letter-spacing: -0.2px;
+}
+
+.fid-sub {
+    font-size: 14px;
+    line-height: 1.65;
+    color: #6b7280;
+    max-width: 320px;
+    margin: 0 auto 24px;
+}
+
+.fid-progress {
+    font-size: 13.5px;
+    color: #8e8e93;
+    margin-bottom: 16px;
+    min-height: 20px;
+}
+
+.fid-error {
+    font-size: 13px;
+    color: #ff3b30;
+    min-height: 20px;
+    margin-top: 10px;
+}
+
+.btn-fid {
+    width: 100%;
+    max-width: 320px;
+    padding: 15px 20px;
+    border: none;
+    border-radius: 999px;
+    background: #007aff;
+    color: #fff;
+    font-family: inherit;
+    font-size: 15.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, opacity 0.15s, transform 0.1s;
+}
+
+.btn-fid:hover:not(:disabled) { background: #0a6fd8; }
+.btn-fid:active:not(:disabled) { transform: scale(0.98); }
+.btn-fid:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-fid-plain {
+    width: 100%;
+    max-width: 320px;
+    margin-top: 10px;
+    padding: 14px 20px;
+    border: none;
+    border-radius: 999px;
+    background: #f2f2f7;
+    color: #1c1c1e;
+    font-family: inherit;
+    font-size: 14.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.btn-fid-plain:hover { background: #e5e5ea; }
+
+.fid-success {
+    color: #30d158;
+    font-weight: 700;
+}
+
+@media (max-width: 480px) {
+    .fid-ring-wrap { --fid-size: 240px; }
+    .fid-ring-wrap.fid-dark { border-radius: 36px; }
+    .fid-heading { font-size: 18px; }
+    .fid-sub { font-size: 13.5px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .fid-ring-wrap.fid-dark::before,
+    .fid-dark .fid-video-wrap::after { animation: none; }
+    .fid-dark .fid-video-wrap::after { opacity: 0; }
+}

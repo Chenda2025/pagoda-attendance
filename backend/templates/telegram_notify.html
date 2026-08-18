@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="km">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>កិច្ចសន្យា — វត្តនិរោធរង្សី</title>
+    <link rel="icon" type="image/jpeg" href="/static/logo.jpg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&family=Kantumruy+Pro:wght@400;500;600;700&family=Moul&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/gov-shell.css">
+    <link rel="stylesheet" href="/static/css/telegram_notify.css?v=10">
+</head>
+<body class="gov-page-body">
+<div class="gov-shell tg-page">
+
+    <header class="gov-masthead">
+        <div class="gov-masthead-inner">
+            <div class="gov-col gov-col-left">
+                <p>មន្ទីរធម្មការ និងសាសនា រាជធានីភ្នំពេញ</p>
+                <p>សាលាពុទ្ធិកអនុវិទ្យាល័យសង្ឃ</p>
+                <p class="gov-pagoda">វត្តនិរោធរង្សី</p>
+            </div>
+            <div class="gov-col gov-col-center">
+                <img src="/static/logo.jpg" alt="វត្តនិរោធរង្សី" class="gov-seal">
+            </div>
+            <div class="gov-col gov-col-right">
+                <p class="gov-kingdom">ព្រះរាជាណាចក្រកម្ពុជា</p>
+                <p class="gov-motto">ជាតិ សាសនា ព្រះមហាក្សត្រ</p>
+            </div>
+        </div>
+    </header>
+
+    <div class="gov-topbar tg-topbar">
+        <div class="gov-topbar-left">
+            <a href="/" class="gov-btn tg-back-btn">← ផ្ទាំងគ្រប់គ្រង</a>
+            <div class="gov-topbar-titles">
+                <h1 class="gov-page-title">កិច្ចសន្យា</h1>
+            </div>
+        </div>
+    </div>
+
+    <div class="tg-summary" id="tg-summary">
+        <article class="tg-sum-card">
+            <div class="tg-sum-icon tg-sum-icon-total" aria-hidden="true">Σ</div>
+            <div class="tg-sum-body">
+                <span class="tg-sum-val" id="sum-total">—</span>
+                <span class="tg-sum-lbl">លើសលក្ខណ</span>
+            </div>
+        </article>
+        <article class="tg-sum-card tg-sum-eligible">
+            <div class="tg-sum-icon tg-sum-icon-warn" aria-hidden="true">!</div>
+            <div class="tg-sum-body">
+                <span class="tg-sum-val" id="sum-eligible">—</span>
+                <span class="tg-sum-lbl">មិនទាន់ផ្ញើ</span>
+            </div>
+        </article>
+        <article class="tg-sum-card tg-sum-sent">
+            <div class="tg-sum-icon tg-sum-icon-sent" aria-hidden="true">✓</div>
+            <div class="tg-sum-body">
+                <span class="tg-sum-val" id="sum-sent">—</span>
+                <span class="tg-sum-lbl">បានផ្ញើរួច</span>
+            </div>
+        </article>
+        <article class="tg-sum-card tg-sum-selected">
+            <div class="tg-sum-icon tg-sum-icon-selected" aria-hidden="true">☑</div>
+            <div class="tg-sum-body">
+                <span class="tg-sum-val" id="sum-selected">0</span>
+                <span class="tg-sum-lbl">បានជ្រើស</span>
+            </div>
+        </article>
+        <article class="tg-sum-card tg-sum-done">
+            <div class="tg-sum-icon tg-sum-icon-done" aria-hidden="true">✔</div>
+            <div class="tg-sum-body">
+                <span class="tg-sum-val" id="sum-contract-done">—</span>
+                <span class="tg-sum-lbl">ធ្វើកិច្ចសន្យារួច</span>
+            </div>
+        </article>
+    </div>
+
+    <section class="gov-panel tg-panel tg-list-panel">
+        <div class="tg-list-head">
+            <div class="tg-list-head-main">
+                <div class="tg-list-title-row">
+                    <span class="tg-list-badge" aria-hidden="true">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    </span>
+                    <div>
+                        <h2 class="tg-panel-title">បញ្ជីរង់ចាំកិច្ចសន្យា</h2>
+                    </div>
+                </div>
+                <div class="tg-list-stats">
+                    <div class="tg-list-stat">
+                        <span class="tg-list-stat-val" id="list-count-num">0</span>
+                        <span class="tg-list-stat-lbl">នៅក្នុងបញ្ជី</span>
+                    </div>
+                    <div class="tg-list-stat tg-list-stat-selected">
+                        <span class="tg-list-stat-val" id="list-selected-num">0</span>
+                        <span class="tg-list-stat-lbl">បានជ្រើស</span>
+                    </div>
+                    <div class="tg-period-segs" role="group" aria-label="រយៈពេលគណនា">
+                        <button type="button" class="tg-period-seg is-active" data-period="15d">១៥ ថ្ងៃ</button>
+                        <button type="button" class="tg-period-seg" data-period="month">១ ខែ</button>
+                    </div>
+                    <span class="tg-chip tg-chip-period" id="block-hint">—</span>
+                    <span class="tg-chip tg-chip-rule">អវត្តមាន ≥ ២ · ច្បាប់ ≥ ៣</span>
+                </div>
+            </div>
+            <div class="tg-list-actions-top">
+                <button type="button" class="tg-btn tg-btn-ghost" id="btn-select-all">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                    ជ្រើសទាំងអស់
+                </button>
+                <button type="button" class="tg-btn tg-btn-send" id="btn-send-tg" disabled>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <path d="M11.944 0A12 12 0 1 0 24 12 12 12 0 0 0 11.944 0zm5.992 8.194-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.94z"/>
+                    </svg>
+                    ផ្ញើ Telegram
+                </button>
+            </div>
+        </div>
+
+        <div class="tg-toolbar tg-list-toolbar">
+            <div class="tg-filter-card">
+                <div class="tg-filter-card-label">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+                    <span>តម្រង</span>
+                </div>
+                <div class="tg-filter-row">
+                    <label class="tg-filter-item">
+                        <span class="tg-filter-label">ថ្ងៃយកគណនា</span>
+                        <div class="tg-input-wrap">
+                            <svg class="tg-input-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                            <input type="date" id="ref-date" class="tg-input tg-input-iconed">
+                        </div>
+                    </label>
+                    <div class="tg-filter-item tg-filter-segments-wrap">
+                        <span class="tg-filter-label">រយៈពេល</span>
+                        <div class="tg-period-segs" role="group" aria-label="រយៈពេលគណនា">
+                            <button type="button" class="tg-period-seg is-active" data-period="15d">១៥ ថ្ងៃ</button>
+                            <button type="button" class="tg-period-seg" data-period="month">១ ខែ</button>
+                        </div>
+                    </div>
+                    <div class="tg-filter-item tg-filter-segments-wrap">
+                        <span class="tg-filter-label">ស្ថានភាព</span>
+                        <div class="tg-segments" role="group" aria-label="តម្រង">
+                            <button type="button" class="tg-segment is-active" data-filter="eligible">ទាំងអស់</button>
+                            <button type="button" class="tg-segment" data-filter="unsent">មិនទាន់ផ្ញើ</button>
+                            <button type="button" class="tg-segment" data-filter="sent">បានផ្ញើ</button>
+                        </div>
+                        <select id="filter-type" class="tg-select-hidden" aria-hidden="true" tabindex="-1">
+                            <option value="eligible">ទាំងអស់ (លើសលក្ខណ)</option>
+                            <option value="unsent">មិនទាន់ផ្ញើ</option>
+                            <option value="sent">បានផ្ញើរួច</option>
+                        </select>
+                    </div>
+                    <label class="tg-filter-item tg-filter-search-item">
+                        <span class="tg-filter-label">ស្វែងរក</span>
+                        <div class="tg-input-wrap">
+                            <svg class="tg-input-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                            <input type="search" id="search-name" class="tg-input tg-input-iconed tg-search" placeholder="ឈ្មោះព្រះសង្ឃ...">
+                        </div>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <div class="tg-list-body">
+            <div class="table-wrap tg-list-wrap">
+                <table class="tg-table tg-list-table">
+                    <thead>
+                        <tr>
+                            <th class="col-check"><input type="checkbox" id="check-all" title="ជ្រើសទាំងអស់"></th>
+                            <th class="col-num">#</th>
+                            <th>នាម</th>
+                            <th class="col-hide-sm">ប្រភេទ</th>
+                            <th>កុដិ</th>
+                            <th class="col-num">អវត្តមាន</th>
+                            <th class="col-num">ច្បាប់</th>
+                            <th class="col-hide-sm">មូលហេតុ</th>
+                            <th>កិច្ចសន្យា</th>
+                            <th>Telegram</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tg-body">
+                        <tr><td colspan="10" class="tg-loading"><span class="tg-spinner"></span>កំពុងផ្ទុក...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <section class="gov-panel tg-panel tg-report-panel">
+        <div class="tg-report-head">
+            <div class="tg-report-head-main">
+                <div class="tg-report-title-row">
+                    <span class="tg-report-badge" aria-hidden="true">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                    </span>
+                    <div>
+                        <h2 class="tg-report-title">របាយការណ៍កិច្ចសន្យារួច</h2>
+                    </div>
+                </div>
+                <div class="tg-report-stats">
+                    <div class="tg-report-stat">
+                        <span class="tg-report-stat-val" id="report-count-num">0</span>
+                        <span class="tg-report-stat-lbl">នាក់</span>
+                    </div>
+                    <div class="tg-report-stat tg-report-stat-alt">
+                        <span class="tg-report-stat-val" id="report-contract-sum">0</span>
+                        <span class="tg-report-stat-lbl">ចំនួនកិច្ចសន្យាសរុប</span>
+                    </div>
+                </div>
+            </div>
+            <div class="tg-report-actions">
+                <span class="tg-report-count" id="report-count">0 នាក់</span>
+                <div class="tg-export-wrap">
+                    <button type="button" class="tg-btn tg-btn-export" id="btn-export-report" aria-haspopup="true" aria-expanded="false">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        នាំចេញ
+                        <svg class="tg-chevron" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+                    </button>
+                    <div class="tg-export-menu" id="tg-export-menu" hidden>
+                        <button type="button" class="tg-export-item" id="btn-export-report-pdf">
+                            <span class="tg-export-icon tg-export-icon-pdf">PDF</span>
+                            <span>ទាញយក PDF</span>
+                        </button>
+                        <button type="button" class="tg-export-item" id="btn-export-report-word">
+                            <span class="tg-export-icon tg-export-icon-word">W</span>
+                            <span>ទាញយក Word</span>
+                        </button>
+                        <button type="button" class="tg-export-item" id="btn-export-report-image">
+                            <span class="tg-export-icon tg-export-icon-img">PNG</span>
+                            <span>ទាញយករូបភាព A4</span>
+                        </button>
+                        <button type="button" class="tg-export-item" id="btn-export-report-telegram">
+                            <span class="tg-export-icon tg-export-icon-tg">TG</span>
+                            <span>ផ្ញើ Telegram (A4)</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="tg-report-body">
+            <div class="table-wrap tg-report-wrap">
+                <table class="tg-table tg-report-table">
+                    <thead>
+                        <tr>
+                            <th class="col-num">#</th>
+                            <th>នាម</th>
+                            <th class="col-hide-sm">ប្រភេទ</th>
+                            <th>កុដិ</th>
+                            <th class="col-num">អវត្តមាន</th>
+                            <th class="col-num">ច្បាប់</th>
+                            <th class="col-hide-sm">មូលហេតុ</th>
+                            <th class="col-num">ចំនួន</th>
+                            <th>ថ្ងៃធ្វើកិច្ចសន្យា</th>
+                            <th class="col-actions"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="report-body">
+                        <tr><td colspan="10" class="tg-empty-cell"><div class="tg-report-empty">មិនមាន</div></td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+</div>
+
+<div id="toast" class="toast"></div>
+<link rel="stylesheet" href="/static/css/export_preview.css?v=5">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="/static/js/export_preview.js?v=4"></script>
+<script src="/static/js/telegram_notify.js?v=14"></script>
+</body>
+</html>

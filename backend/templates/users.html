@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="km">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>គ្រប់គ្រងអ្នកប្រើ — វត្តនិរោធរង្សី</title>
+    <link rel="icon" type="image/jpeg" href="/static/logo.jpg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&family=Kantumruy+Pro:wght@400;500;600;700&family=Moul&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/gov-shell.css">
+    <link rel="stylesheet" href="/static/css/users.css?v=5">
+</head>
+<body class="gov-page-body">
+<div class="gov-shell users-page">
+
+    <header class="gov-masthead">
+        <div class="gov-masthead-inner">
+            <div class="gov-col gov-col-left">
+                <p>មន្ទីរធម្មការ និងសាសនា រាជធានីភ្នំពេញ</p>
+                <p>សាលាពុទ្ធិកអនុវិទ្យាល័យសង្ឃ</p>
+                <p class="gov-pagoda">វត្តនិរោធរង្សី</p>
+            </div>
+            <div class="gov-col gov-col-center">
+                <img src="/static/logo.jpg" alt="វត្តនិរោធរង្សី" class="gov-seal">
+            </div>
+            <div class="gov-col gov-col-right">
+                <p class="gov-kingdom">ព្រះរាជាណាចក្រកម្ពុជា</p>
+                <p class="gov-motto">ជាតិ សាសនា ព្រះមហាក្សត្រ</p>
+            </div>
+        </div>
+    </header>
+
+    <div class="gov-topbar users-topbar">
+        <div class="gov-topbar-left">
+            <a href="/" class="gov-btn gov-btn-back" aria-label="ត្រឡប់ទៅផ្ទាំងគ្រប់គ្រង">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+                ផ្ទាំងគ្រប់គ្រង
+            </a>
+            <div class="gov-topbar-titles">
+                <h1 class="gov-page-title">គ្រប់គ្រងអ្នកប្រើប្រព័ន្ធ</h1>
+                <p class="gov-page-sub">បង្កើតគណនី · កំណត់សិទ្ធិ · តាមដានសកម្មភាព</p>
+            </div>
+        </div>
+        <div class="gov-topbar-actions">
+            <div class="users-user-chip" title="គណនីដែលកំពុងប្រើ">
+                <span class="users-avatar">{{ username[:1]|upper if username else 'A' }}</span>
+                <div class="users-chip-meta">
+                    <span class="users-chip-name">{{ username or 'admin' }}</span>
+                    <span class="users-chip-role">អ្នកគ្រប់គ្រង</span>
+                </div>
+            </div>
+            <a href="/logout" class="gov-btn gov-btn-danger">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                ចាកចេញ
+            </a>
+        </div>
+    </div>
+
+    <nav class="users-tabs" aria-label="ផ្ទាំងគ្រប់គ្រង">
+        <button class="users-tab active" type="button" data-tab="users">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            គណនី
+        </button>
+        <button class="users-tab" type="button" data-tab="activity">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            ប្រវត្តិសកម្មភាព
+        </button>
+    </nav>
+
+    <main class="users-main">
+
+        <!-- Accounts tab -->
+        <div id="tab-users" class="users-tab-panel active">
+            <div class="users-stats" aria-label="ស្ថិតិគណនី">
+                <article class="stat-card">
+                    <div class="stat-icon stat-icon-total">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+                    </div>
+                    <div class="stat-body">
+                        <span class="stat-value" id="stat-total">—</span>
+                        <span class="stat-label">គណនីសរុប</span>
+                    </div>
+                </article>
+                <article class="stat-card">
+                    <div class="stat-icon stat-icon-face">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    </div>
+                    <div class="stat-body">
+                        <span class="stat-value" id="stat-face">—</span>
+                        <span class="stat-label">Face ID រួចរាល់</span>
+                    </div>
+                </article>
+                <article class="stat-card">
+                    <div class="stat-icon stat-icon-admin">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                    </div>
+                    <div class="stat-body">
+                        <span class="stat-value" id="stat-admin">—</span>
+                        <span class="stat-label">អ្នកគ្រប់គ្រង</span>
+                    </div>
+                </article>
+                <article class="stat-card stat-card-locked" id="stat-card-locked">
+                    <div class="stat-icon stat-icon-locked">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    </div>
+                    <div class="stat-body">
+                        <span class="stat-value" id="stat-locked">—</span>
+                        <span class="stat-label">គណនីផ្អាក</span>
+                    </div>
+                </article>
+            </div>
+
+            <div class="users-grid">
+                <section class="gov-panel users-create-panel">
+                    <div class="panel-head panel-head-accent">
+                        <div class="panel-icon panel-icon-create" aria-hidden="true">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+                        </div>
+                        <div>
+                            <h2 class="panel-title">បង្កើតគណនីថ្មី</h2>
+                            <p class="panel-desc">បង្កើត username/password — បុគ្គលិកចូលលើកដំបូងដើម្បីចុះឈ្មោ៙ Face ID</p>
+                        </div>
+                    </div>
+                    <form id="create-user-form" class="user-form">
+                        <div class="form-row">
+                            <div class="form-field">
+                                <label for="new-username">ឈ្មោះចូល (username)</label>
+                                <input type="text" id="new-username" required autocomplete="off" placeholder="ឧ. staff01">
+                            </div>
+                            <div class="form-field">
+                                <label for="new-password">លេខសម្ងាត់</label>
+                                <input type="password" id="new-password" required autocomplete="new-password" placeholder="••••••••">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-field">
+                                <label for="new-display">ឈ្មោះបង្ហាញ</label>
+                                <input type="text" id="new-display" placeholder="ឈ្មោះពិត">
+                            </div>
+                            <div class="form-field">
+                                <label for="new-role">តួនាទី</label>
+                                <select id="new-role">
+                                    <option value="staff">បុគ្គលិក</option>
+                                    <option value="admin">អ្នកគ្រប់គ្រង</option>
+                                </select>
+                            </div>
+                        </div>
+                        <fieldset class="perm-fieldset">
+                            <legend>សិទ្ធិប្រើប្រាស់</legend>
+                            <div class="perm-grid" id="new-perms"></div>
+                        </fieldset>
+                        <button type="submit" class="gov-btn gov-btn-primary btn-create">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            បង្កើតគណនី
+                        </button>
+                    </form>
+                </section>
+
+                <section class="gov-panel users-list-panel">
+                    <div class="panel-head panel-head-row panel-head-accent">
+                        <div class="panel-head-left">
+                            <div class="panel-icon panel-icon-list" aria-hidden="true">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                            </div>
+                            <div>
+                                <h2 class="panel-title">បញ្ជីអ្នកប្រើ</h2>
+                                <p class="panel-desc">គណនីទាំងអស់ក្នុងប្រព័ន្ធ</p>
+                            </div>
+                        </div>
+                        <span class="user-count-badge" id="user-count">—</span>
+                    </div>
+                    <div class="table-wrap">
+                        <table class="users-table">
+                            <thead>
+                                <tr>
+                                    <th>អ្នកប្រើ</th>
+                                    <th>តួនាទី</th>
+                                    <th>សិទ្ធិ</th>
+                                    <th>ស្ថានភាព</th>
+                                    <th>Face ID</th>
+                                    <th>ចូលចុងក្រោយ</th>
+                                    <th aria-label="សកម្មភាព"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="users-body">
+                                <tr><td colspan="7" class="cell-empty">កំពុងផ្ទុក…</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+        </div>
+
+        <!-- Activity tab -->
+        <div id="tab-activity" class="users-tab-panel">
+            <section class="gov-panel users-activity-panel">
+                <div class="panel-head panel-head-row panel-head-accent">
+                    <div class="panel-head-left">
+                        <div class="panel-icon panel-icon-activity" aria-hidden="true">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        </div>
+                        <div>
+                            <h2 class="panel-title">ប្រវត្តិសកម្មភាព</h2>
+                            <p class="panel-desc">ចូល/ចេញ · គណនី · តំណមេកុដិ · ប្លង់អាសនៈ</p>
+                        </div>
+                    </div>
+                    <div class="activity-toolbar">
+                        <span class="retention-badge" id="retention-badge" title="ទិន្នន័យចាស់ជាង ១៥ ថ្ងៃត្រូវលុបដោយស្វ័យប្រវត្តិ">រក្សាទុក ១៥ ថ្ងៃ</span>
+                        <select id="act-module-filter" class="filter-select" aria-label="ច្រោះម៉ូឌុល">
+                            <option value="">ទាំងអស់</option>
+                            <option value="auth">ចូល/ចេញ</option>
+                            <option value="users">គ្រប់គ្រងអ្នកប្រើ</option>
+                            <option value="kuti_links">តំណមេកុដិ</option>
+                            <option value="layout">ប្លង់អាសនៈ</option>
+                        </select>
+                        <button type="button" class="gov-btn" id="btn-refresh-log">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                            ផ្ទុកឡើងវិញ
+                        </button>
+                    </div>
+                </div>
+                <div class="table-wrap">
+                    <table class="activity-table">
+                        <thead>
+                            <tr>
+                                <th>ពេល</th>
+                                <th>អ្នកប្រើ</th>
+                                <th>សកម្មភាព</th>
+                                <th>ម៉ូឌុល</th>
+                                <th>ព័ត៌មាន</th>
+                                <th>IP</th>
+                            </tr>
+                        </thead>
+                        <tbody id="activity-body">
+                            <tr><td colspan="6" class="cell-empty">កំពុងផ្ទុក…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+
+    </main>
+
+    <footer class="gov-footer users-footer">
+        <span>© វត្តនិរោធរង្សី</span>
+        <span class="footer-sep">·</span>
+        <span>គ្រប់គ្រងអ្នកប្រើប្រព័ន្ធ</span>
+    </footer>
+</div>
+
+<!-- Edit modal -->
+<div id="edit-modal" class="usr-modal" style="display:none" role="dialog" aria-modal="true">
+    <div class="usr-modal-backdrop" id="edit-backdrop"></div>
+    <div class="usr-modal-box">
+        <div class="usr-modal-head">
+            <h3>កែប្រែគណនី</h3>
+            <button type="button" class="usr-modal-close" id="edit-cancel" aria-label="បិទ">&times;</button>
+        </div>
+        <p class="usr-modal-user">@<span id="edit-username"></span></p>
+        <input type="hidden" id="edit-id">
+        <div class="form-field">
+            <label for="edit-display">ឈ្មោះបង្ហាញ</label>
+            <input type="text" id="edit-display">
+        </div>
+        <div class="form-field">
+            <label for="edit-password">លេខសម្ងាត់ថ្មី <span class="label-hint">(ទទេ = មិនផ្លាស់)</span></label>
+            <input type="password" id="edit-password" autocomplete="new-password">
+        </div>
+        <fieldset class="perm-fieldset">
+            <legend>សិទ្ធិ</legend>
+            <div class="perm-grid" id="edit-perms"></div>
+        </fieldset>
+        <label class="check-row">
+            <input type="checkbox" id="edit-active" checked>
+            <span>គណនីសកម្ម</span>
+        </label>
+        <div class="usr-modal-actions">
+            <button type="button" class="gov-btn" id="edit-cancel-btn">បោះបង់</button>
+            <button type="button" class="gov-btn gov-btn-primary" id="edit-save">រក្សាទុក</button>
+        </div>
+    </div>
+</div>
+
+<div id="toast" class="usr-toast"></div>
+<script src="/static/js/users.js?v=6"></script>
+</body>
+</html>

@@ -7,8 +7,16 @@ from create_table import (create_monks_table, insert_monk, get_all_monks,
                           update_monk, delete_monk, insert_pending_submission,
                           update_monk_living_status)
 from datetime import date as _date
-from sorting import sort_attendance_monks
+from sorting import sort_attendance_monks, ROLE_RANK
 from khmer_lunar import khmer_lunar_date
+from auth_service import (
+    get_user_by_username, get_user_by_id, list_users, create_user, update_user,
+    delete_user, save_face_enrollment, touch_last_login, find_user_by_face,
+    user_allowed, user_home, log_activity, list_activity, purge_old_activity,
+    verify_password, unlock_user, register_failed_password, bind_device,
+    MODULE_LABELS, ALL_PERMISSIONS, ACTIVITY_RETENTION_DAYS,
+    MAX_PASSWORD_ATTEMPTS, LOCK_REASON_PASSWORD,
+)
 
 # ============ MINISTRY DOCUMENT HEADER (shared by docx/html/excel exports) ============
 
@@ -40,6 +48,15 @@ _VALID_ACADEMIC_YEARS   = {'ឆ្នាំទី១', 'ឆ្នាំទី២
 _VALID_LIVING_STATUSES  = {'កំពុងស្នាក់នៅ', 'ឈប់ស្នាក់នៅ', 'នៅស្រុក'}
 _ACTIVE_LIVING_STATUS   = 'កំពុងស្នាក់នៅ'
 
+# Discipline / contract thresholds (bi-weekly report rules)
+DISC_ABSENT_MIN = 2   # absences  >= 2
+DISC_PERM_MIN   = 3   # permissions >= 3
+
+
+def _contract_eligible(absent_count, perm_count):
+    """True when monk exceeds absent or permission criteria (for contract / Telegram)."""
+    return absent_count >= DISC_ABSENT_MIN or perm_count >= DISC_PERM_MIN
+
 # ============ RATE LIMITER (in-memory, per IP, 10 req/min) ============
 
 _rate_store: dict = defaultdict(list)
@@ -57,29 +74,126 @@ def _rate_limit_ok(ip: str) -> bool:
 
 # ============ AUTH ============
 
-USERS = {
-    'admin': {'password': 'admin@2026',  'role': 'admin'},
-    'user1': {'password': 'layout@2026', 'role': 'user1'},
-    'user2': {'password': 'report@2026', 'role': 'user2'},
-}
+def _client_ip():
+    forwarded = request.headers.get('X-Forwarded-For', '')
+    return (forwarded.split(',')[0].strip() if forwarded else None) or request.remote_addr or ''
 
-# URL prefixes each role may access (startswith matching)
-_ROLE_PATHS = {
-    'user1': ('/layout', '/api/monks', '/api/attendance', '/api/permissions', '/api/export-layout', '/api/check', '/api/seat-order'),
-    'user2': ('/report', '/api/attendance', '/api/permissions', '/api/monks/', '/api/reports'),
-}
+
+def _device_id():
+    return (request.headers.get('X-Device-Id') or request.form.get('device_id') or '').strip()[:128]
+
+
+def _session_user():
+    return {
+        'id': session.get('user_id'),
+        'username': session.get('username', ''),
+        'role': session.get('role', ''),
+        'permissions': session.get('permissions') or [],
+    }
+
+
+# ---- Security alerts: IP geolocation + Telegram ----
+
+# Only accounts auto-disabled by repeated failed logins are reported here;
+# ordinary logins and admin enable/disable stay silent.
+_SECURITY_TG_TOKEN   = '8950898077:AAHNR0tTgtJWy17wMXooKwg4nfQLGdfe5aw'
+_SECURITY_TG_CHAT_ID = -1003960014484
+
+_geo_cache: dict = {}
+_PRIVATE_IP_PREFIXES = ('10.', '192.168.', '127.', '172.16.', '172.17.', '172.18.',
+                        '172.19.', '172.2', '172.30.', '172.31.', '::1', 'localhost')
+
+
+def _geo_lookup(ip):
+    """City/country for an IP. Cached, best-effort — never raises, never blocks long."""
+    if not ip or ip.startswith(_PRIVATE_IP_PREFIXES):
+        return 'បណ្តាញមូលដ្ឋាន (local)'
+    if ip in _geo_cache:
+        return _geo_cache[ip]
+    location = ''
+    try:
+        import requests as req
+        r = req.get(f'http://ip-api.com/json/{ip}',
+                    params={'fields': 'status,country,regionName,city,isp'},
+                    timeout=4)
+        d = r.json()
+        if d.get('status') == 'success':
+            parts = [d.get('city'), d.get('regionName'), d.get('country')]
+            location = ', '.join(p for p in parts if p)
+            if d.get('isp'):
+                location = f"{location} ({d['isp']})" if location else d['isp']
+    except Exception as e:
+        print(f'[geo] lookup failed for {ip}: {e}')
+    location = location or 'មិនស្គាល់ទីតាំង'
+    _geo_cache[ip] = location
+    return location
+
+
+def _perm_names(user):
+    if (user or {}).get('role') == 'admin':
+        return 'អ្នកគ្រប់គ្រង (សិទ្ធិទាំងអស់)'
+    perms = (user or {}).get('permissions') or []
+    return ', '.join(MODULE_LABELS.get(p, p) for p in perms) or 'មិនមានសិទ្ធិ'
+
+
+def _send_account_locked_alert(user, username, ip, location, device_id,
+                               attempts, face_fails=0):
+    """Telegram notice when an account is auto-disabled by failed logins."""
+    from datetime import datetime as _dt
+    lines = ['⛔ គណនីត្រូវបានផ្អាកដោយស្វ័យប្រវត្តិ',
+             f'ឈ្មោះអ្នកប្រើ: {username or "—"}',
+             f'សិទ្ធិ: {_perm_names(user)}']
+    if face_fails:
+        lines.append(f'Face ID មិនស្គាល់មុខ: {face_fails} ដង')
+    lines += [
+        f'លេខសម្ងាត់ខុស: {attempts} ដង',
+        f'មូលហេតុ៖ {LOCK_REASON_PASSWORD}',
+        f'ឧបករណ៍ (device): {device_id or "—"}',
+        f'អាសយដ្ឋាន IP: {ip or "—"}',
+        f'ទីតាំង: {location or "—"}',
+        f'ពេលវេលា: {_dt.now().strftime("%d/%m/%Y %H:%M:%S")}',
+        'គណនីនេះមិនអាចចូលបានទេ រហូតដល់អ្នកគ្រប់គ្រងបើកឡើងវិញ។',
+    ]
+    text = '\n'.join(lines)
+
+    def _worker():
+        try:
+            import requests as req
+            _tg_send_message(_SECURITY_TG_TOKEN, _SECURITY_TG_CHAT_ID, text, req)
+        except Exception as e:
+            print(f'[lock-alert] telegram failed: {e}')
+
+    import threading
+    threading.Thread(target=_worker, daemon=True).start()
+
+
+def _log_act(action, module=None, detail=None, username=None, user_id=None):
+    log_activity(
+        user_id if user_id is not None else session.get('user_id'),
+        username or session.get('username'),
+        action, module, detail, _client_ip(), _device_id() or None,
+    )
+
+
+def _login_user(user, ip=None, location=None):
+    session['user_id'] = user['id']
+    session['username'] = user['username']
+    session['role'] = user['role']
+    session['permissions'] = user.get('permissions') or []
+    session['face_enrolled'] = user.get('face_enrolled', False)
+    touch_last_login(user['id'], ip, location)
+
 
 def _allowed(role, path):
-    if role == 'admin':
-        return True
-    prefixes = _ROLE_PATHS.get(role, ())
-    return any(path.startswith(p) for p in prefixes)
+    return user_allowed(_session_user() if session.get('user_id') else role, path)
+
 
 @main_bp.before_request
 def check_auth():
     path = request.path
     if (path.startswith('/static')
             or path in ('/login', '/logout', '/submit')
+            or path.startswith('/api/auth/')
             or path in ('/public/submit', '/api/monks/check-duplicate')
             or path.startswith('/kuti/')
             or path.startswith('/api/kuti/')):
@@ -89,45 +203,263 @@ def check_auth():
     if not role:
         return redirect(url_for('main_bp.login_page', next=request.path))
 
-    # Redirect root to role's home page
+    # First-time face setup after password login
+    if not session.get('face_enrolled') and path not in ('/setup-face', '/api/auth/face-enroll'):
+        return redirect(url_for('main_bp.setup_face_page'))
+
     if path == '/':
-        if role == 'user1':
-            return redirect(url_for('main_bp.layout'))
-        if role == 'user2':
-            return redirect(url_for('main_bp.report'))
-        return  # admin → allow through to index
+        home = user_home(_session_user())
+        if home != '/':
+            return redirect(home)
+        return
 
     if not _allowed(role, path):
         abort(403)
 
+
 @main_bp.errorhandler(403)
 def forbidden(e):
-    role = session.get('role', '')
-    home = '/layout' if role == 'user1' else '/report' if role == 'user2' else '/'
+    home = user_home(_session_user()) if session.get('role') else '/login'
     return render_template('403.html', home=home), 403
+
 
 @main_bp.route('/login', methods=['GET', 'POST'])
 def login_page():
     error = None
+    locked = False
+    face_fails = 0
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
-        user = USERS.get(username)
-        if user and user['password'] == password:
-            session['username'] = username
-            session['role']     = user['role']
-            nxt = request.args.get('next', '/')
-            # Enforce role home if next is not allowed
-            if not _allowed(user['role'], nxt):
-                nxt = '/layout' if user['role'] == 'user1' else '/report' if user['role'] == 'user2' else '/'
+        ip = _client_ip()
+        device_id = _device_id()
+        try:
+            face_fails = max(0, min(20, int(request.form.get('face_fails') or 0)))
+        except ValueError:
+            face_fails = 0
+        user = get_user_by_username(username, include_inactive=True)
+
+        if user and not user.get('is_active'):
+            locked = True
+            error = ('គណនីនេះត្រូវបានផ្អាក — សូមទាក់ទងអ្នកគ្រប់គ្រង។ '
+                     f'មូលហេតុ៖ {user.get("lock_reason") or "មិនបានបញ្ជាក់"}')
+            _log_act('login_blocked', 'auth', 'attempt on locked account',
+                     user['username'], user['id'])
+
+        elif user and verify_password(user['password_hash'], password):
+            location = _geo_lookup(ip)
+            _login_user(user, ip, location)
+            _log_act('login_password', 'auth', 'password login', user['username'], user['id'])
+            # Password proves ownership, so trust this browser for Face ID from now on
+            if device_id and bind_device(user['id'], device_id):
+                _log_act('device_rebound', 'auth', f'trusted device {device_id[:16]}…',
+                         user['username'], user['id'])
+            if not user.get('face_enrolled'):
+                return redirect(url_for('main_bp.setup_face_page'))
+            nxt = request.args.get('next', '')
+            if not nxt or not user_allowed(user, nxt):
+                nxt = user_home(user)
             return redirect(nxt)
-        error = 'ឈ្មោះអ្នកប្រើ ឬ លេខសម្ងាត់មិនត្រឹមត្រូវ'
-    return render_template('login.html', error=error)
+
+        elif user:
+            location = _geo_lookup(ip)
+            attempts, was_locked = register_failed_password(user['id'], ip, location)
+            _log_act('login_failed', 'auth',
+                     f'wrong password ({attempts}/{MAX_PASSWORD_ATTEMPTS})',
+                     user['username'], user['id'])
+            if was_locked:
+                locked = True
+                error = ('គណនីត្រូវបានផ្អាកដោយសារបញ្ចូលលេខសម្ងាត់ខុសច្រើនដង — '
+                         'សូមរង់ចាំអ្នកគ្រប់គ្រងបើកឡើងវិញ។')
+                _log_act('account_locked', 'auth',
+                         f'{LOCK_REASON_PASSWORD} (Face ID បរាជ័យ {face_fails} ដង)'
+                         if face_fails else LOCK_REASON_PASSWORD,
+                         user['username'], user['id'])
+                _send_account_locked_alert(user, user['username'], ip, location,
+                                           device_id, attempts, face_fails)
+            else:
+                remaining = MAX_PASSWORD_ATTEMPTS - attempts
+                error = ('លេខសម្ងាត់មិនត្រឹមត្រូវ — '
+                         f'នៅសល់ {remaining} ដងមុនពេលគណនីត្រូវផ្អាក')
+        else:
+            _log_act('login_failed', 'auth', f'unknown username: {username[:60]}', username)
+            error = 'ឈ្មោះអ្នកប្រើ ឬ លេខសម្ងាត់មិនត្រឹមត្រូវ'
+
+    return render_template('login.html', error=error, locked=locked,
+                           face_fails=face_fails)
+
+
+@main_bp.route('/setup-face')
+def setup_face_page():
+    if not session.get('user_id'):
+        return redirect(url_for('main_bp.login_page'))
+    return render_template('setup_face.html', username=session.get('username', ''))
+
+
+@main_bp.route('/api/auth/face-login', methods=['POST'])
+def api_face_login():
+    if not _rate_limit_ok(_client_ip()):
+        return jsonify({'success': False, 'message': 'សូមរង់ចាំមួយភ្លែត'}), 429
+    data = request.get_json(silent=True) or {}
+    descriptor = data.get('descriptor')
+    device_id = str(data.get('device_id') or '').strip()[:128]
+    if not descriptor or not isinstance(descriptor, list):
+        return jsonify({'success': False, 'message': 'មិនមានទិន្នន័យមុខ'}), 400
+
+    user, dist, matched = find_user_by_face(descriptor, device_id)
+    if not matched or not user:
+        # Counted client-side; the password form opens after MAX_FACE_ATTEMPTS
+        return jsonify({'success': False, 'message': 'មិនស្គាល់មុខ', 'unknown_face': True}), 401
+
+    ip = _client_ip()
+    stored_device = user.get('device_id') or ''
+
+    # Known face on an unrecognised device (new browser, cleared storage) — fall back
+    # to the password, which re-binds this device on success.
+    if stored_device and device_id and stored_device != device_id:
+        _log_act('login_face_device_mismatch', 'auth',
+                 f'device mismatch (enrolled={stored_device[:16]}…, seen={device_id[:16]}…)',
+                 user['username'], user['id'])
+        return jsonify({
+            'success': False,
+            'need_password': True,
+            'new_device': True,
+            'message': ('ឧបករណ៍ថ្មី — សូមបញ្ចូលឈ្មោះ និងលេខសម្ងាត់ម្តង '
+                        'ដើម្បីអនុញ្ញាតឧបករណ៍នេះ'),
+        }), 401
+
+    location = _geo_lookup(ip)
+    _login_user(user, ip, location)
+    _log_act('login_face', 'auth', f'face login (dist={dist:.3f})', user['username'], user['id'])
+    return jsonify({
+        'success': True,
+        'redirect': user_home(user),
+        'username': user['username'],
+    })
+
+
+@main_bp.route('/api/auth/face-enroll', methods=['POST'])
+def api_face_enroll():
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+    data = request.get_json(silent=True) or {}
+    descriptors = data.get('descriptors') or data.get('descriptor')
+    device_id = str(data.get('device_id') or '').strip()[:128]
+    if not descriptors or not device_id:
+        return jsonify({'success': False, 'message': 'សូមស្កេនមុខ និងឧបករណ៍'}), 400
+    if not save_face_enrollment(user_id, descriptors, device_id):
+        return jsonify({'success': False, 'message': 'Save failed'}), 500
+    session['face_enrolled'] = True
+    _log_act('face_enroll', 'auth', f'face enrolled ({len(descriptors)} angles)')
+    return jsonify({'success': True, 'redirect': user_home(_session_user())})
+
 
 @main_bp.route('/logout')
 def logout():
+    if session.get('username'):
+        _log_act('logout', 'auth')
     session.clear()
     return redirect(url_for('main_bp.login_page'))
+
+
+# ============ USER MANAGEMENT (admin) ============
+
+@main_bp.route('/users')
+def users_page():
+    if not user_allowed(_session_user(), '/users'):
+        abort(403)
+    return render_template('users.html', username=session.get('username', ''),
+                           modules=MODULE_LABELS)
+
+
+@main_bp.route('/api/users', methods=['GET'])
+def api_list_users():
+    if not user_allowed(_session_user(), '/api/users'):
+        return jsonify({'success': False, 'message': 'Forbidden'}), 403
+    return jsonify({'success': True, 'users': list_users(), 'modules': MODULE_LABELS})
+
+
+@main_bp.route('/api/users', methods=['POST'])
+def api_create_user():
+    if not user_allowed(_session_user(), '/api/users'):
+        return jsonify({'success': False, 'message': 'Forbidden'}), 403
+    data = request.get_json(silent=True) or {}
+    username = str(data.get('username', '')).strip()
+    password = str(data.get('password', '')).strip()
+    display_name = str(data.get('display_name', '') or username).strip()
+    role = str(data.get('role', 'staff')).strip()
+    permissions = data.get('permissions') or []
+    if not username or not password:
+        return jsonify({'success': False, 'message': 'ត្រូវការឈ្មោះ និងលេខសម្ងាត់'}), 400
+    if get_user_by_username(username, include_inactive=True):
+        return jsonify({'success': False, 'message': 'ឈ្មោះអ្នកប្រើមានរួចហើយ'}), 400
+    try:
+        uid = create_user(username, password, display_name, role, permissions,
+                          session.get('username', 'admin'))
+        _log_act('user_create', 'users', f'created {username} (id={uid})')
+        return jsonify({'success': True, 'id': uid})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@main_bp.route('/api/users/<int:user_id>/unlock', methods=['POST'])
+def api_unlock_user(user_id):
+    if not user_allowed(_session_user(), '/api/users'):
+        return jsonify({'success': False, 'message': 'Forbidden'}), 403
+    target = get_user_by_id(user_id)
+    if not target:
+        return jsonify({'success': False, 'message': 'Not found'}), 404
+    if not unlock_user(user_id):
+        return jsonify({'success': False, 'message': 'Unlock failed'}), 500
+    _log_act('account_unlocked', 'users', f'unlocked {target["username"]}')
+    return jsonify({'success': True})
+
+
+@main_bp.route('/api/users/<int:user_id>', methods=['PUT'])
+def api_update_user(user_id):
+    if not user_allowed(_session_user(), '/api/users'):
+        return jsonify({'success': False, 'message': 'Forbidden'}), 403
+    data = request.get_json(silent=True) or {}
+    ok = update_user(
+        user_id,
+        display_name=data.get('display_name'),
+        role=data.get('role'),
+        permissions=data.get('permissions'),
+        password=data.get('password') or None,
+        is_active=data.get('is_active'),
+    )
+    if not ok:
+        return jsonify({'success': False, 'message': 'Update failed'}), 400
+    _log_act('user_update', 'users', f'updated user id={user_id}')
+    return jsonify({'success': True})
+
+
+@main_bp.route('/api/users/<int:user_id>', methods=['DELETE'])
+def api_delete_user(user_id):
+    if not user_allowed(_session_user(), '/api/users'):
+        return jsonify({'success': False, 'message': 'Forbidden'}), 403
+    if user_id == session.get('user_id'):
+        return jsonify({'success': False, 'message': 'មិនអាចលុបខ្លួនឯង'}), 400
+    if not delete_user(user_id):
+        return jsonify({'success': False, 'message': 'Not found'}), 404
+    _log_act('user_delete', 'users', f'deleted user id={user_id}')
+    return jsonify({'success': True})
+
+
+@main_bp.route('/api/activity-log', methods=['GET'])
+def api_activity_log():
+    if not user_allowed(_session_user(), '/api/activity-log'):
+        return jsonify({'success': False, 'message': 'Forbidden'}), 403
+    purge_old_activity()
+    module = request.args.get('module', '').strip() or None
+    limit = min(int(request.args.get('limit', 100)), 500)
+    logs = list_activity(limit, module)
+    return jsonify({
+        'success': True,
+        'logs': logs,
+        'retention_days': ACTIVITY_RETENTION_DAYS,
+    })
 
 # ============ PAGES ============
 
@@ -228,6 +560,664 @@ def dashboard_stats():
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
+# ============ TELEGRAM NOTIFY LOG ============
+
+_TELEGRAM_ATTEND_TOKEN   = '8950898077:AAHNR0tTgtJWy17wMXooKwg4nfQLGdfe5aw'
+_TELEGRAM_ATTEND_CHAT_ID = -1003960014484
+
+
+def _log_telegram_notify(monk_id, fullname, notify_type, ref_date, absent_count=0,
+                         perm_count=0, detail=None):
+    try:
+        conn = connect_db()
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO telegram_notify_log
+                (monk_id, fullname, notify_type, absent_count, perm_count, ref_date, detail)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """, (monk_id, fullname, notify_type, absent_count, perm_count, ref_date, detail))
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        print(f'[telegram-notify-log] {e}')
+
+
+def _build_absent_alert_message(fullname, kuti, kuti_head, kuti_deputy, absent_count,
+                                perm_count, date_str):
+    return (
+        "🔔 សេចក្តីប្រគេនដំណឹង 🔔\n"
+        "កិច្ចវត្តថ្វាយបង្គំរាល់ល្ងាចវត្តនិរោធរង្សី\n"
+        "----- សារព្រមាន -----\n"
+        f"ព្រះសង្ឃនាម ៖ {fullname}\n"
+        f"កុដិ ៖ {(kuti or '').replace('_', ' ') or '............'}\n"
+        f"មេកុដិ ៖ {kuti_head}\n"
+        f"អនុកុដិ ៖ {kuti_deputy}\n"
+        "- - - - - បញ្ហា - - - - - \n"
+        f"អវត្តមាន ៖ {absent_count}\n"
+        f"ច្បាប់ ៖ {perm_count}\n"
+        f"កាលបរិច្ឆេទ៖ {date_str}\n"
+        "ដូចបានប្រគេនខាងលើនេះសូមមេកុដិនិងអនុកុដិសួរនាំជាបន្ទាន់ដល់សមាជិកកុដិរបស់ខ្លួន។"
+    )
+
+
+def _fetch_monk_alert_context(cursor, monk_id):
+    cursor.execute("SELECT fullname, residence FROM monk_tbl WHERE id = %s", (monk_id,))
+    monk_info = cursor.fetchone()
+    if not monk_info:
+        return None
+    fullname, kuti = monk_info
+    cursor.execute(
+        "SELECT fullname FROM monk_tbl WHERE residence = %s AND position = 'មេកុដិ' LIMIT 1",
+        (kuti,),
+    )
+    kuti_head_row = cursor.fetchone()
+    kuti_head = kuti_head_row[0] if kuti_head_row else '...........'
+    cursor.execute(
+        "SELECT fullname FROM monk_tbl WHERE residence = %s AND position = 'អនុកុដិ' LIMIT 1",
+        (kuti,),
+    )
+    kuti_deputy_row = cursor.fetchone()
+    kuti_deputy = kuti_deputy_row[0] if kuti_deputy_row else '...........'
+    return fullname, kuti, kuti_head, kuti_deputy
+
+
+def _send_absent_alert_telegram(monk_id, date_str, absent_count, perm_count, notify_type='absent_alert'):
+    import requests as req
+    conn = connect_db()
+    cur = conn.cursor()
+    ctx = _fetch_monk_alert_context(cur, monk_id)
+    cur.close()
+    conn.close()
+    if not ctx:
+        return False, 'Monk not found'
+    fullname, kuti, kuti_head, kuti_deputy = ctx
+    msg = _build_absent_alert_message(
+        fullname, kuti, kuti_head, kuti_deputy, absent_count, perm_count, date_str,
+    )
+    tg = _tg_send_message(_TELEGRAM_ATTEND_TOKEN, _TELEGRAM_ATTEND_CHAT_ID, msg, req)
+    if not tg.get('ok'):
+        return False, tg.get('description', 'Telegram error')
+    _log_telegram_notify(
+        monk_id, fullname, notify_type, date_str,
+        absent_count=absent_count, perm_count=perm_count,
+    )
+    return True, None
+
+
+def _parse_telegram_period(raw):
+    p = (raw or '15d').strip().lower()
+    if p in ('month', '1m', '1month', 'monthly', '1_month'):
+        return 'month'
+    return '15d'
+
+
+def _telegram_period_from_request():
+    raw = request.args.get('period')
+    if raw is None:
+        data = request.get_json(silent=True) or {}
+        raw = data.get('period') or request.form.get('period')
+    return _parse_telegram_period(raw)
+
+
+def _get_telegram_period_dates(date_str, period='15d'):
+    """15-day block, or the full calendar month containing date_str."""
+    import calendar
+    d = _date.fromisoformat(date_str)
+    if _parse_telegram_period(period) == 'month':
+        start = _date(d.year, d.month, 1)
+        end = _date(d.year, d.month, calendar.monthrange(d.year, d.month)[1])
+        return start, end
+    return _get_block_dates(date_str)
+
+
+def _fetch_telegram_eligible_monks(block_start, block_end):
+    """All contract-eligible monks in block with telegram + contract status."""
+    conn = connect_db()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT m.id, m.fullname, m.monk_type, m.residence, m.position,
+               COUNT(CASE WHEN a.status = 'absent' THEN 1 END) AS absent_count,
+               COUNT(CASE WHEN a.status = 'permission' THEN 1 END) AS perm_count
+        FROM monk_tbl m
+        LEFT JOIN attendance_tbl a
+            ON a.monk_id = m.id AND a.date >= %s AND a.date <= %s
+        WHERE COALESCE(m.living_status, %s) = %s
+        GROUP BY m.id, m.fullname, m.monk_type, m.residence, m.position
+        ORDER BY absent_count DESC, perm_count DESC, m.fullname
+    """, (block_start.isoformat(), block_end.isoformat(),
+          _ACTIVE_LIVING_STATUS, _ACTIVE_LIVING_STATUS))
+    rows = cur.fetchall()
+
+    cur.execute("""
+        SELECT monk_id, MAX(sent_at) AS last_sent,
+               (ARRAY_AGG(notify_type ORDER BY sent_at DESC))[1] AS last_type
+        FROM telegram_notify_log
+        WHERE ref_date >= %s AND ref_date <= %s
+        GROUP BY monk_id
+    """, (block_start.isoformat(), block_end.isoformat()))
+    sent_map = {
+        r[0]: {'last_sent': r[1].isoformat() if r[1] else None, 'last_type': r[2]}
+        for r in cur.fetchall()
+    }
+
+    cur.execute("""
+        SELECT DISTINCT ON (monk_id)
+            monk_id, contract_status, updated_at
+        FROM telegram_contract_tbl
+        WHERE block_start <= %s AND block_end >= %s
+        ORDER BY monk_id,
+                 CASE WHEN contract_status = 'done' THEN 0 ELSE 1 END,
+                 updated_at DESC NULLS LAST
+    """, (block_end.isoformat(), block_start.isoformat()))
+    contract_map = {
+        r[0]: {
+            'status': r[1],
+            'updated_at': r[2].isoformat() if r[2] else None,
+        }
+        for r in cur.fetchall()
+    }
+
+    cur.execute("""
+        SELECT monk_id, COUNT(*) AS contract_total
+        FROM telegram_contract_tbl
+        WHERE contract_status = 'done'
+        GROUP BY monk_id
+    """)
+    contract_total_map = {r[0]: int(r[1] or 0) for r in cur.fetchall()}
+    cur.close()
+    conn.close()
+
+    monks = []
+    for r in rows:
+        absent_count = int(r[5] or 0)
+        perm_count = int(r[6] or 0)
+        if not _contract_eligible(absent_count, perm_count):
+            continue
+        sent = sent_map.get(r[0])
+        contract = contract_map.get(r[0], {})
+        over_absent = absent_count >= DISC_ABSENT_MIN
+        over_perm = perm_count >= DISC_PERM_MIN
+        monks.append({
+            'id': r[0],
+            'fullname': r[1],
+            'monk_type': r[2],
+            'residence': (r[3] or '').replace('_', ' '),
+            'position': r[4],
+            'absent_count': absent_count,
+            'perm_count': perm_count,
+            'over_absent': over_absent,
+            'over_perm': over_perm,
+            'sent': bool(sent),
+            'last_sent': sent['last_sent'] if sent else None,
+            'last_type': sent['last_type'] if sent else None,
+            'contract_status': contract.get('status', 'pending'),
+            'contract_updated_at': contract.get('updated_at'),
+            'contract_total': contract_total_map.get(r[0], 0),
+        })
+    return monks
+
+
+def _contract_violation_label(m):
+    parts = []
+    if m.get('over_absent'):
+        parts.append('អវត្តមាន')
+    if m.get('over_perm'):
+        parts.append('ច្បាប់')
+    return ' + '.join(parts) or '—'
+
+
+def _make_contract_report_html(monks, block_start, block_end):
+    import html as _html
+    from datetime import date
+
+    today = date.today().strftime('%d/%m/%Y')
+    period = f'{block_start.strftime("%d/%m/%Y")} — {block_end.strftime("%d/%m/%Y")}'
+
+    def _row(m, idx):
+        updated = (m.get('contract_updated_at') or '')[:10].replace('-', '/') or '—'
+        return (
+            f'<tr>'
+            f'<td class="c">{idx}</td>'
+            f'<td class="name">{_html.escape(m["fullname"])}</td>'
+            f'<td>{_html.escape(m["monk_type"] or "—")}</td>'
+            f'<td>{_html.escape(m["residence"] or "—")}</td>'
+            f'<td class="c">{m["absent_count"]}</td>'
+            f'<td class="c">{m["perm_count"]}</td>'
+            f'<td>{_html.escape(_contract_violation_label(m))}</td>'
+            f'<td class="c">{m.get("contract_total", 0)}</td>'
+            f'<td class="c">{updated}</td>'
+            f'</tr>'
+        )
+
+    rows = ''.join(_row(m, i + 1) for i, m in enumerate(monks))
+    empty = '<tr><td colspan="9" class="empty">មិនមាន</td></tr>'
+    contract_sum = sum(int(m.get('contract_total') or 0) for m in monks)
+
+    return f'''<!DOCTYPE html>
+<html lang="km"><head><meta charset="UTF-8">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&family=Kantumruy+Pro:wght@400;600;700&family=Moul&display=swap');
+@page {{ size: A4 portrait; margin: 12mm; }}
+*, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
+body {{ font-family: 'Kantumruy Pro', 'Battambang', sans-serif; color: #1a2332; font-size: 11px; background: #fff; }}
+.page {{ width: 210mm; min-height: 297mm; margin: 0 auto; padding: 10mm 12mm; background: #fff; }}
+.masthead {{ display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: center;
+    padding-bottom: 10px; border-bottom: 2px solid #0c2d5a; margin-bottom: 12px; }}
+.mast-left, .mast-right {{ font-size: 9px; line-height: 1.45; color: #475569; }}
+.mast-pagoda {{ font-family: 'Moul', serif; color: #0c2d5a; font-size: 10px; }}
+.mast-kingdom {{ font-family: 'Moul', serif; color: #0c2d5a; font-size: 10px; text-align: right; }}
+.report-title {{ text-align: center; margin: 12px 0; }}
+.report-title h1 {{ font-family: 'Moul', serif; font-size: 16px; color: #0c2d5a; }}
+.report-title p {{ font-family: 'Battambang', sans-serif; font-size: 14px; color: #475569; margin-top: 4px; }}
+.meta {{ display: flex; justify-content: space-between; font-size: 10px; color: #64748b; margin-bottom: 10px; }}
+table {{ width: 100%; border-collapse: collapse; }}
+th, td {{ border: 1px solid #cbd5e1; padding: 6px 8px; text-align: left; }}
+th {{ background: #eef3f9; font-weight: 700; color: #0c2d5a; font-size: 10px; }}
+td.c {{ text-align: center; }}
+td.name {{ font-weight: 600; }}
+.empty {{ text-align: center; color: #94a3b8; padding: 16px; }}
+.footer {{ margin-top: 16px; font-size: 9px; color: #94a3b8; text-align: center; }}
+</style></head><body><div class="page">
+<div class="masthead">
+  <div class="mast-left"><p>មន្ទីរធម្មការ និងសាសនា រាជធានីភ្នំពេញ</p>
+  <p>សាលាពុទ្ធិកអនុវិទ្យាល័យសង្ឃ</p><p class="mast-pagoda">វត្តនិរោធរង្សី</p></div>
+  <div class="mast-center"><div style="width:52px;height:52px;border-radius:50%;border:2px solid #c9a227;
+  display:flex;align-items:center;justify-content:center;font-family:Moul;font-size:9px;color:#0c2d5a">វត្ត</div></div>
+  <div class="mast-right"><p class="mast-kingdom">ព្រះរាជាណាចក្រកម្ពុជា</p>
+  <p>ជាតិ សាសនា ព្រះមហាក្សត្រ</p></div>
+</div>
+<div class="report-title">
+  <h1>របាយការណ៍កិច្ចសន្យារួច</h1>
+  <p>ព្រះសង្ឃអវត្តមាន ≥ {DISC_ABSENT_MIN} ឬច្បាប់ ≥ {DISC_PERM_MIN}</p>
+</div>
+<div class="meta"><span>រយៈពេល៖ {period}</span><span>ថ្ងៃចេញរបាយការណ៍៖ {today}</span>
+<span>សរុប៖ {len(monks)} នាក់</span><span>ចំនួនកិច្ចសន្យា៖ {contract_sum}</span></div>
+<table><thead><tr>
+  <th class="c">#</th><th>នាម</th><th>ប្រភេទ</th><th>កុដិ</th>
+  <th class="c">អវត្តមាន</th><th class="c">ច្បាប់</th><th>មូលហេតុ</th>
+  <th class="c">ចំនួនកិច្ចសន្យា</th><th class="c">ថ្ងៃធ្វើកិច្ចសន្យា</th>
+</tr></thead><tbody>{rows if monks else empty}</tbody></table>
+<p class="footer">វត្តនិរោធរង្សី — ប្រព័ន្ធគ្រប់គ្រងព័ត៌មានព្រះសង្ឃ</p>
+</div></body></html>'''
+
+
+@main_bp.route('/telegram-notify')
+def telegram_notify_page():
+    if not user_allowed(_session_user(), '/telegram-notify'):
+        abort(403)
+    return render_template('telegram_notify.html', username=session.get('username', ''))
+
+
+@main_bp.route('/api/telegram-notify', methods=['GET'])
+def api_telegram_notify_list():
+    """Active monks (contract pending) exceeding absent/permission criteria."""
+    if not user_allowed(_session_user(), '/telegram-notify'):
+        abort(403)
+    try:
+        date_str = (request.args.get('date') or '').strip() or _date.today().isoformat()
+        filt = (request.args.get('filter') or 'eligible').strip()
+        period = _telegram_period_from_request()
+        block_start, block_end = _get_telegram_period_dates(date_str, period)
+
+        all_monks = _fetch_telegram_eligible_monks(block_start, block_end)
+        done_monks = [m for m in all_monks if m['contract_status'] == 'done']
+        monks = [m for m in all_monks if m['contract_status'] != 'done']
+
+        if filt == 'sent':
+            monks = [m for m in monks if m['sent']]
+        elif filt == 'unsent':
+            monks = [m for m in monks if not m['sent']]
+
+        return jsonify({
+            'success': True,
+            'date': date_str,
+            'period': period,
+            'block_start': block_start.isoformat(),
+            'block_end': block_end.isoformat(),
+            'thresholds': {'absent_min': DISC_ABSENT_MIN, 'perm_min': DISC_PERM_MIN},
+            'monks': monks,
+            'total': len(monks),
+            'sent_count': sum(1 for m in monks if m['sent']),
+            'contract_done_count': len(done_monks),
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@main_bp.route('/api/telegram-notify/contract-done', methods=['GET'])
+def api_telegram_notify_contract_done():
+    """Monks marked as contract completed in the current block."""
+    if not user_allowed(_session_user(), '/telegram-notify'):
+        abort(403)
+    try:
+        date_str = (request.args.get('date') or '').strip() or _date.today().isoformat()
+        period = _telegram_period_from_request()
+        block_start, block_end = _get_telegram_period_dates(date_str, period)
+        all_monks = _fetch_telegram_eligible_monks(block_start, block_end)
+        done = [m for m in all_monks if m['contract_status'] == 'done']
+        return jsonify({
+            'success': True,
+            'date': date_str,
+            'period': period,
+            'block_start': block_start.isoformat(),
+            'block_end': block_end.isoformat(),
+            'monks': done,
+            'total': len(done),
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@main_bp.route('/api/telegram-notify/contract-report/export', methods=['GET'])
+def api_telegram_contract_report_export():
+    """Export completed contract report — html preview, word, or excel."""
+    import io
+    if not user_allowed(_session_user(), '/telegram-notify'):
+        abort(403)
+    try:
+        date_str = (request.args.get('date') or '').strip() or _date.today().isoformat()
+        fmt = (request.args.get('fmt') or 'html').strip().lower()
+        period = _telegram_period_from_request()
+        block_start, block_end = _get_telegram_period_dates(date_str, period)
+        all_monks = _fetch_telegram_eligible_monks(block_start, block_end)
+        done = [m for m in all_monks if m['contract_status'] == 'done']
+
+        if fmt == 'html':
+            html = _make_contract_report_html(done, block_start, block_end)
+            return html, 200, {'Content-Type': 'text/html; charset=utf-8'}
+
+        if fmt == 'word':
+            from docx import Document
+            from docx.shared import Pt
+            from docx.enum.text import WD_ALIGN_PARAGRAPH
+
+            doc = Document()
+            sec = doc.sections[0]
+            sec.top_margin = sec.bottom_margin = sec.left_margin = sec.right_margin = 457200
+
+            p = doc.add_paragraph()
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            r = p.add_run('របាយការណ៍កិច្ចសន្យារួច')
+            r.bold = True
+            r.font.size = Pt(14)
+
+            p = doc.add_paragraph()
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            p.add_run(f'រយៈពេល {block_start} → {block_end}')
+
+            p = doc.add_paragraph()
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            p.add_run(f'សរុប {len(done)} នាក់')
+
+            table = doc.add_table(rows=1, cols=9)
+            table.style = 'Table Grid'
+            hdr = table.rows[0].cells
+            headers = ['#', 'នាម', 'ប្រភេទ', 'កុដិ', 'អវត្តមាន', 'ច្បាប់', 'មូលហេតុ', 'ចំនួនកិច្ចសន្យា', 'ថ្ងៃធ្វើកិច្ចសន្យា']
+            for i, text in enumerate(headers):
+                hdr[i].text = text
+
+            for i, m in enumerate(done, 1):
+                row = table.add_row().cells
+                updated = (m.get('contract_updated_at') or '')[:10] or '—'
+                vals = [
+                    str(i), m['fullname'], m['monk_type'], m['residence'],
+                    str(m['absent_count']), str(m['perm_count']),
+                    _contract_violation_label(m), str(m.get('contract_total', 0)), updated,
+                ]
+                for j, val in enumerate(vals):
+                    row[j].text = val
+
+            buf = io.BytesIO()
+            doc.save(buf)
+            buf.seek(0)
+            fname = f'contract_done_{block_start.isoformat()}_{block_end.isoformat()}.docx'
+            return send_file(
+                buf,
+                as_attachment=True,
+                download_name=fname,
+                mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            )
+
+        if fmt == 'excel':
+            import openpyxl
+            from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+            from openpyxl.utils import get_column_letter
+
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = 'កិច្ចសន្យារួច'
+            hdr_fill = PatternFill('solid', fgColor='EEF3F9')
+            hdr_font = Font(bold=True, color='0C2D5A')
+            thin = Side(style='thin', color='CBD5E1')
+            border = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+            ws.merge_cells('A1:I1')
+            ws['A1'] = 'របាយការណ៍កិច្ចសន្យារួច — វត្តនិរោធរង្សី'
+            ws['A1'].font = Font(bold=True, size=14)
+            ws.merge_cells('A2:I2')
+            ws['A2'] = f'រយៈពេល {block_start} → {block_end}'
+
+            headers = ['#', 'នាម', 'ប្រភេទ', 'កុដិ', 'អវត្តមាន', 'ច្បាប់', 'មូលហេតុ', 'ចំនួនកិច្ចសន្យា', 'ថ្ងៃធ្វើកិច្ចសន្យា']
+            for col, h in enumerate(headers, 1):
+                cell = ws.cell(row=4, column=col, value=h)
+                cell.fill = hdr_fill
+                cell.font = hdr_font
+                cell.border = border
+                cell.alignment = Alignment(horizontal='center', vertical='center')
+
+            for i, m in enumerate(done, 1):
+                row = 4 + i
+                updated = (m.get('contract_updated_at') or '')[:10] or '—'
+                vals = [
+                    i, m['fullname'], m['monk_type'], m['residence'],
+                    m['absent_count'], m['perm_count'],
+                    _contract_violation_label(m), m.get('contract_total', 0), updated,
+                ]
+                for col, val in enumerate(vals, 1):
+                    cell = ws.cell(row=row, column=col, value=val)
+                    cell.border = border
+                    if col in (1, 5, 6, 8, 9):
+                        cell.alignment = Alignment(horizontal='center')
+
+            for col in range(1, 10):
+                ws.column_dimensions[get_column_letter(col)].width = 14
+            ws.column_dimensions['B'].width = 22
+
+            buf = io.BytesIO()
+            wb.save(buf)
+            buf.seek(0)
+            fname = f'contract_done_{block_start.isoformat()}_{block_end.isoformat()}.xlsx'
+            return send_file(buf, as_attachment=True, download_name=fname,
+                             mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+        return jsonify({'success': False, 'message': 'Invalid format'}), 400
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@main_bp.route('/api/telegram-notify/contract-report/send-image', methods=['POST'])
+def api_telegram_contract_report_send_image():
+    """Send completed contract report as A4 portrait PNG to Telegram."""
+    if not user_allowed(_session_user(), '/telegram-notify'):
+        abort(403)
+    try:
+        import requests as req
+        if 'image' not in request.files:
+            return jsonify({'success': False, 'message': 'រកមិនឃើញរូបភាព'}), 400
+
+        image_bytes = request.files['image'].read()
+        date_str = (request.form.get('date') or '').strip() or _date.today().isoformat()
+        period = _telegram_period_from_request()
+        block_start, block_end = _get_telegram_period_dates(date_str, period)
+        period = f'{block_start.strftime("%d/%m/%Y")} — {block_end.strftime("%d/%m/%Y")}'
+        caption = (request.form.get('caption') or '').strip()
+        if not caption:
+            caption = f'📋 របាយការណ៍កិច្ចសន្យារួច — {period}'
+
+        tg = req.post(
+            f'https://api.telegram.org/bot{_TELEGRAM_ATTEND_TOKEN}/sendPhoto',
+            data={'chat_id': _TELEGRAM_ATTEND_CHAT_ID, 'caption': caption},
+            files={'photo': ('contract_report.png', image_bytes, 'image/png')},
+            timeout=30,
+        ).json()
+
+        if not tg.get('ok'):
+            return jsonify({'success': False, 'message': tg.get('description', 'Telegram error')}), 500
+
+        _log_act('telegram_contract_report_image', 'telegram_notify', period)
+        return jsonify({'success': True, 'message': 'បានផ្ញើរូបភាពទៅ Telegram'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@main_bp.route('/api/telegram-notify/contract', methods=['POST'])
+def api_telegram_notify_contract():
+    """Update contract status (pending / done) for a monk in the current block."""
+    if not user_allowed(_session_user(), '/telegram-notify'):
+        abort(403)
+    try:
+        data = request.get_json(silent=True) or {}
+        monk_id = data.get('monk_id')
+        date_str = (data.get('date') or '').strip() or _date.today().isoformat()
+        status = (data.get('contract_status') or '').strip()
+        if status not in ('pending', 'done'):
+            return jsonify({'success': False, 'message': 'ស្ថានភាពមិនត្រឹមត្រូវ'}), 400
+        try:
+            monk_id = int(monk_id)
+        except (TypeError, ValueError):
+            return jsonify({'success': False, 'message': 'monk_id មិនត្រឹមត្រូវ'}), 400
+
+        period = _telegram_period_from_request()
+        period_start, period_end = _get_telegram_period_dates(date_str, period)
+        block_start, block_end = _get_block_dates(date_str)
+        contract_date_str = (data.get('contract_date') or '').strip()
+        updated_at = None
+        if contract_date_str:
+            try:
+                updated_at = _date.fromisoformat(contract_date_str).isoformat()
+            except ValueError:
+                return jsonify({'success': False, 'message': 'ថ្ងៃមិនត្រឹមត្រូវ'}), 400
+
+        conn = connect_db()
+        cur = conn.cursor()
+        if status == 'pending' and period == 'month':
+            cur.execute("""
+                UPDATE telegram_contract_tbl
+                SET contract_status = 'pending',
+                    updated_at = COALESCE(%s::timestamp, NOW())
+                WHERE monk_id = %s AND block_start <= %s AND block_end >= %s
+                RETURNING contract_status, updated_at
+            """, (updated_at, monk_id, period_end.isoformat(), period_start.isoformat()))
+            row = cur.fetchone()
+            if not row:
+                cur.execute("""
+                    INSERT INTO telegram_contract_tbl (monk_id, block_start, block_end, contract_status, updated_at)
+                    VALUES (%s, %s, %s, %s, COALESCE(%s::timestamp, NOW()))
+                    ON CONFLICT (monk_id, block_start) DO UPDATE
+                        SET contract_status = EXCLUDED.contract_status,
+                            block_end = EXCLUDED.block_end,
+                            updated_at = COALESCE(%s::timestamp, telegram_contract_tbl.updated_at, NOW())
+                    RETURNING contract_status, updated_at
+                """, (monk_id, block_start.isoformat(), block_end.isoformat(), status,
+                      updated_at, updated_at))
+                row = cur.fetchone()
+        else:
+            cur.execute("""
+                INSERT INTO telegram_contract_tbl (monk_id, block_start, block_end, contract_status, updated_at)
+                VALUES (%s, %s, %s, %s, COALESCE(%s::timestamp, NOW()))
+                ON CONFLICT (monk_id, block_start) DO UPDATE
+                    SET contract_status = EXCLUDED.contract_status,
+                        block_end = EXCLUDED.block_end,
+                        updated_at = COALESCE(%s::timestamp, telegram_contract_tbl.updated_at, NOW())
+                RETURNING contract_status, updated_at
+            """, (monk_id, block_start.isoformat(), block_end.isoformat(), status,
+                  updated_at, updated_at))
+            row = cur.fetchone()
+        saved = row[0]
+        saved_at = row[1].isoformat() if row[1] else None
+        cur.execute("SELECT fullname FROM monk_tbl WHERE id = %s", (monk_id,))
+        name_row = cur.fetchone()
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        label = 'ធ្វើកិច្ចសន្យារួច' if saved == 'done' else 'មិនទាន់ធ្វើ'
+        _log_act('telegram_contract_update', 'telegram_notify',
+                 f'{name_row[0] if name_row else monk_id} → {label} ({block_start})')
+        return jsonify({
+            'success': True,
+            'contract_status': saved,
+            'contract_updated_at': saved_at,
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@main_bp.route('/api/telegram-notify/send', methods=['POST'])
+def api_telegram_notify_send():
+    """Send absence alert Telegram messages for selected monk IDs."""
+    if not user_allowed(_session_user(), '/telegram-notify'):
+        abort(403)
+    try:
+        data = request.get_json(silent=True) or {}
+        monk_ids = data.get('monk_ids') or []
+        date_str = (data.get('date') or '').strip() or _date.today().isoformat()
+        if not monk_ids:
+            return jsonify({'success': False, 'message': 'សូមជ្រើសរើសឈ្មោះ'}), 400
+
+        period = _telegram_period_from_request()
+        block_start, block_end = _get_telegram_period_dates(date_str, period)
+        sent, failed = 0, []
+
+        conn = connect_db()
+        cur = conn.cursor()
+        for mid in monk_ids:
+            try:
+                monk_id = int(mid)
+            except (TypeError, ValueError):
+                continue
+            cur.execute("""
+                SELECT COUNT(CASE WHEN status = 'absent' THEN 1 END),
+                       COUNT(CASE WHEN status = 'permission' THEN 1 END)
+                FROM attendance_tbl
+                WHERE monk_id = %s AND date >= %s AND date <= %s
+            """, (monk_id, block_start.isoformat(), block_end.isoformat()))
+            row = cur.fetchone()
+            absent_count = int(row[0] or 0)
+            perm_count = int(row[1] or 0)
+            if not _contract_eligible(absent_count, perm_count):
+                cur.execute("SELECT fullname FROM monk_tbl WHERE id = %s", (monk_id,))
+                name_row = cur.fetchone()
+                failed.append({
+                    'id': monk_id,
+                    'name': name_row[0] if name_row else str(monk_id),
+                    'error': 'មិនគ្រប់លក្ខខណ្ឌកិច្ចសន្យា',
+                })
+                continue
+            ok, err = _send_absent_alert_telegram(
+                monk_id, date_str, absent_count, perm_count, notify_type='manual_alert',
+            )
+            if ok:
+                sent += 1
+            else:
+                cur.execute("SELECT fullname FROM monk_tbl WHERE id = %s", (monk_id,))
+                name_row = cur.fetchone()
+                failed.append({'id': monk_id, 'name': name_row[0] if name_row else str(monk_id), 'error': err})
+        cur.close()
+        conn.close()
+
+        _log_act('telegram_notify_send', 'telegram_notify', f'{sent} monks — {date_str}')
+        return jsonify({
+            'success': True,
+            'sent': sent,
+            'failed': failed,
+            'message': f'បានបញ្ជូន {sent} នាក់',
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 # ============ KUTI SHARE LINKS (leader can view own kuti only) ============
 
 def _residence_label(residence: str) -> str:
@@ -267,7 +1257,7 @@ def _get_share_by_token(token: str):
 @main_bp.route('/kuti-links')
 def kuti_links_page():
     """Admin page — generate share links for each kuti leader."""
-    if session.get('role') != 'admin':
+    if not user_allowed(_session_user(), '/kuti-links'):
         abort(403)
     return render_template(
         'kuti_links.html',
@@ -276,10 +1266,436 @@ def kuti_links_page():
     )
 
 
+@main_bp.route('/kuti-status')
+def kuti_status_page():
+    """Admin page — check each mekuti link status and monk counts."""
+    if not user_allowed(_session_user(), '/kuti-status'):
+        abort(403)
+    return render_template('kuti_status.html', username=session.get('username', ''))
+
+
+@main_bp.route('/api/kuti-status', methods=['GET'])
+def api_kuti_status():
+    """Active mekuti links with living-status counts for each kuti."""
+    if not user_allowed(_session_user(), '/api/kuti-status'):
+        return jsonify({'success': False, 'message': 'Forbidden'}), 403
+    try:
+        conn = connect_db()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT id, residence, token, label, is_active, created_at, last_used_at
+            FROM kuti_share_links
+            WHERE is_active = TRUE
+            ORDER BY residence
+        """)
+        links = cur.fetchall()
+
+        cur.execute("""
+            SELECT residence,
+                   COUNT(*) AS total,
+                   COUNT(*) FILTER (WHERE COALESCE(living_status, %s) = %s) AS active,
+                   COUNT(*) FILTER (WHERE living_status = 'ឈប់ស្នាក់នៅ') AS left_status,
+                   COUNT(*) FILTER (WHERE living_status = 'នៅស្រុក') AS hometown
+            FROM monk_tbl
+            GROUP BY residence
+        """, (_ACTIVE_LIVING_STATUS, _ACTIVE_LIVING_STATUS))
+        counts = {
+            r[0]: {
+                'total': r[1],
+                'active': r[2],
+                'left': r[3],
+                'hometown': r[4],
+            }
+            for r in cur.fetchall()
+        }
+        cur.close()
+        conn.close()
+
+        base = request.host_url.rstrip('/')
+        empty = {'total': 0, 'active': 0, 'left': 0, 'hometown': 0}
+        items = []
+        for row in links:
+            residence = row[1]
+            c = counts.get(residence, empty)
+            items.append({
+                'id': row[0],
+                'residence': residence,
+                'residence_label': _residence_label(residence),
+                'token': row[2],
+                'label': row[3] or '',
+                'is_active': row[4],
+                'created_at': row[5].isoformat() if row[5] else None,
+                'last_used_at': row[6].isoformat() if row[6] else None,
+                'url': f'{base}/kuti/{row[2]}',
+                'total': c['total'],
+                'active': c['active'],
+                'left': c['left'],
+                'hometown': c['hometown'],
+            })
+
+        linked = {i['residence'] for i in items}
+        missing = []
+        for res in sorted(_VALID_RESIDENCES):
+            if res in linked:
+                continue
+            c = counts.get(res, empty)
+            missing.append({
+                'residence': res,
+                'residence_label': _residence_label(res),
+                'total': c['total'],
+                'active': c['active'],
+                'left': c['left'],
+                'hometown': c['hometown'],
+            })
+
+        return jsonify({
+            'success': True,
+            'links': items,
+            'missing': missing,
+            'summary': {
+                'links': len(items),
+                'missing': len(missing),
+                'monks_active': sum(i['active'] for i in items),
+                'monks_total': sum(i['total'] for i in items),
+            },
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+def _make_kuti_status_export_html(label, monks, stay, home, left):
+    """Pagoda-formatted HTML report — 3 columns by living status."""
+    import html as _html
+    from datetime import date
+
+    today = date.today().strftime('%d/%m/%Y')
+    bhikkhu = sum(1 for m in monks if m['monk_type'] == 'ភិក្ខុ')
+    samanera = sum(1 for m in monks if m['monk_type'] == 'សាមណេរ')
+
+    def _row(m, idx):
+        edu = _html.escape(f"{m['education_level']} {m['academic_year']}".strip()) or '—'
+        return (
+            f'<tr>'
+            f'<td class="c">{idx}</td>'
+            f'<td class="name">{_html.escape(m["fullname"])}</td>'
+            f'<td class="c">{m["vassa_years"]}</td>'
+            f'<td>{_html.escape(m["monk_type"] or "—")}</td>'
+            f'<td>{_html.escape(m["position"] or "—")}</td>'
+            f'<td>{edu}</td>'
+            f'</tr>'
+        )
+
+    def _col(title, group, accent, head_bg, row_bg):
+        rows = ''.join(_row(m, i + 1) for i, m in enumerate(group))
+        empty = '<tr><td colspan="6" class="empty">មិនមាន</td></tr>'
+        return f'''
+        <section class="status-col" style="--accent:{accent};--head-bg:{head_bg};--row-bg:{row_bg}">
+            <header class="status-col-head">
+                <span class="status-dot"></span>
+                <h3>{_html.escape(title)}</h3>
+                <span class="status-count">{len(group)}</span>
+            </header>
+            <table>
+                <thead><tr>
+                    <th class="c">#</th><th>ឈ្មោះ</th><th class="c">វស្សា</th>
+                    <th>ប្រភេទ</th><th>តួនាទី</th><th>កម្រិតសិក្សា</th>
+                </tr></thead>
+                <tbody>{rows if group else empty}</tbody>
+            </table>
+        </section>'''
+
+    return f'''<!DOCTYPE html>
+<html lang="km"><head><meta charset="UTF-8">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&family=Kantumruy+Pro:wght@400;600;700&family=Moul&display=swap');
+@page {{ size: A4 portrait; margin: 12mm; }}
+*, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
+body {{
+    font-family: 'Kantumruy Pro', 'Battambang', sans-serif;
+    color: #1a2332; background: #fff; font-size: 11px;
+}}
+.page {{ width: 210mm; min-height: 297mm; margin: 0 auto; padding: 10mm 12mm; }}
+
+.masthead {{
+    display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px;
+    align-items: center; padding-bottom: 10px;
+    border-bottom: 2px solid #0c2d5a; margin-bottom: 12px;
+}}
+.mast-left, .mast-right {{ font-size: 9px; line-height: 1.45; color: #475569; }}
+.mast-left p, .mast-right p {{ margin: 0; }}
+.mast-pagoda {{ font-family: 'Moul', 'Battambang', serif; color: #0c2d5a; font-size: 10px; margin-top: 2px; }}
+.mast-center {{ text-align: center; }}
+.mast-seal {{
+    width: 52px; height: 52px; border-radius: 50%;
+    border: 2px solid #c9a227; background: #fff8e8;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-family: 'Moul', serif; font-size: 9px; color: #0c2d5a;
+}}
+.mast-kingdom {{ font-family: 'Moul', serif; color: #0c2d5a; font-size: 10px; text-align: right; }}
+.mast-motto {{ font-size: 9px; color: #64748b; text-align: right; }}
+
+.report-title {{
+    text-align: center; margin-bottom: 12px;
+}}
+.report-title h1 {{
+    font-family: 'Moul', 'Battambang', serif;
+    font-size: 16px; font-weight: 400; color: #0c2d5a; margin-bottom: 4px;
+}}
+.report-title p {{
+    font-family: 'Battambang', serif;
+    font-size: 14px; color: #64748b;
+}}
+
+.chips {{
+    display: flex; gap: 8px; justify-content: center; margin-bottom: 14px; flex-wrap: wrap;
+}}
+.chip {{
+    min-width: 88px; padding: 8px 12px; border-radius: 8px; text-align: center;
+    border: 1px solid #e2e8f0; background: #f8fafc;
+}}
+.chip span {{ display: block; font-size: 9px; color: #64748b; margin-bottom: 2px; }}
+.chip strong {{ font-size: 16px; color: #0c2d5a; }}
+.chip-stay {{ background: #e6f5ee; border-color: #a7dcc4; }}
+.chip-stay strong {{ color: #1f6b4a; }}
+.chip-home {{ background: #fef3e2; border-color: #f5c98a; }}
+.chip-home strong {{ color: #b45309; }}
+.chip-left {{ background: #fee2e2; border-color: #f5a5a5; }}
+.chip-left strong {{ color: #9b1c1c; }}
+
+.cols {{
+    display: grid; grid-template-columns: 1fr; gap: 12px; align-items: start;
+}}
+.status-col {{
+    border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;
+    border-top: 3px solid var(--accent);
+}}
+.status-col-head {{
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 10px; background: var(--head-bg);
+    border-bottom: 1px solid #e2e8f0;
+}}
+.status-dot {{
+    width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex-shrink: 0;
+}}
+.status-col-head h3 {{
+    flex: 1; font-size: 11px; font-weight: 700; color: var(--accent);
+}}
+.status-count {{
+    min-width: 24px; padding: 2px 8px; border-radius: 999px;
+    background: #fff; font-size: 10px; font-weight: 700; color: var(--accent);
+    box-shadow: 0 0 0 1px rgba(0,0,0,.06); text-align: center;
+}}
+table {{ width: 100%; border-collapse: collapse; }}
+th {{
+    background: #0c2d5a; color: #fff; padding: 6px 5px;
+    font-size: 9px; font-weight: 700; text-align: center;
+}}
+td {{ padding: 5px 5px; border-bottom: 1px solid #edf2f7; vertical-align: middle; font-size: 9.5px; }}
+tbody tr:nth-child(even) {{ background: var(--row-bg); }}
+td.c, th.c {{ text-align: center; }}
+td.name {{ font-weight: 700; text-align: left; }}
+td.empty {{ text-align: center; color: #94a3b8; padding: 16px; }}
+
+.footer {{
+    display: flex; justify-content: space-between; align-items: center;
+    margin-top: 12px; padding-top: 8px; border-top: 1px solid #e2e8f0;
+    font-size: 9px; color: #94a3b8;
+}}
+</style></head><body>
+<div class="page">
+    <div class="masthead">
+        <div class="mast-left">
+            <p>មន្ទីរធម្មការ និងសាសនា រាជធានីភ្នំពេញ</p>
+            <p>សាលាពុទ្ធិកអនុវិទ្យាល័យសង្ឃ</p>
+            <p class="mast-pagoda">វត្តនិរោធរង្សី</p>
+        </div>
+        <div class="mast-center"><div class="mast-seal">វត្ត</div></div>
+        <div class="mast-right">
+            <p class="mast-kingdom">ព្រះរាជាណាចក្រកម្ពុជា</p>
+            <p class="mast-motto">ជាតិ · សាសនា · ព្រះមហាក្សត្រ</p>
+        </div>
+    </div>
+
+    <div class="report-title">
+        <h1>បញ្ជីព្រះសង្ឃ — {_html.escape(label)}</h1>
+        <p>ថ្ងៃទី {today} · តាមស្ថានភាពស្នាក់នៅ · ភិក្ខុ {bhikkhu} · សាមណេរ {samanera}</p>
+    </div>
+
+    <div class="chips">
+        <div class="chip chip-stay"><span>កំពុងស្នាក់នៅ</span><strong>{len(stay)}</strong></div>
+        <div class="chip chip-home"><span>ទៅស្រុក</span><strong>{len(home)}</strong></div>
+        <div class="chip chip-left"><span>ឈប់ស្នាក់នៅ</span><strong>{len(left)}</strong></div>
+        <div class="chip"><span>សរុប</span><strong>{len(monks)}</strong></div>
+    </div>
+
+    <div class="cols">
+        {_col('កំពុងស្នាក់នៅ', stay, '#1f6b4a', '#f0faf5', '#f7fdf9')}
+        {_col('ទៅស្រុក', home, '#b45309', '#fffaf3', '#fffbf5')}
+        {_col('ឈប់ស្នាក់នៅ', left, '#9b1c1c', '#fff5f5', '#fffafa')}
+    </div>
+
+    <div class="footer">
+        <span>វត្តនិរោធរង្សី — ពិនិត្យស្ថានភាពមេកុដិ</span>
+        <span>ថ្ងៃទី {today}</span>
+    </div>
+</div>
+</body></html>'''
+
+
+@main_bp.route('/api/kuti-status/export', methods=['GET'])
+def api_kuti_status_export():
+    """Admin export of one kuti's monk list — excel (xlsx) or html preview."""
+    import io
+    import html as _html
+    from datetime import date
+
+    if not user_allowed(_session_user(), '/api/kuti-status'):
+        return jsonify({'success': False, 'message': 'Forbidden'}), 403
+
+    residence = (request.args.get('residence') or '').strip()
+    fmt = (request.args.get('fmt') or 'excel').strip().lower()
+    if residence not in _VALID_RESIDENCES:
+        return jsonify({'success': False, 'message': 'កុដិមិនត្រឹមត្រូវ'}), 400
+    if fmt not in ('excel', 'html'):
+        return jsonify({'success': False, 'message': 'Invalid format'}), 400
+
+    try:
+        conn = connect_db()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT fullname, vassa_years, monk_type, position, living_status,
+                   education_level, academic_year
+            FROM monk_tbl
+            WHERE residence = %s
+            ORDER BY
+                CASE living_status WHEN 'កំពុងស្នាក់នៅ' THEN 0
+                     WHEN 'នៅស្រុក' THEN 1 ELSE 2 END,
+                monk_type, position, vassa_years DESC, fullname
+        """, (residence,))
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+    monks = [{
+        'fullname': r[0],
+        'vassa_years': r[1],
+        'monk_type': r[2] or '',
+        'position': r[3] or '',
+        'living_status': r[4] or _ACTIVE_LIVING_STATUS,
+        'education_level': r[5] or '',
+        'academic_year': r[6] or '',
+    } for r in rows]
+
+    stay = [m for m in monks if m['living_status'] == _ACTIVE_LIVING_STATUS]
+    home = [m for m in monks if m['living_status'] == 'នៅស្រុក']
+    left = [m for m in monks if m['living_status'] == 'ឈប់ស្នាក់នៅ']
+    label = _residence_label(residence)
+
+    if fmt == 'html':
+        return _make_kuti_status_export_html(label, monks, stay, home, left), 200, {
+            'Content-Type': 'text/html; charset=utf-8',
+        }
+
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    wb = openpyxl.Workbook()
+    thin = Side(border_style='thin', color='D1D5DB')
+    bdr = Border(left=thin, right=thin, top=thin, bottom=thin)
+    hfont = Font(bold=True, color='FFFFFF', size=11, name='Calibri')
+    dfont = Font(size=10, name='Calibri')
+    hdrs = ['#', 'ឈ្មោះ', 'វស្សា', 'ប្រភេទ', 'តួនាទី', 'កម្រិតសិក្សា']
+
+    sheets = [
+        ('កំពុងស្នាក់នៅ', stay, '1F6B4A', 'E6F5EE'),
+        ('ទៅស្រុក', home, 'B45309', 'FEF3E2'),
+        ('ឈប់ស្នាក់នៅ', left, '9B1C1C', 'FEE2E2'),
+    ]
+
+    first = True
+    for sheet_name, group, hdr_hex, row_hex in sheets:
+        ws = wb.active if first else wb.create_sheet(title=sheet_name[:31])
+        if first:
+            ws.title = sheet_name[:31]
+            first = False
+        hfill = PatternFill(start_color=hdr_hex, end_color=hdr_hex, fill_type='solid')
+        rfill = PatternFill(start_color=row_hex, end_color=row_hex, fill_type='solid')
+
+        label = _residence_label(residence)
+        ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(hdrs))
+        title = ws.cell(row=1, column=1,
+                        value=f'{label} — {sheet_name} ({len(group)} នាក់)')
+        title.font = Font(bold=True, size=13, color='0C2D5A', name='Calibri')
+        title.alignment = Alignment(horizontal='center', vertical='center')
+        ws.row_dimensions[1].height = 22
+
+        ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=len(hdrs))
+        meta = ws.cell(row=2, column=1,
+                       value=f'ថ្ងៃទី {date.today().strftime("%d/%m/%Y")}  |  សរុបកុដិ {len(monks)} នាក់')
+        meta.font = Font(size=10, color='718096', name='Calibri')
+        meta.alignment = Alignment(horizontal='center')
+
+        for col, h in enumerate(hdrs, 1):
+            c = ws.cell(row=3, column=col, value=h)
+            c.font = hfont
+            c.fill = hfill
+            c.border = bdr
+            c.alignment = Alignment(horizontal='center', vertical='center')
+
+        for i, m in enumerate(group, 1):
+            vals = [i, m['fullname'], m['vassa_years'], m['monk_type'],
+                    m['position'], m['education_level']]
+            for col, val in enumerate(vals, 1):
+                c = ws.cell(row=3 + i, column=col, value=val)
+                c.fill = rfill
+                c.border = bdr
+                c.font = dfont
+                c.alignment = Alignment(
+                    horizontal='center' if col in (1, 3) else 'left',
+                    vertical='center',
+                )
+
+        for col, w in enumerate([5, 28, 8, 12, 20, 16], 1):
+            ws.column_dimensions[get_column_letter(col)].width = w
+
+    # Overview sheet first
+    overview = wb.create_sheet(title='សរុប', index=0)
+    overview['A1'] = f'បញ្ជីព្រះសង្ឃ — {_residence_label(residence)}'
+    overview['A1'].font = Font(bold=True, size=14, color='0C2D5A')
+    overview['A3'] = 'ស្ថានភាព'
+    overview['B3'] = 'ចំនួន'
+    overview['A3'].font = overview['B3'].font = Font(bold=True)
+    overview['A4'] = 'កំពុងស្នាក់នៅ'
+    overview['B4'] = len(stay)
+    overview['A5'] = 'ទៅស្រុក'
+    overview['B5'] = len(home)
+    overview['A6'] = 'ឈប់ស្នាក់នៅ'
+    overview['B6'] = len(left)
+    overview['A7'] = 'សរុប'
+    overview['B7'] = len(monks)
+    overview['A7'].font = overview['B7'].font = Font(bold=True)
+    overview.column_dimensions['A'].width = 22
+    overview.column_dimensions['B'].width = 12
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    safe = residence.replace(' ', '_').replace('/', '-')
+    return send_file(
+        buf,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f"kuti_status_{safe}_{date.today().isoformat()}.xlsx",
+    )
+
+
 @main_bp.route('/api/kuti-links/monks', methods=['GET'])
 def kuti_links_monks():
     """Admin: list all monks in one residence (including departed statuses)."""
-    if session.get('role') != 'admin':
+    if not user_allowed(_session_user(), '/api/kuti-links'):
         return jsonify({'success': False, 'message': 'Forbidden'}), 403
     residence = (request.args.get('residence') or '').strip()
     if residence not in _VALID_RESIDENCES:
@@ -327,7 +1743,7 @@ def kuti_links_monks():
 @main_bp.route('/api/kuti-links/leaders', methods=['GET'])
 def kuti_leaders_for_residence():
     """Return monks with position មេកុដិ (and អនុកុដិ) in one residence."""
-    if session.get('role') != 'admin':
+    if not user_allowed(_session_user(), '/api/kuti-links'):
         return jsonify({'success': False, 'message': 'Forbidden'}), 403
     residence = (request.args.get('residence') or '').strip()
     if residence not in _VALID_RESIDENCES:
@@ -359,7 +1775,7 @@ def kuti_leaders_for_residence():
 
 @main_bp.route('/api/kuti-links', methods=['GET'])
 def list_kuti_links():
-    if session.get('role') != 'admin':
+    if not user_allowed(_session_user(), '/api/kuti-links'):
         return jsonify({'success': False, 'message': 'Forbidden'}), 403
     try:
         conn = connect_db()
@@ -392,7 +1808,7 @@ def list_kuti_links():
 @main_bp.route('/api/kuti-links', methods=['POST'])
 def create_kuti_link():
     """Create (or recreate) an active share link for one residence."""
-    if session.get('role') != 'admin':
+    if not user_allowed(_session_user(), '/api/kuti-links'):
         return jsonify({'success': False, 'message': 'Forbidden'}), 403
     data = request.get_json(silent=True) or {}
     residence = str(data.get('residence', '') or '').strip()
@@ -418,6 +1834,7 @@ def create_kuti_link():
         cur.close()
         conn.close()
         base = request.host_url.rstrip('/')
+        _log_act('kuti_link_create', 'kuti_links', f'{residence} — {token[:8]}…')
         return jsonify({
             'success': True,
             'link': {
@@ -438,7 +1855,7 @@ def create_kuti_link():
 @main_bp.route('/api/kuti-links/<int:link_id>', methods=['DELETE'])
 def delete_kuti_link(link_id):
     """Permanently remove a share-link record."""
-    if session.get('role') != 'admin':
+    if not user_allowed(_session_user(), '/api/kuti-links'):
         return jsonify({'success': False, 'message': 'Forbidden'}), 403
     try:
         conn = connect_db()
@@ -450,6 +1867,7 @@ def delete_kuti_link(link_id):
         conn.close()
         if not deleted:
             return jsonify({'success': False, 'message': 'រកមិនឃើញតំណ'}), 404
+        _log_act('kuti_link_delete', 'kuti_links', f'id={link_id}')
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
@@ -886,7 +2304,7 @@ def kuti_public_export(token):
     leader_html = f' · មេកុដិ៖ {_html.escape(leader)}' if leader else ''
     html_out = f'''<!DOCTYPE html><html lang="km"><head><meta charset="UTF-8">
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&family=Moul&display=swap');
     @page {{ size: A4 portrait; margin: 12mm; }}
     * {{ box-sizing: border-box; }}
     html, body {{
@@ -919,8 +2337,14 @@ def kuti_public_export(token):
       margin-bottom: 14px;
       text-align: center;
     }}
-    .header h1 {{ font-size: 17px; margin: 0 0 6px; font-weight: 700; }}
-    .header p {{ margin: 0; opacity: .9; font-size: 11px; }}
+    .header h1 {{
+      font-family: 'Moul', 'Battambang', serif;
+      font-size: 16px; margin: 0 0 6px; font-weight: 400;
+    }}
+    .header p {{
+      font-family: 'Battambang', serif;
+      margin: 0; opacity: .9; font-size: 14px;
+    }}
     .chips {{ display: flex; gap: 10px; margin-bottom: 14px; justify-content: center; }}
     .chip {{
       flex: 1; max-width: 160px; padding: 10px; border-radius: 8px;
@@ -1220,7 +2644,7 @@ def add_monk():
 @main_bp.route('/api/monks', methods=['GET'])
 def list_monks():
     """API endpoint to get all monks.
-    Pass ?residing=1 to exclude monks who left (layout / attendance seats).
+    Pass ?residing=1 to exclude monks who left (ឈប់ស្នាក់នៅ) — still includes នៅស្រុក.
     """
     try:
         residing_only = request.args.get('residing', '').strip() in ('1', 'true', 'yes')
@@ -1230,7 +2654,7 @@ def list_monks():
         for monk in monks:
             living = monk[10] if len(monk) > 10 else _ACTIVE_LIVING_STATUS
             living = living or _ACTIVE_LIVING_STATUS
-            if residing_only and living != _ACTIVE_LIVING_STATUS:
+            if residing_only and living == 'ឈប់ស្នាក់នៅ':
                 continue
             monks_list.append({
                 'id': monk[0],
@@ -1282,7 +2706,7 @@ def update_monk_route(monk_id):
 
 @main_bp.route('/api/monks/<int:monk_id>/living-status', methods=['PATCH'])
 def patch_monk_living_status(monk_id):
-    if session.get('role') != 'admin':
+    if not user_allowed(_session_user(), '/view'):
         return jsonify({'success': False, 'message': 'Forbidden'}), 403
     data = request.get_json(silent=True) or {}
     living_status = (data.get('living_status') or '').strip()
@@ -1404,7 +2828,7 @@ def get_seat_order():
 
 @main_bp.route('/api/seat-order', methods=['POST'])
 def save_seat_order():
-    if session.get('role') != 'admin':
+    if not user_allowed(_session_user(), '/layout'):
         abort(403)
     import json as _json
     data  = request.get_json(silent=True) or {}
@@ -1537,21 +2961,23 @@ def get_attendance():
         records = [{'monk_id': r[0], 'status': r[1]} for r in cursor.fetchall()]
         
         cursor.execute("""
-            SELECT monk_id, start_date, end_date, reason FROM monk_permission
+            SELECT monk_id, start_date, end_date, reason, shift FROM monk_permission
             WHERE %s BETWEEN start_date AND end_date
         """, (date_str,))
 
         perms = {}
         target_date = _date.fromisoformat(date_str)
         for r in cursor.fetchall():
-            monk_id, start_date, end_date, reason = r
+            monk_id, start_date, end_date, reason, shift = r
             days_left = (end_date - target_date).days
             if days_left >= 0:
                 perms[monk_id] = {
                     'start_date': start_date.isoformat(),
                     'end_date': end_date.isoformat(),
                     'days_left': days_left,
-                    'reason': reason or ''
+                    'reason': reason or '',
+                    'shift': shift or '',
+                    'same_day': start_date == end_date,
                 }
                 
         cursor.close(); conn.close()
@@ -1594,45 +3020,15 @@ def set_attendance():
             perm_count = int(row[1] or 0)
 
             if absent_count in (3, 6):
-                # Fetch monk info
-                cursor.execute("SELECT fullname, residence FROM monk_tbl WHERE id = %s", (monk_id,))
-                monk_info = cursor.fetchone()
-                if monk_info:
-                    fullname, kuti = monk_info
-                    
-                    # Fetch head and deputy
-                    cursor.execute("SELECT fullname FROM monk_tbl WHERE residence = %s AND position = 'មេកុដិ' LIMIT 1", (kuti,))
-                    kuti_head_row = cursor.fetchone()
-                    kuti_head = kuti_head_row[0] if kuti_head_row else '...........'
-                    
-                    cursor.execute("SELECT fullname FROM monk_tbl WHERE residence = %s AND position = 'អនុកុដិ' LIMIT 1", (kuti,))
-                    kuti_deputy_row = cursor.fetchone()
-                    kuti_deputy = kuti_deputy_row[0] if kuti_deputy_row else '...........'
-
-                    msg = (
-                        "🔔 សេចក្តីប្រគេនដំណឹង 🔔\n"
-                        "កិច្ចវត្តថ្វាយបង្គំរាល់ល្ងាចវត្តនិរោធរង្សី\n"
-                        "----- សារព្រមាន -----\n"
-                        f"ព្រះសង្ឃនាម ៖ {fullname}\n"
-                        f"កុដិ ៖ {kuti or '............'}\n"
-                        f"មេកុដិ ៖ {kuti_head}\n"
-                        f"អនុកុដិ ៖ {kuti_deputy}\n"
-                        "- - - - - បញ្ហា - - - - - \n"
-                        f"អវត្តមាន ៖ {absent_count}\n"
-                        f"ច្បាប់ ៖ {perm_count}\n"
-                        f"កាលបរិច្ឆេទ៖ {date_str}\n"
-                        "ដូចបានប្រគេនខាងលើនេះសូមមេកុដិនិងអនុកុដិសួរនាំជាបន្ទាន់ដល់សមាជិកកុដិរបស់ខ្លួន។"
-                    )
-                    import requests as req
-                    import threading
-                    TELEGRAM_TOKEN   = '8950898077:AAHNR0tTgtJWy17wMXooKwg4nfQLGdfe5aw'
-                    TELEGRAM_CHAT_ID = -1003960014484
-                    # Run telegram sending in a background thread to not block the response
-                    def send_tg():
-                        try:
-                            _tg_send_message(TELEGRAM_TOKEN, TELEGRAM_CHAT_ID, msg, req)
-                        except: pass
-                    threading.Thread(target=send_tg).start()
+                import threading
+                def send_tg():
+                    try:
+                        _send_absent_alert_telegram(
+                            monk_id, date_str, absent_count, perm_count, 'absent_alert',
+                        )
+                    except Exception:
+                        pass
+                threading.Thread(target=send_tg, daemon=True).start()
                     
         cursor.close(); conn.close()
         return jsonify({'success': True})
@@ -1648,6 +3044,7 @@ def add_permission():
         start_date = data.get('start_date')
         end_date = data.get('end_date')
         reason = data.get('reason', '')
+        shift = str(data.get('shift') or '').strip()
 
         if not monk_id or not start_date or not end_date:
             return jsonify({'success': False, 'message': 'Missing required fields'}), 400
@@ -1657,6 +3054,13 @@ def add_permission():
 
         if e_date < s_date:
             return jsonify({'success': False, 'message': 'ថ្ងៃបញ្ចប់ត្រូវតែក្រោយថ្ងៃចាប់ផ្តើម'}), 400
+
+        same_day = s_date == e_date
+        if same_day:
+            if shift not in ('ព្រឹក', 'ល្ងាច'):
+                shift = 'ល្ងាច'
+        else:
+            shift = None
 
         conn = connect_db()
         cursor = conn.cursor()
@@ -1673,9 +3077,9 @@ def add_permission():
         # Replace any existing leave range for this monk (one active leave record)
         cursor.execute("DELETE FROM monk_permission WHERE monk_id = %s", (monk_id,))
         cursor.execute("""
-            INSERT INTO monk_permission (monk_id, reason, start_date, end_date)
-            VALUES (%s, %s, %s, %s)
-        """, (monk_id, reason, start_date, end_date))
+            INSERT INTO monk_permission (monk_id, reason, start_date, end_date, shift)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (monk_id, reason, start_date, end_date, shift))
 
         from datetime import timedelta
         current_date = s_date
@@ -1896,12 +3300,12 @@ def _build_report_html(monks, start_date, end_date, filters_applied, ABSENT_LIMI
 
     return (
         '<!DOCTYPE html><html lang="km"><head><meta charset="UTF-8"><style>'
-        "@import url('https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&display=swap');"
+        "@import url('https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&family=Moul&display=swap');"
         '*{box-sizing:border-box;margin:0;padding:0}'
         "body{font-family:'Battambang','Khmer MN','Khmer Sangam MN',sans-serif;"
         'color:#2d3748;font-size:10px;}'
-        'h1{text-align:center;font-size:15px;color:#1a202c;margin-bottom:4px;}'
-        '.sub{text-align:center;color:#718096;font-size:9.5px;margin-bottom:3px;}'
+        "h1{text-align:center;font-family:'Moul','Battambang',serif;font-size:16px;font-weight:400;color:#1a202c;margin-bottom:4px;}"
+        ".sub{text-align:center;font-family:'Battambang',serif;color:#718096;font-size:14px;margin-bottom:3px;}"
         '.summary{display:flex;gap:12px;justify-content:center;margin:10px 0;flex-wrap:wrap;}'
         '.summary span{padding:3px 10px;border-radius:4px;font-weight:bold;font-size:9.5px;}'
         '.s-total{background:#edf2f7;color:#2d3748;}'
@@ -1921,8 +3325,8 @@ def _build_report_html(monks, start_date, end_date, filters_applied, ABSENT_LIMI
         '.badge-ok{background:#c6f6d5;color:#276749;padding:2px 7px;'
         'border-radius:10px;font-size:8px;font-weight:bold;white-space:nowrap;}'
         '.dates{font-size:8.5px;line-height:1.7;}'
-        '@page{size:A4;margin:12mm 10mm;}'
-        '@media print { @page { size: A4 landscape; margin: 10mm; } }'
+        '@page{size:A4 portrait;margin:12mm 10mm;}'
+        '@media print { @page { size: A4 portrait; margin: 12mm; } }'
         '</style></head><body>'
         '<h1>វត្តនិរោធរង្សី — របាយការណ៍វត្តមាន</h1>'
         f'<p class="sub">ចន្លោះ: {date_range} (១៥ ថ្ងៃ)</p>'
@@ -2323,6 +3727,23 @@ def submit_attendance():
         if not tg.get('ok'):
             return jsonify({'success': False, 'message': f"Telegram: {tg.get('description', 'error')}"}), 500
 
+        conn2 = connect_db()
+        cur2 = conn2.cursor()
+        cur2.execute("""
+            SELECT a.monk_id, m.fullname, a.status
+            FROM attendance_tbl a
+            JOIN monk_tbl m ON m.id = a.monk_id
+            WHERE a.date = %s AND a.status IN ('absent', 'permission')
+        """, (date_str,))
+        for mid, fname, status in cur2.fetchall():
+            _log_telegram_notify(
+                mid, fname, 'daily_submit', date_str,
+                detail=f'status={status}',
+            )
+        cur2.close()
+        conn2.close()
+
+        _log_act('attendance_submit', 'layout', f'{len(rows)} monks — {date_str}')
         return jsonify({'success': True, 'total': len(rows)})
 
     except Exception as e:
@@ -2574,7 +3995,7 @@ def export_monks():
             )
 
             css = (
-                "@import url('https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&display=swap');"
+                "@import url('https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&family=Moul&display=swap');"
                 "*, *::before, *::after{box-sizing:border-box;margin:0;padding:0}"
                 "body{font-family:'Battambang','Khmer MN','Khmer Sangam MN',sans-serif;"
                 "color:#1a202c;font-size:9px;background:#fff}"
@@ -2583,8 +4004,8 @@ def export_monks():
                 ".header{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);"
                 "color:#fff;padding:14px 18px 12px;border-radius:8px;margin-bottom:14px}"
                 ".hdr-top{display:flex;justify-content:space-between;align-items:flex-start}"
-                ".hdr-name{font-size:17px;font-weight:700;letter-spacing:.4px}"
-                ".hdr-sub{font-size:8.5px;opacity:.85;margin-top:3px}"
+                ".hdr-name{font-family:'Moul','Battambang',serif;font-size:16px;font-weight:400;letter-spacing:.4px}"
+                ".hdr-sub{font-family:'Battambang',serif;font-size:14px;opacity:.85;margin-top:3px}"
                 ".hdr-date{font-size:8.5px;opacity:.8;text-align:right}"
                 ".hdr-divider{border:none;border-top:1px solid rgba(255,255,255,.3);margin:10px 0 8px}"
                 ".hdr-stats{display:flex;gap:20px}"
@@ -2624,14 +4045,14 @@ def export_monks():
                 ".footer{position:running(footer);display:flex;justify-content:space-between;"
                 "font-size:7px;color:#a0aec0;border-top:1px solid #e2e8f0;padding-top:4px;"
                 "margin-top:6px}"
-                "@page{size:A4;margin:12mm 10mm 18mm;"
+                "@page{size:A4 portrait;margin:12mm 10mm 18mm;"
                 "@bottom-center{content:element(footer)}}"
             )
 
             html_str = f'''<!DOCTYPE html>
 <html lang="km"><head><meta charset="UTF-8">
 <style>{css}
-@media print {{ @page {{ size: A4 landscape; margin: 10mm; }} }}
+@media print {{ @page {{ size: A4 portrait; margin: 12mm; }} }}
 </style></head><body>
 
 <div class="header">
@@ -2674,6 +4095,215 @@ def export_monks():
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
+# ============ LAYOUT EXPORT HELPERS ============
+
+_LAYOUT_BHIKKHU_RANK = ROLE_RANK
+_LAYOUT_SAMANERA_ADMIN_RANK = {'មេកុដិ': 1, 'អនុកុដិ': 2}
+
+
+def _load_seat_order_from_db():
+    import json as _json
+    conn = connect_db()
+    cur = conn.cursor()
+    cur.execute('SELECT type, monk_ids FROM seat_order')
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    result = {'bhikkhu': None, 'samanera': None, 'grid_config': None}
+    for row in rows:
+        result[row[0]] = _json.loads(row[1])
+    return result
+
+
+def _build_grid_layout(default_sorted, stored_ids, rows, cols, reserve_first_row=False):
+    """Fit monks into a rows×cols grid using stored seat order."""
+    total = rows * cols
+    grid = [None] * total
+    by_id = {m['id']: m for m in default_sorted}
+    placed = set()
+    first_data_index = cols if reserve_first_row else 0
+    chief_seat = cols // 2 if reserve_first_row else 0
+    chief = (
+        next((m for m in default_sorted if m['position'] == 'ព្រះអធិការ'), None)
+        if reserve_first_row else None
+    )
+    stored_is_valid = True
+    if reserve_first_row and stored_ids:
+        first_id = stored_ids[chief_seat] if chief_seat < len(stored_ids) else None
+        stored_is_valid = first_id == (chief['id'] if chief else None)
+        if stored_is_valid:
+            stored_is_valid = all(
+                i == chief_seat
+                or (stored_ids[i] if i < len(stored_ids) else None) is None
+                for i in range(cols)
+            )
+    stored_for_layout = stored_ids if stored_is_valid else None
+
+    # Keep the first bhikkhu row exclusively for the chief monk.
+    if reserve_first_row and total > 0:
+        if chief:
+            grid[chief_seat] = chief
+            placed.add(chief['id'])
+
+    if stored_for_layout:
+        for i, mid in enumerate(stored_for_layout[:total]):
+            if reserve_first_row and i < first_data_index:
+                continue
+            if mid is None:
+                continue
+            monk = by_id.get(mid)
+            if monk and mid not in placed:
+                grid[i] = monk
+                placed.add(mid)
+
+    remaining = [m for m in default_sorted if m['id'] not in placed]
+    ri = 0
+    for i in range(first_data_index, total):
+        if grid[i] is None and ri < len(remaining):
+            grid[i] = remaining[ri]
+            placed.add(remaining[ri]['id'])
+            ri += 1
+
+    return grid
+
+
+def _get_residing_monks_for_layout():
+    raw = get_all_monks()
+    return [
+        {
+            'id': m[0],
+            'fullname': m[1],
+            'vassa_years': m[2],
+            'monk_type': m[3],
+            'position': m[5],
+        }
+        for m in raw
+        if (m[10] if len(m) > 10 and m[10] else _ACTIVE_LIVING_STATUS) != 'ឈប់ស្នាក់នៅ'
+    ]
+
+
+def _get_layout_seat_grids(br, bc, sr, sc):
+    all_monks = _get_residing_monks_for_layout()
+    bhikkhus = sorted(
+        [m for m in all_monks if m['monk_type'] == 'ភិក្ខុ'],
+        key=lambda m: (_LAYOUT_BHIKKHU_RANK.get(m['position'], 99), -m['vassa_years']),
+    )
+    samaneras = sorted(
+        [m for m in all_monks if m['monk_type'] == 'សាមណេរ'],
+        key=lambda m: (
+            _LAYOUT_SAMANERA_ADMIN_RANK.get(m['position'], 99),
+            -m['vassa_years'],
+            m['fullname'],
+        ),
+    )
+    seat_order = _load_seat_order_from_db()
+    bhikkhu_grid = _build_grid_layout(
+        bhikkhus, seat_order.get('bhikkhu'), br, bc, reserve_first_row=True
+    )
+    samanera_grid = _build_grid_layout(samaneras, seat_order.get('samanera'), sr, sc)
+    return bhikkhu_grid, samanera_grid
+
+
+def _build_layout_export_html(bhikkhu_grid, samanera_grid, br, bc, sr, sc):
+    import html as _html
+    from datetime import date
+
+    def build_grid(monks, rows, cols, type_):
+        cells = []
+        for r in range(rows):
+            for c in range(cols):
+                idx = r * cols + c
+                monk = monks[idx] if idx < len(monks) else None
+                num = idx + 1
+                if monk:
+                    sub = monk['position'] if (
+                        type_ == 'bhikkhu' or monk['position'] in _LAYOUT_SAMANERA_ADMIN_RANK
+                    ) else f"វស្សា {monk['vassa_years']}"
+                    cells.append(
+                        f'<td class="cell filled">'
+                        f'<span class="num">{num}</span>'
+                        f'<span class="name">{_html.escape(monk["fullname"])}</span>'
+                        f'<span class="sub">{_html.escape(sub)}</span>'
+                        f'</td>'
+                    )
+                else:
+                    cells.append(f'<td class="cell empty"><span class="num-e">{num}</span></td>')
+        rows_html = ''
+        for r in range(rows):
+            rows_html += '<tr>' + ''.join(cells[r * cols:(r + 1) * cols]) + '</tr>'
+        return f'<table>{rows_html}</table>'
+
+    bhikkhu_count = sum(1 for m in bhikkhu_grid if m)
+    samanera_count = sum(1 for m in samanera_grid if m)
+    today = date.today().strftime('%d/%m/%Y')
+    css = (
+        "@import url('https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&family=Moul&display=swap');"
+        "*, *::before, *::after{box-sizing:border-box;margin:0;padding:0}"
+        "body{font-family:'Battambang','Khmer MN',sans-serif;color:#1a202c;font-size:8.5px;background:#fff}"
+        ".header{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);"
+        "color:#fff;padding:10px 14px 9px;border-radius:7px;margin-bottom:10px}"
+        ".hdr-row{display:flex;justify-content:space-between;align-items:center}"
+        ".hdr-title{font-family:'Moul','Battambang',serif;font-size:16px;font-weight:400;letter-spacing:.3px}"
+        ".hdr-sub{font-family:'Battambang',serif;font-size:14px;opacity:.85;margin-top:2px}"
+        ".hdr-right{text-align:right;font-size:8px;opacity:.85}"
+        ".hdr-divider{border:none;border-top:1px solid rgba(255,255,255,.3);margin:7px 0 6px}"
+        ".hdr-stats{display:flex;gap:18px}"
+        ".hdr-stat{font-size:8px;opacity:.9}"
+        ".hdr-stat strong{font-size:12px;display:block;font-weight:700}"
+        ".sec{padding:4px 9px;font-size:10px;font-weight:700;border-radius:4px;margin:10px 0 4px}"
+        ".sec-b{background:#fff8e1;color:#8a6100;border-left:4px solid #f0c040}"
+        ".sec-s{background:#f1f8e9;color:#1b5e20;border-left:4px solid #66bb6a}"
+        ".sec-sub{font-size:7.5px;font-weight:400;opacity:.75;margin-left:6px}"
+        "table{width:100%;border-collapse:collapse;margin-bottom:8px;table-layout:fixed}"
+        "td{border:1px solid #e2e8f0;vertical-align:top;padding:3px 4px;height:42px}"
+        ".filled{background:#f7f8fa}"
+        ".empty{background:#fafbfc}"
+        ".num{display:block;font-size:6.5px;color:#a0aec0;line-height:1}"
+        ".num-e{display:block;font-size:6.5px;color:#e2e8f0}"
+        ".name{display:block;font-size:8px;font-weight:700;color:#1a202c;margin:2px 0 1px;line-height:1.3}"
+        ".sub{display:block;font-size:7px;color:#718096;line-height:1.2}"
+        ".footer{display:flex;justify-content:space-between;font-size:7px;color:#a0aec0;"
+        "border-top:1px solid #e2e8f0;padding-top:6px;margin-top:10px}"
+        "@page{size:A4 portrait;margin:10mm 12mm 16mm}"
+    )
+    return f'''<!DOCTYPE html>
+<html lang="km"><head><meta charset="UTF-8"><style>{css}
+@media print {{ @page {{ size: A4 portrait; margin: 12mm; }} }}
+</style></head><body>
+
+<div class="header">
+  <div class="hdr-row">
+    <div>
+      <div class="hdr-title">ប្លង់អាសនៈព្រះសង្ឃ — វត្តនិរោធរង្សី</div>
+      <div class="hdr-sub">Pagoda Niroth Rangsay — Seating Layout</div>
+    </div>
+    <div class="hdr-right">ថ្ងៃទី {today}<br>ស្ថានភាពបច្ចុប្បន្ន</div>
+  </div>
+  <hr class="hdr-divider">
+  <div class="hdr-stats">
+    <div class="hdr-stat"><strong>{bhikkhu_count}</strong>ភិក្ខុ</div>
+    <div class="hdr-stat"><strong>{samanera_count}</strong>សាមណេរ</div>
+    <div class="hdr-stat"><strong>{bhikkhu_count + samanera_count}</strong>ព្រះសង្ឃសរុប</div>
+  </div>
+</div>
+
+<div class="sec sec-b">ផ្នែកទី ១ — ភិក្ខុ
+  <span class="sec-sub">{bhikkhu_count} នាក់ &nbsp;|&nbsp; ក្រឡា {br}×{bc}={br * bc}</span>
+</div>
+{build_grid(bhikkhu_grid, br, bc, 'bhikkhu')}
+
+<div class="sec sec-s">ផ្នែកទី ២ — សាមណេរ
+  <span class="sec-sub">{samanera_count} នាក់ &nbsp;|&nbsp; ក្រឡា {sr}×{sc}={sr * sc}</span>
+</div>
+{build_grid(samanera_grid, sr, sc, 'samanera')}
+
+<div class="footer">
+  <span>វត្តនិរោធរង្សី — ប្លង់អាសនៈព្រះសង្ឃ</span>
+  <span>ថ្ងៃទី {today}</span>
+</div>
+</body></html>'''
+
+
 @main_bp.route('/api/export-layout')
 def export_layout():
     """Export the seating layout as a Word (.docx) document"""
@@ -2687,19 +4317,8 @@ def export_layout():
     from docx.oxml.ns import qn
     from docx.oxml import OxmlElement
 
-    BHIKKHU_RANK = {
-        'ព្រះគ្រូសូត្រស្តាំ':         1,
-        'ព្រះគ្រូសូត្រឆ្វេង':         2,
-        'ព្រះគ្រូវិន័យធរ':           3,
-        'ព្រះគ្រូលេខា':               4,
-        'ព្រះគ្រូប្រធានការក':        5,
-        'ព្រះគ្រូអនុប្រធានការកទី១':  6,
-        'ព្រះគ្រូអនុប្រធានការកទី២':  7,
-        'មេកុដិ':                     8,
-        'អនុកុដិ':                    9,
-        'ព្រះសង្ឃធម្មតា':            10,
-        'សមណសិស្ស':                 10,
-    }
+    BHIKKHU_RANK = _LAYOUT_BHIKKHU_RANK
+    SAMANERA_ADMIN_RANK = _LAYOUT_SAMANERA_ADMIN_RANK
 
     def clamp(val, lo, hi):
         return max(lo, min(hi, int(val)))
@@ -2773,35 +4392,18 @@ def export_layout():
         sr = clamp(request.args.get('sr', 12), 1, 50)
         sc = clamp(request.args.get('sc', 10), 1, 30)
 
-        raw = get_all_monks()
-        all_monks = [
-            {'fullname': m[1], 'vassa_years': m[2], 'monk_type': m[3], 'position': m[5]}
-            for m in raw
-            if (m[10] if len(m) > 10 and m[10] else _ACTIVE_LIVING_STATUS) == _ACTIVE_LIVING_STATUS
-        ]
-
-        bhikkhus = sorted(
-            [m for m in all_monks if m['monk_type'] == 'ភិក្ខុ'],
-            key=lambda m: (BHIKKHU_RANK.get(m['position'], 99), -m['vassa_years'])
-        )
-        SAMANERA_ADMIN_RANK = {'មេកុដិ': 1, 'អនុកុដិ': 2}
-        samaneras = sorted(
-            [m for m in all_monks if m['monk_type'] == 'សាមណេរ'],
-            key=lambda m: (SAMANERA_ADMIN_RANK.get(m['position'], 99), -m['vassa_years'], m['fullname'])
-        )
+        bhikkhus, samaneras = _get_layout_seat_grids(br, bc, sr, sc)
 
         doc = Document()
 
-        # Landscape A4
+        # Portrait A4
         sec = doc.sections[0]
-        sec.orientation = WD_ORIENT.LANDSCAPE
-        sec.page_width, sec.page_height = sec.page_height, sec.page_width
         sec.left_margin   = Cm(1.5)
         sec.right_margin  = Cm(1.5)
         sec.top_margin    = Cm(1.5)
         sec.bottom_margin = Cm(1.5)
 
-        usable_cm = 27.0  # ~297mm - 3cm margins
+        usable_cm = 18.0  # ~210mm - 3cm margins
 
         # Title
         t = doc.add_heading('ប្លង់អាសនៈព្រះសង្ឃ — វត្តនិរោធរង្សី', 0)
@@ -2819,7 +4421,7 @@ def export_layout():
         h1.runs[0].font.color.rgb = RGBColor(0x8A, 0x61, 0x00)
 
         info1 = doc.add_paragraph(
-            f'ចំនួនភិក្ខុ: {len(bhikkhus)} នាក់  |  ក្រឡា: {br} × {bc} = {br*bc}'
+            f'ចំនួនភិក្ខុ: {sum(1 for m in bhikkhus if m)} នាក់  |  ក្រឡា: {br} × {bc} = {br*bc}'
         )
         info1.runs[0].font.size = Pt(10)
         info1.runs[0].font.color.rgb = RGBColor(0x71, 0x80, 0x96)
@@ -2835,7 +4437,7 @@ def export_layout():
         h2.runs[0].font.color.rgb = RGBColor(0x1B, 0x5E, 0x20)
 
         info2 = doc.add_paragraph(
-            f'ចំនួនសាមណេរ: {len(samaneras)} នាក់  |  ក្រឡា: {sr} × {sc} = {sr*sc}'
+            f'ចំនួនសាមណេរ: {sum(1 for m in samaneras if m)} នាក់  |  ក្រឡា: {sr} × {sc} = {sr*sc}'
         )
         info2.runs[0].font.size = Pt(10)
         info2.runs[0].font.color.rgb = RGBColor(0x71, 0x80, 0x96)
@@ -2861,147 +4463,27 @@ def export_layout():
 
 @main_bp.route('/api/export-layout-pdf')
 def export_layout_pdf():
-    """Export the seating layout as a PDF document via WeasyPrint"""
-    import io, html as _html
+    """Export the seating layout as PDF or HTML preview via WeasyPrint."""
+    import io
     from datetime import date
-
-    BHIKKHU_RANK = {
-        'ព្រះគ្រូសូត្រស្តាំ':         1, 'ព្រះគ្រូសូត្រឆ្វេង':         2,
-        'ព្រះគ្រូវិន័យធរ':           3, 'ព្រះគ្រូលេខា':               4,
-        'ព្រះគ្រូប្រធានការក':        5, 'ព្រះគ្រូអនុប្រធានការកទី១':  6,
-        'ព្រះគ្រូអនុប្រធានការកទី២':  7, 'មេកុដិ':                     8,
-        'អនុកុដិ':                    9, 'ព្រះសង្ឃធម្មតា':            10,
-        'សមណសិស្ស':                 10,
-    }
-    SAMANERA_ADMIN_RANK = {'មេកុដិ': 1, 'អនុកុដិ': 2}
 
     def clamp(val, lo, hi):
         return max(lo, min(hi, int(val or 0)))
 
     try:
-        
-        br = clamp(request.args.get('br', 3),  1, 30)
-        bc = clamp(request.args.get('bc', 5),  1, 30)
+        br = clamp(request.args.get('br', 3), 1, 30)
+        bc = clamp(request.args.get('bc', 5), 1, 30)
         sr = clamp(request.args.get('sr', 12), 1, 50)
         sc = clamp(request.args.get('sc', 10), 1, 30)
+        fmt = request.args.get('fmt', 'pdf').strip().lower()
 
-        raw = get_all_monks()
-        all_monks = [
-            {'fullname': m[1], 'vassa_years': m[2], 'monk_type': m[3], 'position': m[5]}
-            for m in raw
-            if (m[10] if len(m) > 10 and m[10] else _ACTIVE_LIVING_STATUS) == _ACTIVE_LIVING_STATUS
-        ]
+        bhikkhu_grid, samanera_grid = _get_layout_seat_grids(br, bc, sr, sc)
+        html_str = _build_layout_export_html(bhikkhu_grid, samanera_grid, br, bc, sr, sc)
 
-        bhikkhus = sorted(
-            [m for m in all_monks if m['monk_type'] == 'ភិក្ខុ'],
-            key=lambda m: (BHIKKHU_RANK.get(m['position'], 99), -m['vassa_years'])
-        )
-        samaneras = sorted(
-            [m for m in all_monks if m['monk_type'] == 'សាមណេរ'],
-            key=lambda m: (SAMANERA_ADMIN_RANK.get(m['position'], 99), -m['vassa_years'], m['fullname'])
-        )
+        if fmt == 'html':
+            return html_str, 200, {'Content-Type': 'text/html; charset=utf-8'}
 
-        def build_grid(monks, rows, cols, type_):
-            cells = []
-            for r in range(rows):
-                for c in range(cols):
-                    idx = r * cols + c
-                    m = monks[idx] if idx < len(monks) else None
-                    num = idx + 1
-                    if m:
-                        sub = m['position'] if (type_ == 'bhikkhu' or m['position'] in SAMANERA_ADMIN_RANK) \
-                              else f"វស្សា {m['vassa_years']}"
-                        cells.append(
-                            f'<td class="cell filled">'
-                            f'<span class="num">{num}</span>'
-                            f'<span class="name">{_html.escape(m["fullname"])}</span>'
-                            f'<span class="sub">{_html.escape(sub)}</span>'
-                            f'</td>'
-                        )
-                    else:
-                        cells.append(f'<td class="cell empty"><span class="num-e">{num}</span></td>')
-            rows_html = ''
-            for r in range(rows):
-                rows_html += '<tr>' + ''.join(cells[r * cols:(r + 1) * cols]) + '</tr>'
-            return f'<table>{rows_html}</table>'
-
-        today = date.today().strftime('%d/%m/%Y')
-        css = (
-            "@import url('https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&display=swap');"
-            "*, *::before, *::after{box-sizing:border-box;margin:0;padding:0}"
-            "body{font-family:'Battambang','Khmer MN',sans-serif;color:#1a202c;font-size:8.5px;background:#fff}"
-
-            # Header
-            ".header{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);"
-            "color:#fff;padding:10px 14px 9px;border-radius:7px;margin-bottom:10px}"
-            ".hdr-row{display:flex;justify-content:space-between;align-items:center}"
-            ".hdr-title{font-size:15px;font-weight:700;letter-spacing:.3px}"
-            ".hdr-sub{font-size:8px;opacity:.85;margin-top:2px}"
-            ".hdr-right{text-align:right;font-size:8px;opacity:.85}"
-            ".hdr-divider{border:none;border-top:1px solid rgba(255,255,255,.3);margin:7px 0 6px}"
-            ".hdr-stats{display:flex;gap:18px}"
-            ".hdr-stat{font-size:8px;opacity:.9}"
-            ".hdr-stat strong{font-size:12px;display:block;font-weight:700}"
-
-            # Section
-            ".sec{padding:4px 9px;font-size:10px;font-weight:700;border-radius:4px;margin:10px 0 4px}"
-            ".sec-b{background:#fff8e1;color:#8a6100;border-left:4px solid #f0c040}"
-            ".sec-s{background:#f1f8e9;color:#1b5e20;border-left:4px solid #66bb6a}"
-            ".sec-sub{font-size:7.5px;font-weight:400;opacity:.75;margin-left:6px}"
-
-            # Grid table
-            "table{width:100%;border-collapse:collapse;margin-bottom:8px}"
-            "td{border:1px solid #e2e8f0;vertical-align:top;padding:3px 4px}"
-            ".filled{background:#f7f8fa}"
-            ".empty{background:#fafbfc}"
-            ".num{display:block;font-size:6.5px;color:#a0aec0;line-height:1}"
-            ".num-e{display:block;font-size:6.5px;color:#e2e8f0}"
-            ".name{display:block;font-size:8px;font-weight:700;color:#1a202c;margin:2px 0 1px;line-height:1.3}"
-            ".sub{display:block;font-size:7px;color:#718096;line-height:1.2}"
-
-            # Footer
-            ".footer{position:running(footer);display:flex;justify-content:space-between;"
-            "font-size:7px;color:#a0aec0;border-top:1px solid #e2e8f0;padding-top:3px}"
-            "@page{size:A4 landscape;margin:10mm 12mm 16mm;"
-            "@bottom-center{content:element(footer)}}"
-        )
-        html_str = f'''<!DOCTYPE html>
-<html lang="km"><head><meta charset="UTF-8"><style>{css}
-@media print {{ @page {{ size: A4 landscape; margin: 10mm; }} }}
-</style></head><body>
-
-<div class="header">
-  <div class="hdr-row">
-    <div>
-      <div class="hdr-title">ប្លង់អាសនៈព្រះសង្ឃ — វត្តនិរោធរង្សី</div>
-      <div class="hdr-sub">Pagoda Niroth Rangsay — Seating Layout</div>
-    </div>
-    <div class="hdr-right">ថ្ងៃទី {today}<br>ស្ថានភាព​ ​បច្ចុប្បន្ន</div>
-  </div>
-  <hr class="hdr-divider">
-  <div class="hdr-stats">
-    <div class="hdr-stat"><strong>{len(bhikkhus)}</strong>ភិក្ខុ</div>
-    <div class="hdr-stat"><strong>{len(samaneras)}</strong>សាមណេរ</div>
-    <div class="hdr-stat"><strong>{len(bhikkhus)+len(samaneras)}</strong>ព្រះសង្ឃ​សរុប</div>
-  </div>
-</div>
-
-<div class="sec sec-b">ផ្នែកទី ១ — ភិក្ខុ
-  <span class="sec-sub">{len(bhikkhus)} នាក់ &nbsp;|&nbsp; ក្រឡា {br}×{bc}={br*bc}</span>
-</div>
-{build_grid(bhikkhus, br, bc, "bhikkhu")}
-
-<div class="sec sec-s">ផ្នែកទី ២ — សាមណេរ
-  <span class="sec-sub">{len(samaneras)} នាក់ &nbsp;|&nbsp; ក្រឡា {sr}×{sc}={sr*sc}</span>
-</div>
-{build_grid(samaneras, sr, sc, "samanera")}
-
-<div class="footer">
-  <span>វត្តនិរោធរង្សី — ប្លង់អាសនៈព្រះសង្ឃ</span>
-  <span>ថ្ងៃទី {today}</span>
-</div>
-</body></html>'''
-
+        from weasyprint import HTML
         pdf_bytes = HTML(string=html_str).write_pdf()
         buf = io.BytesIO(pdf_bytes)
         fname = f'layout_{date.today().strftime("%Y%m%d")}.pdf'
@@ -3016,9 +4498,6 @@ def export_layout_pdf():
 # ================================================================
 # MULTI-TIER REPORTING SYSTEM
 # ================================================================
-
-DISC_ABSENT_MIN = 2   # absences  > 1  (i.e. >= 2)
-DISC_PERM_MIN   = 3   # permissions > 2 (i.e. >= 3)
 
 
 def _do_compile_period(conn, cur, period_start):
@@ -3553,8 +5032,6 @@ def _make_export_docx(monks, type_label, subtitle, report_type):
 
     doc = Document()
     sec = doc.sections[0]
-    sec.orientation  = WD_ORIENT.LANDSCAPE
-    sec.page_width, sec.page_height = sec.page_height, sec.page_width
     sec.left_margin = sec.right_margin = Cm(1.5)
     sec.top_margin  = sec.bottom_margin = Cm(1.5)
 
@@ -3673,7 +5150,7 @@ def _make_export_html(monks, type_label, subtitle, report_type):
     cl = len(monks) - av - pv
 
     css = (
-        "@import url('https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&display=swap');"
+        "@import url('https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&family=Moul&display=swap');"
         "*, *::before, *::after{box-sizing:border-box;margin:0;padding:0}"
         "body{font-family:'Battambang','Khmer MN','Khmer Sangam MN',sans-serif;"
         "color:#1a202c;font-size:17px;background:#fff}"
@@ -3682,8 +5159,8 @@ def _make_export_html(monks, type_label, subtitle, report_type):
         ".header{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);"
         "color:#fff;padding:16px 18px 14px;border-radius:7px;margin-bottom:14px}"
         ".hdr-top{display:flex;justify-content:space-between;align-items:flex-start}"
-        ".hdr-title{font-size:27px;font-weight:700;letter-spacing:.3px}"
-        ".hdr-sub{font-size:15px;opacity:.85;margin-top:4px}"
+        ".hdr-title{font-family:'Moul','Battambang',serif;font-size:16px;font-weight:400;letter-spacing:.3px}"
+        ".hdr-sub{font-family:'Battambang',serif;font-size:14px;opacity:.85;margin-top:4px}"
         ".hdr-right{text-align:right;font-size:15px;opacity:.85}"
         ".hdr-divider{border:none;border-top:1px solid rgba(255,255,255,.3);margin:10px 0 8px}"
         ".hdr-stats{display:flex;gap:20px}"
@@ -3726,7 +5203,7 @@ def _make_export_html(monks, type_label, subtitle, report_type):
         # Footer
         ".footer{position:running(footer);display:flex;justify-content:space-between;"
         "font-size:12px;color:#a0aec0;border-top:1px solid #e2e8f0;padding-top:5px}"
-        "@page{size:A4 landscape;margin:12mm 10mm 17mm;"
+        "@page{size:A4 portrait;margin:12mm 10mm 17mm;"
         "@bottom-center{content:element(footer)}}"
 
         # Ministry document header
@@ -3737,8 +5214,8 @@ def _make_export_html(monks, type_label, subtitle, report_type):
         "display:flex;align-items:center;justify-content:center;font-size:7px;"
         "margin-bottom:4px;text-align:center;color:#2b6cb0}"
         ".mh-right{text-align:center;font-weight:700;font-size:15px;line-height:1.6;flex:1}"
-        ".mh-title{text-align:center;font-weight:700;font-size:22px;margin-top:4px}"
-        ".mh-sub{text-align:center;font-size:13px;color:#718096;margin:2px 0 12px}"
+        ".mh-title{text-align:center;font-family:'Moul','Battambang',serif;font-weight:400;font-size:16px;margin-top:4px}"
+        ".mh-sub{text-align:center;font-family:'Battambang',serif;font-size:14px;color:#718096;margin:2px 0 12px}"
     )
 
     lunar_str = khmer_lunar_date(_date.today())
@@ -3760,7 +5237,7 @@ def _make_export_html(monks, type_label, subtitle, report_type):
 
     return f'''<!DOCTYPE html>
 <html lang="km"><head><meta charset="UTF-8"><style>{css}
-@media print {{ @page {{ size: A4 landscape; margin: 10mm; }} }}
+@media print {{ @page {{ size: A4 portrait; margin: 12mm; }} }}
 </style></head><body>
 
 {ministry_header}

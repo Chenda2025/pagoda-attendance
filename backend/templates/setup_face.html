@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="km">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>រៀបចំ Face ID — វត្តនិរោធរង្សី</title>
+    <link rel="icon" type="image/jpeg" href="/static/logo.jpg">
+    <link href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/login.css?v=3">
+    <link rel="stylesheet" href="/static/css/face_id.css?v=5">
+</head>
+<body>
+    <div class="login-bg">
+        <div class="login-card login-card-wide">
+
+            <!-- Step 1: intro -->
+            <div class="fid-stage" id="stage-intro">
+                <div class="fid-ring-wrap">
+                    <div class="fid-ticks" id="intro-ticks"></div>
+                    <svg class="fid-face-icon" viewBox="0 0 120 120" fill="none" stroke="currentColor"
+                        stroke-width="3" stroke-linecap="round">
+                        <circle cx="60" cy="60" r="46" />
+                        <circle cx="45" cy="50" r="2.5" fill="currentColor" stroke="none" />
+                        <circle cx="75" cy="50" r="2.5" fill="currentColor" stroke="none" />
+                        <path d="M60 52v14h-5" />
+                        <path d="M45 80c5 5 25 5 30 0" />
+                    </svg>
+                </div>
+                <h1 class="fid-heading">របៀបរៀបចំ Face ID</h1>
+                <p class="fid-sub">
+                    ដំបូង ដាក់មុខរបស់អ្នកក្នុងស៊ុមកាមេរ៉ា។
+                    បន្ទាប់មក បង្វិលក្បាលជារង្វង់ ដើម្បីបង្ហាញគ្រប់ទិសនៃមុខរបស់អ្នក។
+                </p>
+                <button type="button" class="btn-fid" id="btn-start">ចាប់ផ្តើម</button>
+                <p class="fid-error" id="intro-error"></p>
+            </div>
+
+            <!-- Step 2: scanning -->
+            <div class="fid-stage" id="stage-scan" style="display:none">
+                <div class="fid-ring-wrap fid-dark">
+                    <div class="fid-ticks" id="scan-ticks"></div>
+                    <div class="fid-video-wrap">
+                        <video id="setup-video" autoplay playsinline muted></video>
+                        <svg class="fid-arrow" id="fid-arrow" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M4 11h11.2l-4.6-4.6L12 5l7 7-7 7-1.4-1.4 4.6-4.6H4z" />
+                        </svg>
+                    </div>
+                </div>
+                <h2 class="fid-heading" id="scan-heading">បង្វិលក្បាលតាមព្រួញ</h2>
+                <p class="fid-progress" id="scan-progress">ការស្កេនលើកទី ១</p>
+                <button type="button" class="btn-fid-plain" id="btn-restart">ចាប់ផ្តើមឡើងវិញ</button>
+                <p class="fid-error" id="scan-error"></p>
+            </div>
+
+            <!-- Step 3: done -->
+            <div class="fid-stage" id="stage-done" style="display:none">
+                <div class="fid-ring-wrap">
+                    <div class="fid-ticks" id="done-ticks"></div>
+                    <svg class="fid-face-icon" viewBox="0 0 120 120" fill="none" stroke="#30d158"
+                        stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M35 62l18 18 34-38" />
+                    </svg>
+                </div>
+                <h2 class="fid-heading fid-success">Face ID រួចរាល់</h2>
+                <p class="fid-sub">ពេលក្រោយ អ្នកអាចចូលប្រព័ន្ធដោយស្កេនមុខតែម្តង។</p>
+                <button type="button" class="btn-fid" id="btn-continue">បន្តទៅផ្ទាំងគ្រប់គ្រង</button>
+            </div>
+
+        </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.14/dist/face-api.js"></script>
+    <script src="/static/js/face_auth.js?v=2"></script>
+    <script src="/static/js/setup_face.js?v=2"></script>
+</body>
+</html>

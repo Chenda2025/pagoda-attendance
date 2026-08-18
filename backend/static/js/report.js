@@ -519,10 +519,10 @@ function renderSummary(monks) {
 
 // ============ EXPORT ============
 
-const _PDF_PAGE_W_PX = 1400; // render width; A4 landscape aspect ratio is preserved by jsPDF below
+const _PDF_PAGE_W_PX = 794; // A4 portrait @ ~96dpi (210mm)
 
 // Renders a standalone export HTML document (as returned by /api/reports/export?fmt=html)
-// off-screen at A4-landscape proportions and returns the rasterized canvas.
+// off-screen at A4-portrait width and returns the rasterized canvas.
 async function _renderExportHtmlToCanvas(html) {
     // Strip the server's auto-print script; we render this ourselves and don't want a print dialog.
     html = html.replace(/<script>[\s\S]*?window\.print\(\)[\s\S]*?<\/script>/i, '');
@@ -552,12 +552,12 @@ async function _renderExportHtmlToCanvas(html) {
     }
 }
 
-// Renders the export HTML and saves it as a real, downloadable A4-landscape PDF file.
+// Renders the export HTML and saves it as a downloadable A4-portrait PDF file.
 async function _downloadHtmlAsPdf(html, filename) {
     const canvas = await _renderExportHtmlToCanvas(html);
 
     const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const pageW = pdf.internal.pageSize.getWidth();
     const pageH = pdf.internal.pageSize.getHeight();
     const imgW  = pageW;
@@ -621,7 +621,7 @@ async function exportReport(action, fmt = 'docx') {
 
     try {
         if (isTg) {
-            // Render the same A4-landscape PDF report HTML and send that image to Telegram,
+            // Render the same A4-portrait report HTML and send that image to Telegram,
             // so the Telegram image always matches the PDF report (incl. active filters).
             p.set('fmt', 'html');
             const res0 = await fetch(`/api/reports/export?${p}`);
@@ -642,33 +642,52 @@ async function exportReport(action, fmt = 'docx') {
             const res = await fetch(`/api/reports/export?${p}`);
             if (!res.ok) { const j = await res.json(); throw new Error(j.message); }
             const html = await res.text();
-            await _downloadHtmlAsPdf(html, `report_${type}_${date}.pdf`);
-            showToast('ឯកសារ PDF បានដំណើរការ!', 'success');
+            await ExportPreview.open({
+                title: 'របាយការណ៍',
+                subtitle: `${type} · ${date}`,
+                formatLabel: 'PDF',
+                preview: { type: 'html', html },
+                onDownload: async () => {
+                    await _downloadHtmlAsPdf(html, `report_${type}_${date}.pdf`);
+                    showToast('ឯកសារ PDF បានដំណើរការ!', 'success');
+                },
+            });
         } else if (isImg) {
-            // Image download — same rendering pipeline as the Telegram image, saved locally.
             p.set('fmt', 'html');
             const res = await fetch(`/api/reports/export?${p}`);
             if (!res.ok) { const j = await res.json(); throw new Error(j.message); }
             const html = await res.text();
             const canvas = await _renderExportHtmlToCanvas(html);
-            const blob   = await new Promise(r => canvas.toBlob(r, 'image/png'));
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = `report_${type}_${date}.png`;
-            a.click();
-            URL.revokeObjectURL(a.href);
-            showToast('រូបភាពបានដំណើរការ!', 'success');
+            await ExportPreview.open({
+                title: 'របាយការណ៍',
+                subtitle: `${type} · ${date}`,
+                formatLabel: 'រូបភាព PNG',
+                preview: { type: 'canvas', canvas },
+                onDownload: async () => {
+                    const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+                    ExportPreview.downloadBlob(blob, `report_${type}_${date}.png`);
+                    showToast('រូបភាពបានដំណើរការ!', 'success');
+                },
+            });
         } else {
-            // DOCX/Excel download
-            const res = await fetch(`/api/reports/export?${p}`);
-            if (!res.ok) { const j = await res.json(); throw new Error(j.message); }
-            const blob = await res.blob();
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = `report_${type}_${date}.${isExcel ? 'xlsx' : 'docx'}`;
-            a.click();
-            URL.revokeObjectURL(a.href);
-            showToast(isExcel ? 'ឯកសារ Excel បានដំណើរការ!' : 'ឯកសារ Word បានដំណើរការ!', 'success');
+            p.set('fmt', 'html');
+            const resHtml = await fetch(`/api/reports/export?${p}`);
+            if (!resHtml.ok) { const j = await resHtml.json(); throw new Error(j.message); }
+            const html = await resHtml.text();
+            await ExportPreview.open({
+                title: 'របាយការណ៍',
+                subtitle: `${type} · ${date}`,
+                formatLabel: isExcel ? 'Excel (.xlsx)' : 'Word (.docx)',
+                preview: { type: 'html', html },
+                onDownload: async () => {
+                    p.set('fmt', fmt);
+                    const res = await fetch(`/api/reports/export?${p}`);
+                    if (!res.ok) { const j = await res.json(); throw new Error(j.message); }
+                    const blob = await res.blob();
+                    ExportPreview.downloadBlob(blob, `report_${type}_${date}.${isExcel ? 'xlsx' : 'docx'}`);
+                    showToast(isExcel ? 'ឯកសារ Excel បានដំណើរការ!' : 'ឯកសារ Word បានដំណើរការ!', 'success');
+                },
+            });
         }
     } catch (err) {
         showToast('មានបញ្ហា: ' + err.message, 'error');

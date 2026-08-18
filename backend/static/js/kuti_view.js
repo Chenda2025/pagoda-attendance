@@ -340,27 +340,48 @@
         const fmt = item.dataset.fmt;
         exportMenu.classList.remove('open');
 
-        if (fmt === 'docx' || fmt === 'excel') {
-            window.location.href = `${EXPORT_API}?fmt=${fmt}`;
-            return;
-        }
+        const orig = item.innerHTML;
+        item.disabled = true;
+        item.textContent = 'កំពុងបង្កើត...';
 
-        if (fmt === 'pdf') {
-            const orig = item.innerHTML;
-            item.disabled = true;
-            item.textContent = 'កំពុងបង្កើត...';
-            try {
+        try {
+            const day = new Date().toISOString().slice(0, 10);
+
+            if (fmt === 'docx' || fmt === 'excel') {
                 const res = await fetch(`${EXPORT_API}?fmt=html`);
                 if (!res.ok) throw new Error('មិនអាចនាំចេញបាន');
                 const html = await res.text();
-                const day = new Date().toISOString().slice(0, 10);
-                await downloadHtmlAsPdf(html, `kuti_${day}.pdf`);
-            } catch (err) {
-                alert(err.message || 'មិនអាចបង្កើត PDF បាន');
-            } finally {
-                item.disabled = false;
-                item.innerHTML = orig;
+                await ExportPreview.open({
+                    title: KUTI_RESIDENCE || 'បញ្ជីព្រះសង្ឃ',
+                    subtitle: `ថ្ងៃ ${day}`,
+                    formatLabel: fmt === 'excel' ? 'Excel (.xlsx)' : 'Word (.docx)',
+                    preview: { type: 'html', html },
+                    onDownload: async () => {
+                        window.location.href = `${EXPORT_API}?fmt=${fmt}`;
+                    },
+                });
+                return;
             }
+
+            if (fmt === 'pdf') {
+                const res = await fetch(`${EXPORT_API}?fmt=html`);
+                if (!res.ok) throw new Error('មិនអាចនាំចេញបាន');
+                const html = await res.text();
+                await ExportPreview.open({
+                    title: KUTI_RESIDENCE || 'បញ្ជីព្រះសង្ឃ',
+                    subtitle: `ថ្ងៃ ${day}`,
+                    formatLabel: 'PDF',
+                    preview: { type: 'html', html },
+                    onDownload: async () => {
+                        await downloadHtmlAsPdf(html, `kuti_${day}.pdf`);
+                    },
+                });
+            }
+        } catch (err) {
+            alert(err.message || 'មិនអាចបង្កើតឯកសារបាន');
+        } finally {
+            item.disabled = false;
+            item.innerHTML = orig;
         }
     });
 

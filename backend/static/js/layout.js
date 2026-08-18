@@ -1,18 +1,23 @@
 'use strict';
 
+// Mirrors sorting.py ROLE_RANK — rank 1 = highest (first row / seat 1)
 const BHIKKHU_RANK = {
-    'ព្រះគ្រូសូត្រស្តាំ':         1,  // Senior Reciter (Right)
-    'ព្រះគ្រូសូត្រឆ្វេង':         2,  // Senior Reciter (Left)
-    'ព្រះគ្រូវិន័យធរ':           3,  // Discipline Keeper
-    'ព្រះគ្រូលេខា':               4,  // Secretary Monk
-    'ព្រះគ្រូប្រធានការក':        5,  // Committee Chairperson
-    'ព្រះគ្រូអនុប្រធានការកទី១':  6,  // First Vice-Chairperson
-    'ព្រះគ្រូអនុប្រធានការកទី២':  7,  // Second Vice-Chairperson
-    'មេកុដិ':                     8,  // Kuti Head
-    'អនុកុដិ':                    9,  // Deputy Kuti Head
-    'ព្រះសង្ឃធម្មតា':            10, // Regular monk
-    'សមណសិស្ស':                 10, // Disciple / student monk
+    'ព្រះអធិការ':                 1,
+    'ព្រះគ្រូសូត្រស្តាំ':         2,
+    'ព្រះគ្រូសូត្រឆ្វេង':         3,
+    'ព្រះគ្រូវិន័យធរ':           4,
+    'ព្រះគ្រូលេខា':               5,
+    'មេក្រុម':                    6,
+    'ព្រះគ្រូប្រធានការក':        7,
+    'មេកុដិ':                     8,
+    'អនុកុដិ':                    9,
+    'អនុមេក្រុម':                  10,
+    'ព្រះគ្រូអនុប្រធានការកទី១':  10,
+    'ព្រះគ្រូអនុប្រធានការកទី២':  10,
+    'ព្រះសង្ឃធម្មតា':            11,
+    'សមណសិស្ស':                 11,
 };
+const BHIKKHU_CHIEF_POSITION = 'ព្រះអធិការ';
 
 const SAMANERA_ADMIN_RANK = {
     'មេកុដិ':  1,
@@ -33,30 +38,118 @@ const moveState = {
     samanera: { active: false, selectedPos: null },
 };
 
-function applyStoredOrder(type, defaultSorted) {
-    const stored = type === 'bhikkhu' ? bhikkhuOrder : samaneraOrder;
-    if (!stored) return defaultSorted;
-    const byId = new Map(defaultSorted.map(m => [m.id, m]));
-    const ordered = [], seen = new Set();
-    for (const id of stored) {
-        if (id === null) {
-            ordered.push(null);
-            continue;
-        }
-        const m = byId.get(id);
-        if (m) { 
-            ordered.push(m); 
-            seen.add(id); 
-        } else {
-            ordered.push(null);
-        }
+function isBhikkhuOrderValid(stored, cols, chief) {
+    if (!stored || !stored.length) return true;
 
+    const chiefSeat = Math.floor(cols / 2);
+    const first = stored[chiefSeat] ?? null;
+    if (chief ? first !== chief.id : first !== null) return false;
+    for (let i = 0; i < cols; i++) {
+        if (i === chiefSeat) continue;
+        if ((stored[i] ?? null) !== null) return false;
     }
-    defaultSorted.forEach(m => { if (!seen.has(m.id)) ordered.push(m); });
-    return ordered;
+    return true;
+}
+
+function buildGridLayout(type, defaultSorted, rows, cols) {
+    const stored = type === 'bhikkhu' ? bhikkhuOrder : samaneraOrder;
+    const total = rows * cols;
+    const grid = new Array(total).fill(null);
+    const byId = new Map(defaultSorted.map(m => [m.id, m]));
+    const placed = new Set();
+    const firstDataIndex = type === 'bhikkhu' ? cols : 0;
+    const chiefSeat = type === 'bhikkhu' ? Math.floor(cols / 2) : 0;
+    const chief = type === 'bhikkhu'
+        ? defaultSorted.find(m => m.position === BHIKKHU_CHIEF_POSITION)
+        : null;
+    const storedIsValid = type !== 'bhikkhu' || isBhikkhuOrderValid(stored, cols, chief);
+    const storedForLayout = storedIsValid ? stored : null;
+
+    // Keep the first bhikkhu row exclusively for the chief monk.
+    if (type === 'bhikkhu' && total > 0) {
+        if (chief) {
+            grid[chiefSeat] = chief;
+            placed.add(chief.id);
+        }
+    }
+
+    if (storedForLayout && storedForLayout.length) {
+        for (let i = 0; i < Math.min(storedForLayout.length, total); i++) {
+            const id = storedForLayout[i];
+            if (type === 'bhikkhu' && i < firstDataIndex) continue;
+            if (id === null) continue;
+            const m = byId.get(id);
+            if (m && !placed.has(id)) {
+                grid[i] = m;
+                placed.add(id);
+            }
+        }
+    }
+
+    const remaining = defaultSorted.filter(m => !placed.has(m.id));
+    let ri = 0;
+    for (let i = firstDataIndex; i < total && ri < remaining.length; i++) {
+        if (!grid[i]) {
+            grid[i] = remaining[ri++];
+            placed.add(grid[i].id);
+        }
+    }
+
+    return { grid, overflow: remaining.slice(ri) };
+}
+
+function resetGridLayout(defaultSorted, rows, cols, type) {
+    const total = rows * cols;
+    const grid = new Array(total).fill(null);
+    const firstDataIndex = type === 'bhikkhu' ? cols : 0;
+    const chiefSeat = type === 'bhikkhu' ? Math.floor(cols / 2) : 0;
+    const placed = new Set();
+    const chief = type === 'bhikkhu'
+        ? defaultSorted.find(m => m.position === BHIKKHU_CHIEF_POSITION)
+        : null;
+
+    if (type === 'bhikkhu' && total > 0) {
+        if (chief) {
+            grid[chiefSeat] = chief;
+            placed.add(chief.id);
+        }
+    }
+
+    const remaining = defaultSorted.filter(m => !placed.has(m.id));
+    let ri = 0;
+    for (let i = firstDataIndex; i < total && ri < remaining.length; i++) {
+        grid[i] = remaining[ri++];
+    }
+    return { grid, overflow: remaining.slice(ri) };
+}
+
+async function persistSeatOrder(type, grid) {
+    if (typeof PAGE_ROLE === 'undefined' || PAGE_ROLE !== 'admin') return;
+    const ids = grid.map(m => m ? m.id : null);
+    try {
+        const res = await fetch('/api/seat-order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type, ids }),
+        });
+        const json = await res.json();
+        if (json.success) {
+            seatOrderUpdatedAt = json.updated_at;
+            if (type === 'bhikkhu') bhikkhuOrder = ids;
+            else samaneraOrder = ids;
+        }
+    } catch { /* non-fatal */ }
 }
 
 async function swapMonks(type, posA, posB) {
+    if (type === 'bhikkhu') {
+        const cols = clamp(parseInt(document.getElementById('bhikkhu-cols')?.value) || 5, 1, 30);
+        if (posA < cols || posB < cols) {
+            showToast('ជួរទី១ ទុកសម្រាប់ ព្រះអធិការ', 'error');
+            return;
+        }
+    }
+
     const current = type === 'bhikkhu' ? currentBhikkhu : currentSamanera;
     const ids = current.map(m => m ? m.id : null);
     [ids[posA], ids[posB]] = [ids[posB], ids[posA]];
@@ -87,6 +180,14 @@ async function swapMonks(type, posA, posB) {
 async function handleMoveClick(type, cell) {
     const pos   = parseInt(cell.dataset.pos);
     const state = moveState[type];
+    if (type === 'bhikkhu') {
+        const cols = clamp(parseInt(document.getElementById('bhikkhu-cols')?.value) || 5, 1, 30);
+        if (pos < cols) {
+            showToast('ជួរទី១ ទុកសម្រាប់ ព្រះអធិការ', 'error');
+            return;
+        }
+    }
+
     if (state.selectedPos === null) {
         state.selectedPos = pos;
         cell.classList.add('seat-move-selected');
@@ -392,7 +493,7 @@ function _renderAttModal({ date, loading, bodyHtml = '', grandAbsent = 0, grandP
         </div>`;
 }
 
-function generateBhikkhu() {
+function generateBhikkhu(reset = false) {
     const rows = clamp(parseInt(document.getElementById('bhikkhu-rows').value) || 3, 1, 30);
     const cols = clamp(parseInt(document.getElementById('bhikkhu-cols').value) || 5, 1, 30);
     localStorage.setItem('bhikkhu-rows', rows);
@@ -404,16 +505,25 @@ function generateBhikkhu() {
             const ra = BHIKKHU_RANK[a.position] ?? 99;
             const rb = BHIKKHU_RANK[b.position] ?? 99;
             if (ra !== rb) return ra - rb;
-            return b.vassa_years - a.vassa_years; // tiebreak: more vassa first
+            return b.vassa_years - a.vassa_years;
         });
 
-    currentBhikkhu = applyStoredOrder('bhikkhu', defaultSorted);
-    renderGrid('bhikkhu-grid', currentBhikkhu, rows, cols, 'bhikkhu');
+    const { grid, overflow } = reset
+        ? resetGridLayout(defaultSorted, rows, cols, 'bhikkhu')
+        : buildGridLayout('bhikkhu', defaultSorted, rows, cols);
+    currentBhikkhu = grid;
+    renderGrid('bhikkhu-grid', currentBhikkhu, rows, cols, 'bhikkhu', overflow.length, defaultSorted.length);
     renderTotals();
-
+    return { grid, overflow };
 }
 
-function generateSamanera() {
+async function generateBhikkhuAndSave() {
+    const { grid } = generateBhikkhu(true);
+    await persistSeatOrder('bhikkhu', grid);
+    showToast('បានបង្កើតប្លង់ភិក្ខុ ✓', 'success');
+}
+
+function generateSamanera(reset = false) {
     const rows = clamp(parseInt(document.getElementById('samanera-rows').value) || 12, 1, 50);
     const cols = clamp(parseInt(document.getElementById('samanera-cols').value) || 10, 1, 30);
     localStorage.setItem('samanera-rows', rows);
@@ -429,22 +539,42 @@ function generateSamanera() {
             return a.fullname.localeCompare(b.fullname);
         });
 
-    currentSamanera = applyStoredOrder('samanera', defaultSorted);
-    renderGrid('samanera-grid', currentSamanera, rows, cols, 'samanera');
+    const { grid, overflow } = reset
+        ? resetGridLayout(defaultSorted, rows, cols, 'samanera')
+        : buildGridLayout('samanera', defaultSorted, rows, cols);
+    currentSamanera = grid;
+    renderGrid('samanera-grid', currentSamanera, rows, cols, 'samanera', overflow.length, defaultSorted.length);
     renderTotals();
+    return { grid, overflow };
+}
 
+async function generateSamaneraAndSave() {
+    const { grid } = generateSamanera(true);
+    await persistSeatOrder('samanera', grid);
+    showToast('បានបង្កើតប្លង់សាមណេរ ✓', 'success');
 }
 
 // ============ GRID RENDERER ============
 
-function renderGrid(containerId, monks, rows, cols, type) {
+function renderGrid(containerId, monks, rows, cols, type, overflowCount = 0, eligibleCount = null) {
     const container = document.getElementById(containerId);
     const total = rows * cols;
-    const actualCount = monks.filter(m => m !== null).length;
-    const overflow = actualCount > total ? actualCount - total : 0;
+    const filled = monks.filter(m => m !== null).length;
+    const eligible = eligibleCount ?? filled;
     const typeLabel = type === 'bhikkhu' ? 'ភិក្ខុ' : 'សាមណេរ';
 
-    let html = `
+    let statsHtml = `
+        <div class="grid-stats">
+            <span class="stat-item"><strong>${filled}</strong> / ${total} កន្លែង</span>
+            <span class="stat-item">${typeLabel} ${filled} / ${eligible} នាក់</span>`;
+    if (overflowCount > 0) {
+        statsHtml += `<span class="stat-overflow">⚠ ${overflowCount} នាក់មិនចូលក្នុងក្រឡា — បង្កើនជួរដេក/ឈរ</span>`;
+    } else if (filled < total) {
+        statsHtml += `<span class="stat-ok">${total - filled} កន្លែងទទេ</span>`;
+    }
+    statsHtml += '</div>';
+
+    let html = statsHtml + `
         <div class="grid-scroll">
         <table class="seat-grid">
             <tbody>`;
@@ -454,6 +584,7 @@ function renderGrid(containerId, monks, rows, cols, type) {
         for (let c = 0; c < cols; c++) {
             const idx = r * cols + c;
             const monk = monks[idx];
+            const isReserved = type === 'bhikkhu' && idx < cols;
             if (monk) {
                 const sub = (type === 'bhikkhu' || SAMANERA_ADMIN_RANK[monk.position])
                     ? escapeHtml(monk.position)
@@ -466,19 +597,14 @@ function renderGrid(containerId, monks, rows, cols, type) {
                 if (att === 'absent') badgeText = 'អវត្តមាន';
                 else if (att === 'permission') {
                     const permInfo = permissionsMap.get(monk.id);
-                    badgeText = 'ច្បាប់';
-                    if (permInfo && permInfo.days_left >= 0) {
-                        if (permInfo.days_left === 0) {
-                            badgeText += ` (ល្ងាចនេះ)`;
-                        } else {
-                            badgeText += ` (សល់${permInfo.days_left} ថ្ងៃ)`;
-                        }
-                    }
+                    badgeText = permissionBadgeText(permInfo);
                     if (permInfo) {
                         permIcon = `<span class="perm-icon"
                             data-start="${escapeHtml(permInfo.start_date || '')}"
                             data-end="${escapeHtml(permInfo.end_date || '')}"
                             data-days="${permInfo.days_left ?? ''}"
+                            data-shift="${escapeHtml(permInfo.shift || '')}"
+                            data-same-day="${permInfo.same_day ? '1' : '0'}"
                             data-reason="${escapeHtml(permInfo.reason || '')}">
                             <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
@@ -490,11 +616,12 @@ function renderGrid(containerId, monks, rows, cols, type) {
                 const attBadge = badgeText ? `<span class="seat-status">${badgeText}</span>` : '';
                 
                 html += `
-                    <td class="seat-cell seat-filled${attClass}"
+                    <td class="seat-cell seat-filled${attClass}${isReserved ? ' seat-reserved' : ''}"
                         data-monk-id="${monk.id}"
                         data-monk-name="${escapeHtml(monk.fullname)}"
                         data-pos="${idx}"
                         data-type="${type}"
+                        data-reserved="${isReserved ? '1' : '0'}"
                         title="${escapeHtml(monk.fullname)}">
                         <span class="seat-num">${idx + 1}</span>
                         <span class="seat-name">${escapeHtml(monk.fullname)}</span>
@@ -503,7 +630,7 @@ function renderGrid(containerId, monks, rows, cols, type) {
                         ${permIcon}
                     </td>`;
             } else {
-                html += `<td class="seat-cell seat-empty" data-pos="${idx}" data-type="${type}"><span class="seat-num">${idx + 1}</span></td>`;
+                html += `<td class="seat-cell seat-empty${isReserved ? ' seat-reserved' : ''}" data-pos="${idx}" data-type="${type}" data-reserved="${isReserved ? '1' : '0'}" title="${isReserved ? 'ជួរទី១ ទុកសម្រាប់ ព្រះអធិការ' : ''}"><span class="seat-num">${idx + 1}</span></td>`;
             }
         }
         html += '</tr>';
@@ -561,16 +688,7 @@ function updateCellDisplay(monkId) {
         if (status === 'absent') {
             span.textContent = 'អវត្តមាន';
         } else {
-            let text = 'ច្បាប់';
-            const permInfo = permissionsMap.get(monkId);
-            if (permInfo && permInfo.days_left >= 0) {
-                if (permInfo.days_left === 0) {
-                    text += ` (ល្ងាចនេះ)`;
-                } else {
-                    text += ` (សល់${permInfo.days_left} ថ្ងៃ)`;
-                }
-            }
-            span.textContent = text;
+            span.textContent = permissionBadgeText(permissionsMap.get(monkId));
         }
         
         cell.appendChild(span);
@@ -681,6 +799,64 @@ function scheduleNewDayReset() {
 
 let activeMonkId = null;
 
+function permissionBadgeText(permInfo) {
+    if (!permInfo || permInfo.days_left < 0) return 'ច្បាប់';
+    if (permInfo.same_day && permInfo.shift) return `ច្បាប់ (${permInfo.shift})`;
+    if (permInfo.days_left === 0) return 'ច្បាប់ (ល្ងាចនេះ)';
+    return `ច្បាប់ (សល់${permInfo.days_left} ថ្ងៃ)`;
+}
+
+function getSelectedPermShift() {
+    const active = document.querySelector('.perm-shift-btn.is-active');
+    return active ? active.dataset.shift : 'ល្ងាច';
+}
+
+function setSelectedPermShift(shift) {
+    document.querySelectorAll('.perm-shift-btn').forEach(btn => {
+        btn.classList.toggle('is-active', btn.dataset.shift === shift);
+    });
+}
+
+function isSameDayPermission() {
+    const start = document.getElementById('perm-start-date')?.value;
+    const end = document.getElementById('perm-end-date')?.value;
+    return !!(start && end && start === end);
+}
+
+function syncPermDurationHint() {
+    const hint = document.getElementById('perm-duration-hint');
+    if (!hint) return;
+    const start = document.getElementById('perm-start-date')?.value;
+    const end = document.getElementById('perm-end-date')?.value;
+    if (!start || !end || end < start) {
+        hint.hidden = true;
+        hint.textContent = '';
+        return;
+    }
+    if (start === end) {
+        hint.hidden = true;
+        hint.textContent = '';
+        return;
+    }
+    const days = Math.round((new Date(end) - new Date(start)) / 86400000) + 1;
+    hint.textContent = `សរុប ${days} ថ្ងៃ`;
+    hint.hidden = false;
+}
+
+function syncPermShiftVisibility() {
+    const group = document.getElementById('perm-shift-group');
+    if (!group) return;
+    group.hidden = !isSameDayPermission();
+    syncPermDurationHint();
+}
+
+function closePermModal() {
+    const modal = document.getElementById('permission-modal');
+    if (!modal) return;
+    modal.style.display = 'none';
+    document.body.style.overflow = '';
+}
+
 function openPermModal(monkId, monkName) {
     activeMonkId = monkId;
     document.getElementById('perm-monk-name').textContent = monkName;
@@ -689,7 +865,11 @@ function openPermModal(monkId, monkName) {
     document.getElementById('perm-start-date').value = info?.start_date || today;
     document.getElementById('perm-end-date').value   = info?.end_date   || today;
     document.getElementById('perm-reason').value     = info?.reason     || '';
+    setSelectedPermShift(info?.shift === 'ព្រឹក' ? 'ព្រឹក' : 'ល្ងាច');
+    syncPermShiftVisibility();
     document.getElementById('permission-modal').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    document.getElementById('perm-reason')?.focus();
 }
 
 function initPopover() {
@@ -790,16 +970,21 @@ function initPopover() {
     const permEndInput    = document.getElementById('perm-end-date');
     const permReasonInput = document.getElementById('perm-reason');
 
+    permStartInput.addEventListener('change', syncPermShiftVisibility);
+    permEndInput.addEventListener('change', syncPermShiftVisibility);
+    document.querySelectorAll('.perm-shift-btn').forEach(btn => {
+        btn.addEventListener('click', () => setSelectedPermShift(btn.dataset.shift));
+    });
+
     permBtn.addEventListener('click', () => {
         popover.style.display = 'none';
         openPermModal(activeMonkId, nameEl.textContent);
     });
     
-    document.getElementById('btn-cancel-perm').addEventListener('click', () => {
-        permModal.style.display = 'none';
-    });
+    document.getElementById('btn-cancel-perm').addEventListener('click', closePermModal);
+    document.getElementById('btn-close-perm').addEventListener('click', closePermModal);
     permModal.addEventListener('click', e => {
-        if (e.target === permModal) permModal.style.display = 'none';
+        if (e.target === permModal) closePermModal();
     });
     
     document.getElementById('btn-save-perm').addEventListener('click', async () => {
@@ -828,14 +1013,15 @@ function initPopover() {
                     monk_id: activeMonkId,
                     start_date: start,
                     end_date: end,
-                    reason: reason
+                    reason: reason,
+                    shift: start === end ? getSelectedPermShift() : null,
                 })
             });
             const json = await res.json();
             if (!json.success) throw new Error(json.message);
             
             showToast('បានរក្សាទុកការសុំច្បាប់ជោគជ័យ', 'success');
-            permModal.style.display = 'none';
+            closePermModal();
             await loadData();
             if (document.getElementById('att-list-modal').style.display !== 'none')
                 await showAttList();
@@ -901,25 +1087,47 @@ function _getGridParams() {
     };
 }
 
-async function _doExport(endpoint, ext, btn, busyLabel, doneLabel) {
+async function _doExport(endpoint, ext, btn, busyLabel, doneLabel, formatLabel) {
     const { br, bc, sr, sc } = _getGridParams();
+    const layoutEl = document.getElementById('layout-content');
+    if (!layoutEl || layoutEl.style.display === 'none') {
+        showToast('សូមបង្កើតប្លង់មុន', 'error');
+        return;
+    }
+
     const origHTML = btn.innerHTML;
     btn.disabled    = true;
     btn.textContent = busyLabel;
 
     try {
-        const res = await fetch(`${endpoint}?br=${br}&bc=${bc}&sr=${sr}&sc=${sc}`);
-        if (!res.ok) {
-            const j = await res.json().catch(() => ({}));
-            throw new Error(j.message || `HTTP ${res.status}`);
+        const params = `br=${br}&bc=${bc}&sr=${sr}&sc=${sc}`;
+        const downloadUrl = `${endpoint}?${params}`;
+        const previewUrl = `/api/export-layout-pdf?${params}&fmt=html`;
+        const day = new Date().toISOString().slice(0, 10);
+
+        const previewRes = await fetch(previewUrl);
+        if (!previewRes.ok) {
+            const j = await previewRes.json().catch(() => ({}));
+            throw new Error(j.message || `HTTP ${previewRes.status}`);
         }
-        const blob = await res.blob();
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = `layout_${new Date().toISOString().slice(0, 10)}.${ext}`;
-        a.click();
-        URL.revokeObjectURL(a.href);
-        showToast(doneLabel, 'success');
+        const html = await previewRes.text();
+
+        await ExportPreview.open({
+            title: 'ប្លង់កន្លែងអង្គុយ',
+            subtitle: `ថ្ងៃ ${day}`,
+            formatLabel: formatLabel || (ext === 'pdf' ? 'PDF' : 'Word (.docx)'),
+            preview: { type: 'html', html },
+            onDownload: async () => {
+                const res = await fetch(downloadUrl);
+                if (!res.ok) {
+                    const j = await res.json().catch(() => ({}));
+                    throw new Error(j.message || `HTTP ${res.status}`);
+                }
+                const blob = await res.blob();
+                ExportPreview.downloadBlob(blob, `layout_${day}.${ext}`);
+                showToast(doneLabel, 'success');
+            },
+        });
     } catch (err) {
         showToast('មានបញ្ហា: ' + err.message, 'error');
     } finally {
@@ -930,19 +1138,12 @@ async function _doExport(endpoint, ext, btn, busyLabel, doneLabel) {
 
 function exportWord() {
     const btn = document.getElementById('btn-export-word');
-    _doExport('/api/export-layout', 'docx', btn, 'កំពុងបង្កើត...', 'ឯកសារ Word បានដំណើរការជោគជ័យ!');
+    _doExport('/api/export-layout', 'docx', btn, 'កំពុងបង្កើត...', 'ឯកសារ Word បានដំណើរការជោគជ័យ!', 'Word (.docx)');
 }
 
 function exportPdf() {
     const btn = document.getElementById('btn-export-pdf');
-    const origHTML = btn.innerHTML;
-    btn.disabled = true;
-    btn.textContent = 'កំពុងរៀបចំ...';
-    setTimeout(() => {
-        window.open(`/api/export-layout-pdf?date=${document.getElementById('att-date').value}`, '_blank');
-        btn.disabled = false;
-        btn.innerHTML = origHTML;
-    }, 300);
+    _doExport('/api/export-layout-pdf', 'pdf', btn, 'កំពុងរៀបចំ...', 'ឯកសារ PDF បានដំណើរការជោគជ័យ!', 'PDF');
 }
 
 // ============ PERMISSION PREVIEW TOOLTIP ============
@@ -958,10 +1159,13 @@ function initPermTooltip() {
         const end    = icon.dataset.end;
         const days   = icon.dataset.days;
         const reason = icon.dataset.reason;
+        const shift  = icon.dataset.shift;
+        const sameDay = icon.dataset.sameDay === '1';
 
         let html = `<div class="perm-tip-title">ព័ត៌មានច្បាប់</div>`;
         if (start)       html += `<div class="perm-tip-row"><span class="perm-tip-lbl">ចាប់ពី</span><span>${escapeHtml(start)}</span></div>`;
         if (end)         html += `<div class="perm-tip-row"><span class="perm-tip-lbl">ដល់</span><span>${escapeHtml(end)}</span></div>`;
+        if (sameDay && shift) html += `<div class="perm-tip-row"><span class="perm-tip-lbl">វេន</span><span>${escapeHtml(shift)}</span></div>`;
         if (days !== '') html += `<div class="perm-tip-row"><span class="perm-tip-lbl">សល់</span><span>${escapeHtml(String(days))} ថ្ងៃ</span></div>`;
         if (reason)      html += `<div class="perm-tip-row"><span class="perm-tip-lbl">មូលហេតុ</span><span>${escapeHtml(reason)}</span></div>`;
 
@@ -1149,8 +1353,8 @@ document.addEventListener('DOMContentLoaded', () => {
     loadData();
     setInterval(pollSeatOrder, 5000); // sync seat order from DB every 5 s
 
-    document.getElementById('btn-gen-bhikkhu')?.addEventListener('click', () => { generateBhikkhu(); saveGridConfig(); });
-    document.getElementById('btn-gen-samanera')?.addEventListener('click', () => { generateSamanera(); saveGridConfig(); });
+    document.getElementById('btn-gen-bhikkhu')?.addEventListener('click', () => { generateBhikkhuAndSave(); saveGridConfig(); });
+    document.getElementById('btn-gen-samanera')?.addEventListener('click', () => { generateSamaneraAndSave(); saveGridConfig(); });
     document.getElementById('btn-submit-att').addEventListener('click', submitAttendance);
     // Export dropdown
     const _layDd = document.getElementById('lay-export-dd');
@@ -1164,8 +1368,8 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btn-export-pdf').addEventListener('click',  () => { _layDd.classList.remove('open'); exportPdf(); });
 
     // Regenerate on Enter key
-    document.getElementById('bhikkhu-rows')?.addEventListener('keydown',  e => { if (e.key === 'Enter') { generateBhikkhu();  saveGridConfig(); } });
-    document.getElementById('bhikkhu-cols')?.addEventListener('keydown',  e => { if (e.key === 'Enter') { generateBhikkhu();  saveGridConfig(); } });
-    document.getElementById('samanera-rows')?.addEventListener('keydown', e => { if (e.key === 'Enter') { generateSamanera(); saveGridConfig(); } });
-    document.getElementById('samanera-cols')?.addEventListener('keydown', e => { if (e.key === 'Enter') { generateSamanera(); saveGridConfig(); } });
+    document.getElementById('bhikkhu-rows')?.addEventListener('keydown',  e => { if (e.key === 'Enter') { generateBhikkhuAndSave(); saveGridConfig(); } });
+    document.getElementById('bhikkhu-cols')?.addEventListener('keydown',  e => { if (e.key === 'Enter') { generateBhikkhuAndSave(); saveGridConfig(); } });
+    document.getElementById('samanera-rows')?.addEventListener('keydown', e => { if (e.key === 'Enter') { generateSamaneraAndSave(); saveGridConfig(); } });
+    document.getElementById('samanera-cols')?.addEventListener('keydown', e => { if (e.key === 'Enter') { generateSamaneraAndSave(); saveGridConfig(); } });
 });

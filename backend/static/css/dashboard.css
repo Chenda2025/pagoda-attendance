@@ -370,6 +370,9 @@ body {
 .mod-report  { background: #f7efd4; color: #8a6d12; }
 .mod-book    { background: #efe8f7; color: #5b3d8a; }
 .mod-kuti    { background: #e8f5f0; color: #1f6b4a; }
+.mod-kuti-status { background: #e4f1f7; color: #2f6f8f; }
+.mod-telegram { background: #e3f4fc; color: #229ED9; }
+.mod-users   { background: #f3e8ff; color: #6b46c1; }
 .mod-public  { background: #eef2f6; color: var(--muted); }
 
 .mod-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }

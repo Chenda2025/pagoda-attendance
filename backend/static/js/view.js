@@ -360,40 +360,54 @@ function _exportParams(fmt) {
     return params;
 }
 
+const _EXPORT_FMT_LABELS = {
+    docx: 'Word (.docx)',
+    excel: 'Excel (.xlsx)',
+    pdf: 'PDF',
+};
+
 async function exportData(fmt) {
     document.getElementById('export-menu').classList.remove('open');
 
-    // DOCX/Excel are generated server-side and can be downloaded directly.
-    if (fmt === 'docx' || fmt === 'excel') {
-        window.location.href = `/api/monks/export?${_exportParams(fmt)}`;
-        return;
-    }
+    try {
+        const day = new Date().toISOString().slice(0, 10);
+        const res = await fetch(`/api/monks/export?${_exportParams('html')}`);
+        if (!res.ok) { const j = await res.json(); throw new Error(j.message); }
+        const html = await res.text();
 
-    // PDF is generated client-side (html2canvas + jsPDF) from the same
-    // export HTML used for the image export, matching the /report page.
-    if (fmt === 'pdf') {
-        const btn  = document.querySelector(".export-item[onclick=\"exportData('pdf')\"]");
-        const orig = btn.innerHTML;
-        btn.disabled    = true;
-        btn.textContent = 'កំពុងបង្កើត...';
-        try {
-            const res = await fetch(`/api/monks/export?${_exportParams('html')}`);
-            if (!res.ok) { const j = await res.json(); throw new Error(j.message); }
-            const html = await res.text();
-            await _downloadHtmlAsPdf(html, `monks_${new Date().toISOString().slice(0, 10)}.pdf`);
-            showToast('ឯកសារ PDF បានដំណើរការ!', 'success');
-        } catch (err) {
-            showToast('មានបញ្ហា: ' + err.message, 'error');
-        } finally {
-            btn.disabled  = false;
-            btn.innerHTML = orig;
+        if (fmt === 'docx' || fmt === 'excel') {
+            await ExportPreview.open({
+                title: 'បញ្ជីព្រះសង្ឃ',
+                subtitle: `ថ្ងៃ ${day}`,
+                formatLabel: _EXPORT_FMT_LABELS[fmt],
+                preview: { type: 'html', html },
+                onDownload: async () => {
+                    window.location.href = `/api/monks/export?${_exportParams(fmt)}`;
+                },
+            });
+            return;
         }
+
+        if (fmt === 'pdf') {
+            await ExportPreview.open({
+                title: 'បញ្ជីព្រះសង្ឃ',
+                subtitle: `ថ្ងៃ ${day}`,
+                formatLabel: 'PDF',
+                preview: { type: 'html', html },
+                onDownload: async () => {
+                    await _downloadHtmlAsPdf(html, `monks_${day}.pdf`);
+                    showToast('ឯកសារ PDF បានដំណើរការ!', 'success');
+                },
+            });
+        }
+    } catch (err) {
+        showToast('មានបញ្ហា: ' + err.message, 'error');
     }
 }
 
 // ============ EXPORT AS IMAGE / PDF (client-side rendering) ============
 
-const _EXPORT_IMG_PAGE_W_PX = 1400;
+const _EXPORT_IMG_PAGE_W_PX = 794; // A4 portrait @ ~96dpi (210mm)
 
 // Renders the export HTML (as returned by /api/monks/export?fmt=html) off-screen
 // and returns the rasterized canvas. Mirrors report.js's _renderExportHtmlToCanvas.
@@ -423,12 +437,12 @@ async function _renderMonksHtmlToCanvas(html) {
     }
 }
 
-// Renders the export HTML and saves it as a real, downloadable A4-landscape PDF file.
+// Renders the export HTML and saves it as a downloadable A4-portrait PDF file.
 async function _downloadHtmlAsPdf(html, filename) {
     const canvas = await _renderMonksHtmlToCanvas(html);
 
     const { jsPDF } = window.jspdf;
-    const pdf   = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    const pdf   = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const pageW = pdf.internal.pageSize.getWidth();
     const pageH = pdf.internal.pageSize.getHeight();
     const imgW  = pageW;
@@ -451,31 +465,28 @@ async function _downloadHtmlAsPdf(html, filename) {
 }
 
 async function exportImage() {
-    const btn = document.getElementById('btn-export-image');
-    const orig = btn.innerHTML;
-    btn.disabled    = true;
-    btn.textContent = 'កំពុងបង្កើត...';
     document.getElementById('export-menu').classList.remove('open');
 
     try {
+        const day = new Date().toISOString().slice(0, 10);
         const res = await fetch(`/api/monks/export?${_exportParams('html')}`);
         if (!res.ok) { const j = await res.json(); throw new Error(j.message); }
         const html = await res.text();
-
         const canvas = await _renderMonksHtmlToCanvas(html);
-        const blob   = await new Promise(r => canvas.toBlob(r, 'image/png'));
 
-        const a = document.createElement('a');
-        a.href     = URL.createObjectURL(blob);
-        a.download = `monks_${new Date().toISOString().slice(0, 10)}.png`;
-        a.click();
-        URL.revokeObjectURL(a.href);
-        showToast('រូបភាពបានដំណើរការ!', 'success');
+        await ExportPreview.open({
+            title: 'បញ្ជីព្រះសង្ឃ',
+            subtitle: `ថ្ងៃ ${day}`,
+            formatLabel: 'រូបភាព PNG',
+            preview: { type: 'canvas', canvas },
+            onDownload: async () => {
+                const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+                ExportPreview.downloadBlob(blob, `monks_${day}.png`);
+                showToast('រូបភាពបានដំណើរការ!', 'success');
+            },
+        });
     } catch (err) {
         showToast('មានបញ្ហា: ' + err.message, 'error');
-    } finally {
-        btn.disabled  = false;
-        btn.innerHTML = orig;
     }
 }
 

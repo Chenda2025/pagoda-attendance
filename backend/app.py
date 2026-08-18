@@ -1,7 +1,8 @@
 import os
 from flask import Flask
 from routes import main_bp
-from create_table import create_monks_table, create_summaries_tables, create_pending_submissions_table, create_seat_order_table, create_permission_table, create_kuti_share_table
+from create_table import create_monks_table, create_summaries_tables, create_pending_submissions_table, create_seat_order_table, create_permission_table, create_kuti_share_table, create_app_users_table, create_telegram_notify_table, create_telegram_contract_table
+from auth_service import seed_default_users, purge_old_activity
 from conn import connect_db
 
 app = Flask(__name__)
@@ -45,6 +46,26 @@ def _auto_setup():
         print('[startup] Kuti share links table created / verified.')
     except Exception as e:
         print(f'[startup] kuti-share warning: {e}')
+
+    try:
+        create_telegram_notify_table()
+        print('[startup] Telegram notify log table created / verified.')
+    except Exception as e:
+        print(f'[startup] telegram-notify warning: {e}')
+
+    try:
+        create_telegram_contract_table()
+        print('[startup] Telegram contract table created / verified.')
+    except Exception as e:
+        print(f'[startup] telegram-contract warning: {e}')
+
+    try:
+        create_app_users_table()
+        seed_default_users()
+        purge_old_activity()
+        print('[startup] App users table created / verified.')
+    except Exception as e:
+        print(f'[startup] app-users warning: {e}')
 
     try:
         conn = connect_db()
@@ -94,11 +115,19 @@ def _run_scheduler():
             except Exception as e:
                 print(f'[scheduler] compile error: {e}')
 
+        def purge_activity_logs():
+            try:
+                purge_old_activity()
+            except Exception as e:
+                print(f'[scheduler] activity purge error: {e}')
+
         sched = BackgroundScheduler(daemon=True)
         sched.add_job(check_and_compile, 'interval', hours=12, id='period_check',
                       misfire_grace_time=3600)
+        sched.add_job(purge_activity_logs, 'interval', hours=24, id='activity_purge',
+                      misfire_grace_time=3600)
         sched.start()
-        print('[scheduler] APScheduler started (period 12h).')
+        print('[scheduler] APScheduler started (period 12h, activity purge 24h).')
     except ImportError:
         print('[scheduler] APScheduler not installed — skipping.')
     except Exception as e:

@@ -583,7 +583,7 @@ async function _downloadHtmlAsPdf(html, filename) {
   // Strip the server's auto-print script; we render this ourselves and don't want a print dialog.
   html = html.replace(/<script>[\s\S]*?window\.print\(\)[\s\S]*?<\/script>/i, '');
 
-  const PAGE_W_PX = 1400; // render width; A4 landscape aspect ratio is preserved by jsPDF below
+  const PAGE_W_PX = 794; // A4 portrait @ ~96dpi (210mm)
 
   const iframe = document.createElement('iframe');
   iframe.style.cssText = `position:fixed; top:-99999px; left:-99999px; width:${PAGE_W_PX}px; border:0;`;
@@ -607,7 +607,7 @@ async function _downloadHtmlAsPdf(html, filename) {
     });
 
     const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const pageW = pdf.internal.pageSize.getWidth();
     const pageH = pdf.internal.pageSize.getHeight();
     const imgW  = pageW;
@@ -648,14 +648,14 @@ async function _doExport(btn, type, fmt, action) {
       if (!res.ok) { const j = await res.json(); throw new Error(j.message); }
       const html = await res.text();
       const iframe = document.createElement('iframe');
-      iframe.style.cssText = 'position:fixed; top:-99999px; left:-99999px; width:1400px; border:0;';
+      iframe.style.cssText = 'position:fixed; top:-99999px; left:-99999px; width:794px; border:0;';
       document.body.appendChild(iframe);
       try {
         await new Promise((resolve) => { iframe.onload = resolve; iframe.srcdoc = html; });
         const doc = iframe.contentDocument;
         iframe.style.height = doc.body.scrollHeight + 'px';
         await new Promise(r => setTimeout(r, 200));
-        const canvas = await html2canvas(doc.body, { scale: 2, useCORS: true, backgroundColor: '#ffffff', windowWidth: 1400 });
+        const canvas = await html2canvas(doc.body, { scale: 2, useCORS: true, backgroundColor: '#ffffff', windowWidth: 794 });
         const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
