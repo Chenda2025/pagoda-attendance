@@ -1,17 +1,25 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+}
+
 body {
     font-family: 'Kantumruy Pro', 'Battambang', sans-serif;
     color: #2d3748;
+    overflow-x: hidden;
 }
 
 .login-bg {
     min-height: 100vh;
+    min-height: 100dvh;
     background: linear-gradient(135deg, #0c2d5a 0%, #163f73 100%);
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 24px;
+    overflow-x: hidden;
 }
 
 .login-card {
@@ -21,6 +29,7 @@ body {
     padding: 44px 40px 36px;
     width: 100%;
     max-width: 400px;
+    overflow: hidden;
     animation: cardIn 0.3s ease-out;
 }
 

@@ -2,14 +2,14 @@
 <html lang="km">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
     <title>ចូលប្រព័ន្ធ — វត្តនិរោធរង្សី</title>
     <link rel="icon" type="image/jpeg" href="/static/logo.jpg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@300;400;500;600;700&family=Battambang:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/login.css?v=6">
-    <link rel="stylesheet" href="/static/css/face_id.css?v=5">
+    <link rel="stylesheet" href="/static/css/login.css?v=7">
+    <link rel="stylesheet" href="/static/css/face_id.css?v=6">
 </head>
 <body>
     <div class="login-bg">
@@ -81,7 +81,7 @@
                 <div class="fid-ring-wrap fid-dark">
                     <div class="fid-ticks" id="login-ticks"></div>
                     <div class="fid-video-wrap">
-                        <video id="face-video" autoplay playsinline muted></video>
+                        <video id="face-video" autoplay playsinline webkit-playsinline muted disablepictureinpicture></video>
                     </div>
                 </div>
                 <h2 class="fid-heading" id="face-heading">Face ID</h2>
@@ -127,7 +127,7 @@
         </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.14/dist/face-api.js"></script>
-    <script src="/static/js/face_auth.js?v=3"></script>
+    <script src="/static/js/face_auth.js?v=4"></script>
     <script src="/static/js/login.js?v=9"></script>
 </body>
 </html>

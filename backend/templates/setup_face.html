@@ -2,12 +2,12 @@
 <html lang="km">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
     <title>រៀបចំ Face ID — វត្តនិរោធរង្សី</title>
     <link rel="icon" type="image/jpeg" href="/static/logo.jpg">
     <link href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@400;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/login.css?v=3">
-    <link rel="stylesheet" href="/static/css/face_id.css?v=5">
+    <link rel="stylesheet" href="/static/css/login.css?v=7">
+    <link rel="stylesheet" href="/static/css/face_id.css?v=6">
 </head>
 <body>
     <div class="login-bg">
@@ -40,7 +40,7 @@
                 <div class="fid-ring-wrap fid-dark">
                     <div class="fid-ticks" id="scan-ticks"></div>
                     <div class="fid-video-wrap">
-                        <video id="setup-video" autoplay playsinline muted></video>
+                        <video id="setup-video" autoplay playsinline webkit-playsinline muted disablepictureinpicture></video>
                         <svg class="fid-arrow" id="fid-arrow" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M4 11h11.2l-4.6-4.6L12 5l7 7-7 7-1.4-1.4 4.6-4.6H4z" />
                         </svg>
@@ -69,7 +69,7 @@
         </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.14/dist/face-api.js"></script>
-    <script src="/static/js/face_auth.js?v=3"></script>
+    <script src="/static/js/face_auth.js?v=4"></script>
     <script src="/static/js/setup_face.js?v=3"></script>
 </body>
 </html>

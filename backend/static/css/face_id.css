@@ -16,7 +16,7 @@
 .login-card-wide .login-brand { margin-bottom: 14px; }
 
 .fid-ring-wrap {
-    --fid-size: 280px;
+    --fid-size: min(280px, calc(100vw - 80px));
     --fid-radius: calc(var(--fid-size) / 2 - 10px);
     position: relative;
     width: var(--fid-size);
@@ -26,6 +26,8 @@
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    overflow: hidden;
+    contain: layout size;
 }
 
 .fid-ring-wrap.fid-dark {
@@ -63,8 +65,8 @@
 }
 
 @keyframes fid-halo {
-    0%, 100% { opacity: 0.55; transform: scale(0.98); }
-    50%      { opacity: 1;    transform: scale(1.02); }
+    0%, 100% { opacity: 0.45; }
+    50%      { opacity: 0.95; }
 }
 
 /* Verified — ring turns green and the sweep stops */
@@ -121,7 +123,7 @@
     box-shadow: 0 0 12px rgba(255, 255, 255, 0.85);
 }
 
-/* Circular camera preview — masked so WebKit clips the flipped video */
+/* Circular camera preview — size is locked so iOS video metadata cannot grow the UI */
 .fid-video-wrap {
     position: relative;
     width: calc(var(--fid-size) - 76px);
@@ -132,16 +134,26 @@
     -webkit-mask-image: -webkit-radial-gradient(circle, #fff 99%, transparent 100%);
     mask-image: radial-gradient(circle, #fff 99%, transparent 100%);
     isolation: isolate;
+    contain: strict;
+    flex-shrink: 0;
 }
 
 .fid-video-wrap video {
-    width: 100%;
-    height: 100%;
+    position: absolute;
+    inset: 0;
+    width: 100% !important;
+    height: 100% !important;
+    max-width: none;
+    max-height: none;
     object-fit: cover;
     border-radius: 50%;
     transform: scaleX(-1);
     display: block;
+    opacity: 0;
+    transition: opacity 0.2s ease;
 }
+
+.fid-video-wrap.is-live video { opacity: 1; }
 
 /* Sweeping scan bar over the live preview */
 .fid-dark .fid-video-wrap::after {
@@ -187,6 +199,7 @@
     border-radius: 50%;
     color: inherit;
     font: inherit;
+    touch-action: manipulation;
     transition: transform 0.15s ease;
 }
 
@@ -305,10 +318,15 @@
 }
 
 @media (max-width: 480px) {
-    .fid-ring-wrap { --fid-size: 240px; }
+    .fid-ring-wrap {
+        --fid-size: min(220px, calc(100vw - 72px));
+        overflow: hidden;
+        border-radius: 36px;
+    }
     .fid-ring-wrap.fid-dark { border-radius: 36px; }
     .fid-heading { font-size: 18px; }
     .fid-sub { font-size: 13.5px; }
+    .fid-ring-wrap.fid-dark::before { animation: none; opacity: 0.55; }
 }
 
 @media (prefers-reduced-motion: reduce) {

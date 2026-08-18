@@ -35,11 +35,18 @@ async function startCamera(videoEl) {
 
     videoEl.setAttribute('playsinline', '');
     videoEl.setAttribute('webkit-playsinline', '');
+    videoEl.setAttribute('disablepictureinpicture', '');
+    videoEl.playsInline = true;
     videoEl.muted = true;
     videoEl.autoplay = true;
 
+    const wrap = videoEl.closest('.fid-video-wrap') || videoEl.parentElement;
+    const box = Math.max(160, Math.round((wrap && wrap.clientWidth) || 220));
+    videoEl.setAttribute('width', String(box));
+    videoEl.setAttribute('height', String(box));
+
     const attempts = [
-        { video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }, audio: false },
+        { video: { facingMode: 'user', width: { ideal: 480 }, height: { ideal: 480 } }, audio: false },
         { video: { facingMode: { ideal: 'user' } }, audio: false },
         { video: true, audio: false },
     ];
@@ -49,7 +56,13 @@ async function startCamera(videoEl) {
         try {
             const stream = await navigator.mediaDevices.getUserMedia(constraints);
             videoEl.srcObject = stream;
+            if (videoEl.readyState < 1) {
+                await new Promise((resolve) => {
+                    videoEl.addEventListener('loadedmetadata', resolve, { once: true });
+                });
+            }
             await videoEl.play();
+            if (wrap) wrap.classList.add('is-live');
             return stream;
         } catch (e) {
             lastError = e;
@@ -81,6 +94,7 @@ function cameraErrorMessage(err) {
 
 function stopCamera(stream) {
     if (stream) stream.getTracks().forEach(t => t.stop());
+    document.querySelectorAll('.fid-video-wrap.is-live').forEach(el => el.classList.remove('is-live'));
 }
 
 /** Render the ring of tick marks around the circular preview. */
