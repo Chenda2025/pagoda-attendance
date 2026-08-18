@@ -220,6 +220,8 @@ def check_auth():
 @main_bp.errorhandler(403)
 def forbidden(e):
     home = user_home(_session_user()) if session.get('role') else '/login'
+    if request.path.startswith('/api/'):
+        return jsonify({'success': False, 'message': 'គ្មានសិទ្ធិចូល'}), 403
     return render_template('403.html', home=home), 403
 
 
