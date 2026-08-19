@@ -309,6 +309,14 @@ def create_pending_submissions_table():
             CREATE INDEX IF NOT EXISTS idx_pending_status
             ON pending_submissions(status);
         """)
+        cursor.execute("""
+            ALTER TABLE pending_submissions
+            ADD COLUMN IF NOT EXISTS source VARCHAR(40) NOT NULL DEFAULT 'public';
+        """)
+        cursor.execute("""
+            ALTER TABLE pending_submissions
+            ADD COLUMN IF NOT EXISTS target_monk_id INTEGER REFERENCES monk_tbl(id) ON DELETE SET NULL;
+        """)
         conn.commit()
         print("Table 'pending_submissions' created / verified.")
         cursor.close()
@@ -322,18 +330,58 @@ def create_pending_submissions_table():
 
 
 def insert_pending_submission(fullname, vassa_years, monk_type, residence,
-                               position, education_level, academic_year):
-    """Stage a guest submission for admin review."""
+                               position, education_level, academic_year,
+                               source='public', target_monk_id=None):
+    """Stage a guest / mekuti submission for admin review.
+
+    If a pending row already exists for the same monk (by target id or name+kuti),
+    replace it so the queue stays one row per person.
+    """
     conn = None
     try:
         conn = connect_db()
         cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO pending_submissions
-                (fullname, vassa_years, monk_type, residence, position, education_level, academic_year)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-            RETURNING id;
-        """, (fullname, vassa_years, monk_type, residence, position, education_level, academic_year))
+        existing_id = None
+        if target_monk_id:
+            cursor.execute("""
+                SELECT id FROM pending_submissions
+                WHERE status = 'pending' AND target_monk_id = %s
+                LIMIT 1;
+            """, (target_monk_id,))
+            row = cursor.fetchone()
+            if row:
+                existing_id = row[0]
+        if existing_id is None:
+            cursor.execute("""
+                SELECT id FROM pending_submissions
+                WHERE status = 'pending'
+                  AND LOWER(fullname) = LOWER(%s)
+                  AND residence = %s
+                LIMIT 1;
+            """, (fullname, residence))
+            row = cursor.fetchone()
+            if row:
+                existing_id = row[0]
+
+        if existing_id:
+            cursor.execute("""
+                UPDATE pending_submissions
+                SET fullname = %s, vassa_years = %s, monk_type = %s, residence = %s,
+                    position = %s, education_level = %s, academic_year = %s,
+                    source = %s, target_monk_id = %s, submitted_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+                RETURNING id;
+            """, (fullname, vassa_years, monk_type, residence, position,
+                  education_level, academic_year, source, target_monk_id, existing_id))
+        else:
+            cursor.execute("""
+                INSERT INTO pending_submissions
+                    (fullname, vassa_years, monk_type, residence, position,
+                     education_level, academic_year, source, target_monk_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id;
+            """, (fullname, vassa_years, monk_type, residence, position,
+                  education_level, academic_year, source, target_monk_id))
         result = cursor.fetchone()
         sub_id = result[0] if result else None
         conn.commit()

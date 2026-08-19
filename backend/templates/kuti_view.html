@@ -131,7 +131,7 @@
         <div id="monk-cards" class="monk-cards" aria-live="polite"></div>
     </section>
 
-    <p class="lock-note">សុវត្ថិភាព៖ តំណនេះគ្រប់គ្រងតែព្រះសង្ឃក្នុង <strong>{{ residence_label }}</strong> ប៉ុណ្ណោះ — មិនអាចមើល ឬកែកុដិផ្សេងបានទេ។</p>
+    <p class="lock-note">សុវត្ថិភាព៖ តំណនេះគ្រប់គ្រងតែព្រះសង្ឃក្នុង <strong>{{ residence_label }}</strong> ប៉ុណ្ណោះ។ បន្ថែម ឬកែប្រែទិន្នន័យនឹងរង់ចាំអនុម័តពីអ្នកគ្រប់គ្រង។</p>
 
     <!-- Add / Edit modal -->
     <div id="monk-modal" class="kv-modal" hidden>
@@ -155,8 +155,7 @@
                     <div class="form-field">
                         <label for="monk-type">សាមណេរ / ភិក្ខុ</label>
                         <select id="monk-type" required>
-                            <option value="សាមណេរ">សាមណេរ</option>
-                            <option value="ភិក្ខុ">ភិក្ខុ</option>
+                            <option value="">កំពុងផ្ទុក…</option>
                         </select>
                     </div>
                 </div>
@@ -168,26 +167,20 @@
                 <div class="form-field">
                     <label for="monk-position">តួនាទី</label>
                     <select id="monk-position" required>
-                        {% for p in positions %}
-                        <option value="{{ p }}">{{ p }}</option>
-                        {% endfor %}
+                        <option value="">កំពុងផ្ទុក…</option>
                     </select>
                 </div>
                 <div class="form-row">
                     <div class="form-field">
                         <label for="monk-education">កម្រិតសិក្សា</label>
                         <select id="monk-education" required>
-                            {% for e in education_levels %}
-                            <option value="{{ e }}">{{ e }}</option>
-                            {% endfor %}
+                            <option value="">កំពុងផ្ទុក…</option>
                         </select>
                     </div>
                     <div class="form-field">
                         <label for="monk-academic">ថ្នាក់ / ឆ្នាំ</label>
                         <select id="monk-academic" required>
-                            {% for a in academic_years %}
-                            <option value="{{ a }}">{{ a }}</option>
-                            {% endfor %}
+                            <option value="">កំពុងផ្ទុក…</option>
                         </select>
                     </div>
                 </div>
@@ -235,6 +228,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="/static/js/export_preview.js?v=2"></script>
+    <script src="/static/js/form_options.js"></script>
     <script src="/static/js/kuti_view.js"></script>
     {% endif %}
 

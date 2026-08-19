@@ -139,6 +139,7 @@ body {
 }
 .legend-dot.match { background: #bbf7d0; border: 1px solid #4ade80; }
 .legend-dot.new   { background: #fff; border: 1px solid #c4b5fd; }
+.legend-dot.kuti  { background: #dbeafe; border: 1px solid #60a5fa; }
 
 /* ── Table Card ──────────────────────────────────────────────────────── */
 .table-card {
@@ -199,6 +200,8 @@ tr.row-new   { background: #fff; }
 }
 .tag-match { background: #dcfce7; color: #15803d; border: 1px solid #86efac; }
 .tag-new   { background: #ede9fe; color: #6d28d9; border: 1px solid #c4b5fd; }
+.tag-kuti  { background: #dbeafe; color: #1d4ed8; border: 1px solid #93c5fd; }
+.tag-public { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
 
 /* Checkbox */
 input[type="checkbox"] {

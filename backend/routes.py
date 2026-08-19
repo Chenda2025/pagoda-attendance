@@ -27,25 +27,46 @@ _HDR_MAIN_TITLE  = 'ស្ថិតព្រះសង្ឃក្នុងវត
 
 main_bp = Blueprint('main_bp', __name__)
 
-# ============ PUBLIC SUBMISSION — ALLOWED VALUES ============
+from form_options_service import (
+    FIELD_LABELS,
+    list_grouped,
+    valid_set,
+    add_option as add_form_option,
+    delete_option as delete_form_option,
+    update_option as update_form_option,
+)
 
-_VALID_MONK_TYPES       = {'សាមណេរ', 'ភិក្ខុ'}
-_VALID_RESIDENCES       = {
-    'កុដិលេខ១', 'កុដិលេខ២_ជាន់ក្រោម', 'កុដិលេខ២_ជាន់លើ', 'កុដិលេខ៤',
-    'កុដិធំ_ជាន់ទី១', 'កុដិធំ_ជាន់ទី២', 'កុដិធំ_ជាន់ទី៣',
-    'កុដិហោត្រៃ', 'សាលាបាលីចាស់', 'សាលាពុទ្ធិក',
-}
-_VALID_POSITIONS        = {
-    'សមណសិស្ស', 'ព្រះអធិការ',
-    'ព្រះគ្រូសូត្រស្តាំ', 'ព្រះគ្រូសូត្រឆ្វេង', 'ព្រះគ្រូវិន័យធរ',
-    'ព្រះគ្រូលេខា', 'ព្រះគ្រូប្រធានការក',
-    'ព្រះគ្រូអនុប្រធានការកទី១', 'ព្រះគ្រូអនុប្រធានការកទី២',
-    'មេកុដិ', 'អនុកុដិ',
-    # legacy values still present in existing records
-    'ព្រះសង្ឃធម្មតា', 'មេក្រុម', 'អនុមេក្រុម',
-}
-_VALID_EDUCATION_LEVELS = {'បឋមសិក្សា', 'អនុវិទ្យាល័យ', 'វិទ្យាល័យ', 'មហាវិទ្យាល័យ'}
-_VALID_ACADEMIC_YEARS   = {'ឆ្នាំទី១', 'ឆ្នាំទី២', 'ឆ្នាំទី៣', 'ឆ្នាំទី៤'}
+# ============ PUBLIC SUBMISSION — ALLOWED VALUES (from DB) ============
+
+def _valid_monk_types():
+    return valid_set('monk_type')
+
+def _valid_residences():
+    return valid_set('residence')
+
+def _valid_positions():
+    return valid_set('position')
+
+def _valid_education_levels():
+    return valid_set('education_level')
+
+def _valid_academic_years():
+    return valid_set('academic_year')
+
+def _validate_entry_dropdowns(monk_type, residence, position, education_level, academic_year):
+    errors = []
+    if monk_type not in _valid_monk_types():
+        errors.append('ប្រភេទព្រះសង្ឃ មិនត្រឹមត្រូវ')
+    if residence not in _valid_residences():
+        errors.append('ស្នាក់នៅកុដិ មិនត្រឹមត្រូវ')
+    if position not in _valid_positions():
+        errors.append('តួនាទី មិនត្រឹមត្រូវ')
+    if education_level not in _valid_education_levels():
+        errors.append('កម្រិតសិក្សា មិនត្រឹមត្រូវ')
+    if academic_year not in _valid_academic_years():
+        errors.append('ឆ្នាំសិក្សា មិនត្រឹមត្រូវ')
+    return errors
+
 LIVING_STATUSES = (
     'កំពុងស្នាក់នៅ',
     'ឈប់ស្នាក់នៅ',
@@ -239,6 +260,7 @@ def check_auth():
             or path in ('/login', '/logout', '/submit')
             or path.startswith('/api/auth/')
             or path in ('/public/submit', '/api/monks/check-duplicate')
+            or (path == '/api/form-options' and request.method == 'GET')
             or path.startswith('/kuti/')
             or path.startswith('/api/kuti/')):
         return
@@ -569,6 +591,74 @@ def index():
 def entry_page():
     """Monk data entry forms (admin)."""
     return render_template('index.html')
+
+
+@main_bp.route('/api/form-options', methods=['GET'])
+def api_form_options_list():
+    """Active dropdown options for monk entry forms."""
+    return jsonify({
+        'success': True,
+        'options': list_grouped(),
+        'fields': FIELD_LABELS,
+    })
+
+
+@main_bp.route('/api/form-options', methods=['POST'])
+def api_form_options_add():
+    """Add a dropdown option (admin entry page)."""
+    if not user_allowed(_session_user(), '/entry'):
+        return jsonify({'success': False, 'message': 'Forbidden'}), 403
+    data = request.get_json(silent=True) or {}
+    field_key = (data.get('field_key') or '').strip()
+    value = (data.get('value') or '').strip()
+    label = (data.get('label') or '').strip()
+    if field_key == 'residence' and not value and label:
+        value = label.replace(' ', '_')
+    if field_key != 'residence' and not value:
+        value = label
+    sort_order = data.get('sort_order')
+    if sort_order is None and data.get('priority') not in (None, ''):
+        try:
+            # UI priority is 1-based (១ = first in list)
+            sort_order = max(0, int(data.get('priority')) - 1)
+        except (TypeError, ValueError):
+            return jsonify({'success': False, 'message': 'អាទិភាពត្រូវតែជាលេខ'}), 400
+    opt, err = add_form_option(field_key, value, label, sort_order)
+    if err:
+        return jsonify({'success': False, 'message': err}), 400
+    return jsonify({'success': True, 'option': opt})
+
+
+@main_bp.route('/api/form-options/<int:opt_id>', methods=['PATCH'])
+def api_form_options_update(opt_id):
+    """Update label and/or priority of a dropdown option."""
+    if not user_allowed(_session_user(), '/entry'):
+        return jsonify({'success': False, 'message': 'Forbidden'}), 403
+    data = request.get_json(silent=True) or {}
+    label = data.get('label')
+    if label is not None:
+        label = str(label).strip()
+    sort_order = data.get('sort_order')
+    if sort_order is None and data.get('priority') not in (None, ''):
+        try:
+            sort_order = max(0, int(data.get('priority')) - 1)
+        except (TypeError, ValueError):
+            return jsonify({'success': False, 'message': 'អាទិភាពត្រូវតែជាលេខ'}), 400
+    opt, err = update_form_option(opt_id, label=label, sort_order=sort_order)
+    if err:
+        return jsonify({'success': False, 'message': err}), 400
+    return jsonify({'success': True, 'option': opt})
+
+
+@main_bp.route('/api/form-options/<int:opt_id>', methods=['DELETE'])
+def api_form_options_delete(opt_id):
+    """Hide a dropdown option from new entries."""
+    if not user_allowed(_session_user(), '/entry'):
+        return jsonify({'success': False, 'message': 'Forbidden'}), 403
+    ok, err = delete_form_option(opt_id)
+    if not ok:
+        return jsonify({'success': False, 'message': err or 'មិនអាចលុបបាន'}), 400
+    return jsonify({'success': True})
 
 
 @main_bp.route('/api/dashboard/stats', methods=['GET'])
@@ -1353,7 +1443,7 @@ def kuti_links_page():
         abort(403)
     return render_template(
         'kuti_links.html',
-        residences=sorted(_VALID_RESIDENCES),
+        residences=sorted(_valid_residences()),
         username=session.get('username', ''),
     )
 
@@ -1427,7 +1517,7 @@ def api_kuti_status():
 
         linked = {i['residence'] for i in items}
         missing = []
-        for res in sorted(_VALID_RESIDENCES):
+        for res in sorted(_valid_residences()):
             if res in linked:
                 continue
             c = counts.get(res, empty)
@@ -1656,7 +1746,7 @@ def api_kuti_status_export():
 
     residence = (request.args.get('residence') or '').strip()
     fmt = (request.args.get('fmt') or 'excel').strip().lower()
-    if residence not in _VALID_RESIDENCES:
+    if residence not in _valid_residences():
         return jsonify({'success': False, 'message': 'កុដិមិនត្រឹមត្រូវ'}), 400
     if fmt not in ('excel', 'html'):
         return jsonify({'success': False, 'message': 'Invalid format'}), 400
@@ -1808,7 +1898,7 @@ def kuti_links_monks():
     if not user_allowed(_session_user(), '/api/kuti-links'):
         return jsonify({'success': False, 'message': 'Forbidden'}), 403
     residence = (request.args.get('residence') or '').strip()
-    if residence not in _VALID_RESIDENCES:
+    if residence not in _valid_residences():
         return jsonify({'success': False, 'message': 'កុដិមិនត្រឹមត្រូវ'}), 400
     try:
         conn = connect_db()
@@ -1856,7 +1946,7 @@ def kuti_leaders_for_residence():
     if not user_allowed(_session_user(), '/api/kuti-links'):
         return jsonify({'success': False, 'message': 'Forbidden'}), 403
     residence = (request.args.get('residence') or '').strip()
-    if residence not in _VALID_RESIDENCES:
+    if residence not in _valid_residences():
         return jsonify({'success': False, 'message': 'កុដិមិនត្រឹមត្រូវ'}), 400
     try:
         conn = connect_db()
@@ -1923,7 +2013,7 @@ def create_kuti_link():
     data = request.get_json(silent=True) or {}
     residence = str(data.get('residence', '') or '').strip()
     label = str(data.get('label', '') or '').strip() or None
-    if residence not in _VALID_RESIDENCES:
+    if residence not in _valid_residences():
         return jsonify({'success': False, 'message': 'កុដិមិនត្រឹមត្រូវ'}), 400
     try:
         token = secrets.token_urlsafe(24)
@@ -1989,22 +2079,12 @@ def kuti_public_view(token):
     share = _get_share_by_token(token)
     if not share:
         return render_template('kuti_view.html', invalid=True, share=None), 404
-    positions = [
-        'សមណសិស្ស', 'ព្រះអធិការ',
-        'ព្រះគ្រូសូត្រស្តាំ', 'ព្រះគ្រូសូត្រឆ្វេង', 'ព្រះគ្រូវិន័យធរ',
-        'ព្រះគ្រូលេខា', 'ព្រះគ្រូប្រធានការក',
-        'ព្រះគ្រូអនុប្រធានការកទី១', 'ព្រះគ្រូអនុប្រធានការកទី២',
-        'មេកុដិ', 'អនុកុដិ',
-    ]
     return render_template(
         'kuti_view.html',
         invalid=False,
         share=share,
         residence=share['residence'],
         residence_label=_residence_label(share['residence']),
-        positions=positions,
-        education_levels=['បឋមសិក្សា', 'អនុវិទ្យាល័យ', 'វិទ្យាល័យ', 'មហាវិទ្យាល័យ'],
-        academic_years=['ឆ្នាំទី១', 'ឆ្នាំទី២', 'ឆ្នាំទី៣', 'ឆ្នាំទី៤'],
         living_statuses=list(LIVING_STATUSES),
     )
 
@@ -2073,14 +2153,11 @@ def _kuti_monk_payload(data, forced_residence):
         return None, 'ចំនួនវស្សាមិនត្រឹមត្រូវ'
     if not all([fullname, monk_type, position, education_level, academic_year]):
         return None, 'Missing required fields'
-    if monk_type not in _VALID_MONK_TYPES:
-        return None, 'ប្រភេទមិនត្រឹមត្រូវ'
-    if position not in _VALID_POSITIONS:
-        return None, 'តួនាទីមិនត្រឹមត្រូវ'
-    if education_level not in _VALID_EDUCATION_LEVELS:
-        return None, 'កម្រិតសិក្សាមិនត្រឹមត្រូវ'
-    if academic_year not in _VALID_ACADEMIC_YEARS:
-        return None, 'ថ្នាក់មិនត្រឹមត្រូវ'
+    dropdown_errors = _validate_entry_dropdowns(
+        monk_type, forced_residence, position, education_level, academic_year,
+    )
+    if dropdown_errors:
+        return None, dropdown_errors[0]
     if living_status not in _VALID_LIVING_STATUSES:
         return None, 'ស្ថានភាពមិនត្រឹមត្រូវ'
     return {
@@ -2105,9 +2182,31 @@ def _monk_in_residence(monk_id, residence):
     return bool(row)
 
 
+def _queue_kuti_pending(payload, target_monk_id=None):
+    """Mekuti add/edit goes to the admin approval queue (INSERT or UPDATE)."""
+    if target_monk_id is None:
+        conn = connect_db()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT id FROM monk_tbl
+            WHERE residence = %s AND LOWER(fullname) = LOWER(%s)
+            LIMIT 1
+        """, (payload['residence'], payload['fullname']))
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        if row:
+            target_monk_id = row[0]
+    return insert_pending_submission(
+        payload['fullname'], payload['vassa_years'], payload['monk_type'],
+        payload['residence'], payload['position'], payload['education_level'],
+        payload['academic_year'], source='kuti', target_monk_id=target_monk_id,
+    )
+
+
 @main_bp.route('/api/kuti/<token>/monks', methods=['POST'])
 def kuti_public_add_monk(token):
-    """មេកុដិ: add a monk into this token's residence only."""
+    """មេកុដិ: queue a new monk for admin approval (INSERT)."""
     share = _get_share_by_token(token)
     if not share:
         return jsonify({'success': False, 'message': 'តំណភ្ជាប់មិនត្រឹមត្រូវ ឬត្រូវបានបិទ'}), 404
@@ -2115,19 +2214,20 @@ def kuti_public_add_monk(token):
     payload, err = _kuti_monk_payload(data, share['residence'])
     if err:
         return jsonify({'success': False, 'message': err}), 400
-    monk_id = insert_monk(
-        payload['fullname'], payload['vassa_years'], payload['monk_type'],
-        payload['residence'], payload['position'], payload['education_level'],
-        payload['academic_year'], payload['living_status'],
-    )
-    if not monk_id:
-        return jsonify({'success': False, 'message': 'Failed to insert monk'}), 500
-    return jsonify({'success': True, 'monk_id': monk_id})
+    sub_id = _queue_kuti_pending(payload)
+    if not sub_id:
+        return jsonify({'success': False, 'message': 'មិនអាចដាក់ស្នើបាន'}), 500
+    return jsonify({
+        'success': True,
+        'pending': True,
+        'pending_id': sub_id,
+        'message': 'បានដាក់ស្នើ — រង់ចាំអនុម័តពីអ្នកគ្រប់គ្រង',
+    })
 
 
 @main_bp.route('/api/kuti/<token>/monks/<int:monk_id>', methods=['PUT'])
 def kuti_public_update_monk(token, monk_id):
-    """មេកុដិ: update a monk only if they belong to this token's residence."""
+    """មេកុដិ: queue an edit for admin approval (UPDATE)."""
     share = _get_share_by_token(token)
     if not share:
         return jsonify({'success': False, 'message': 'តំណភ្ជាប់មិនត្រឹមត្រូវ ឬត្រូវបានបិទ'}), 404
@@ -2138,14 +2238,15 @@ def kuti_public_update_monk(token, monk_id):
     payload, err = _kuti_monk_payload(data, residence)
     if err:
         return jsonify({'success': False, 'message': err}), 400
-    ok = update_monk(
-        monk_id, payload['fullname'], payload['vassa_years'], payload['monk_type'],
-        payload['residence'], payload['position'], payload['education_level'],
-        payload['academic_year'], payload['living_status'],
-    )
-    if not ok:
-        return jsonify({'success': False, 'message': 'Failed to update'}), 500
-    return jsonify({'success': True})
+    sub_id = _queue_kuti_pending(payload, target_monk_id=monk_id)
+    if not sub_id:
+        return jsonify({'success': False, 'message': 'មិនអាចដាក់ស្នើបាន'}), 500
+    return jsonify({
+        'success': True,
+        'pending': True,
+        'pending_id': sub_id,
+        'message': 'បានដាក់ស្នើកែប្រែ — រង់ចាំអនុម័តពីអ្នកគ្រប់គ្រង',
+    })
 
 
 @main_bp.route('/api/kuti/<token>/monks/<int:monk_id>/living-status', methods=['PATCH'])
@@ -2529,16 +2630,9 @@ def public_submit():
     except (ValueError, TypeError):
         errors.append('ចំនួនវស្សា ត្រូវតែជាលេខចន្លោះ ១ ដល់ ១០០')
 
-    if monk_type not in _VALID_MONK_TYPES:
-        errors.append('ប្រភេទព្រះសង្ឃ មិនត្រឹមត្រូវ')
-    if residence not in _VALID_RESIDENCES:
-        errors.append('ស្នាក់នៅកុដិ មិនត្រឹមត្រូវ')
-    if position not in _VALID_POSITIONS:
-        errors.append('តួនាទី មិនត្រឹមត្រូវ')
-    if education_level not in _VALID_EDUCATION_LEVELS:
-        errors.append('កម្រិតសិក្សា មិនត្រឹមត្រូវ')
-    if academic_year not in _VALID_ACADEMIC_YEARS:
-        errors.append('ឆ្នាំសិក្សា មិនត្រឹមត្រូវ')
+    errors.extend(_validate_entry_dropdowns(
+        monk_type, residence, position, education_level, academic_year,
+    ))
 
     if errors:
         return jsonify({'success': False, 'message': ' | '.join(errors)}), 422
@@ -2560,8 +2654,10 @@ def public_submit():
         pass
 
     try:
-        sub_id = insert_pending_submission(fullname, vassa_int, monk_type, residence,
-                                           position, education_level, academic_year)
+        sub_id = insert_pending_submission(
+            fullname, vassa_int, monk_type, residence,
+            position, education_level, academic_year, source='public',
+        )
         if sub_id:
             return jsonify({'success': True, 'pending_id': sub_id})
         return jsonify({'success': False, 'message': 'មានបញ្ហាក្នុងការរក្សាទុក។ សូមព្យាយាមមកវិញ។'}), 500
@@ -2582,8 +2678,11 @@ def approve_page():
                 ps.id, ps.fullname, ps.vassa_years, ps.monk_type,
                 ps.residence, ps.position, ps.education_level, ps.academic_year,
                 ps.submitted_at,
-                (SELECT m.id FROM monk_tbl m
-                 WHERE LOWER(m.fullname) = LOWER(ps.fullname) LIMIT 1) AS matched_id
+                COALESCE(ps.target_monk_id,
+                    (SELECT m.id FROM monk_tbl m
+                     WHERE LOWER(m.fullname) = LOWER(ps.fullname) LIMIT 1)
+                ) AS matched_id,
+                COALESCE(ps.source, 'public') AS source
             FROM pending_submissions ps
             WHERE ps.status = 'pending'
             ORDER BY ps.submitted_at DESC;
@@ -2603,6 +2702,8 @@ def approve_page():
                 'academic_year':   r[7],
                 'submitted_at':    r[8].strftime('%d/%m/%Y %H:%M') if r[8] else '',
                 'matched':         r[9] is not None,
+                'source':          r[10] or 'public',
+                'residence_label': _residence_label(r[4]),
             })
         return render_template('approve.html', submissions=submissions, error=None)
     except Exception as e:
@@ -2653,7 +2754,7 @@ def submissions_bulk_action():
         if action == 'approve-all':
             cursor.execute("""
                 SELECT id, fullname, vassa_years, monk_type, residence,
-                       position, education_level, academic_year
+                       position, education_level, academic_year, target_monk_id
                 FROM pending_submissions
                 WHERE status = 'pending'
                 FOR UPDATE
@@ -2661,7 +2762,7 @@ def submissions_bulk_action():
         else:
             cursor.execute("""
                 SELECT id, fullname, vassa_years, monk_type, residence,
-                       position, education_level, academic_year
+                       position, education_level, academic_year, target_monk_id
                 FROM pending_submissions
                 WHERE status = 'pending' AND id = ANY(%s)
                 FOR UPDATE
@@ -2671,22 +2772,24 @@ def submissions_bulk_action():
         approved = 0
         for row in rows:
             sub_id, fullname, vassa_years, monk_type, residence, \
-                position, education_level, academic_year = row
+                position, education_level, academic_year, target_monk_id = row
 
-            # Auto-match: update existing monk record if name found, else insert
-            cursor.execute(
-                "SELECT id FROM monk_tbl WHERE LOWER(fullname) = LOWER(%s) LIMIT 1",
-                (fullname,)
-            )
-            match = cursor.fetchone()
-            if match:
+            match_id = target_monk_id
+            if not match_id:
+                cursor.execute(
+                    "SELECT id FROM monk_tbl WHERE LOWER(fullname) = LOWER(%s) LIMIT 1",
+                    (fullname,)
+                )
+                found = cursor.fetchone()
+                match_id = found[0] if found else None
+            if match_id:
                 cursor.execute("""
                     UPDATE monk_tbl
-                    SET vassa_years=%s, monk_type=%s, residence=%s, position=%s,
+                    SET fullname=%s, vassa_years=%s, monk_type=%s, residence=%s, position=%s,
                         education_level=%s, academic_year=%s, updated_at=NOW()
                     WHERE id=%s
-                """, (vassa_years, monk_type, residence, position,
-                      education_level, academic_year, match[0]))
+                """, (fullname, vassa_years, monk_type, residence, position,
+                      education_level, academic_year, match_id))
             else:
                 cursor.execute("""
                     INSERT INTO monk_tbl
@@ -2733,6 +2836,11 @@ def add_monk():
         # Validate required fields
         if not all([fullname, vassa_years, monk_type, residence, position, education_level, academic_year]):
             return jsonify({'success': False, 'message': 'Missing required fields'}), 400
+        dropdown_errors = _validate_entry_dropdowns(
+            monk_type, residence, position, education_level, academic_year,
+        )
+        if dropdown_errors:
+            return jsonify({'success': False, 'message': ' | '.join(dropdown_errors)}), 400
         if living_status not in _VALID_LIVING_STATUSES:
             return jsonify({'success': False, 'message': 'ស្ថានភាពមិនត្រឹមត្រូវ'}), 400
 
@@ -2800,6 +2908,11 @@ def update_monk_route(monk_id):
 
         if not all([fullname, vassa_years, monk_type, residence, position, education_level, academic_year]):
             return jsonify({'success': False, 'message': 'Missing required fields'}), 400
+        dropdown_errors = _validate_entry_dropdowns(
+            monk_type, residence, position, education_level, academic_year,
+        )
+        if dropdown_errors:
+            return jsonify({'success': False, 'message': ' | '.join(dropdown_errors)}), 400
         if living_status is not None and living_status not in _VALID_LIVING_STATUSES:
             return jsonify({'success': False, 'message': 'ស្ថានភាពមិនត្រឹមត្រូវ'}), 400
 

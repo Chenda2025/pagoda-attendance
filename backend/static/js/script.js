@@ -125,9 +125,7 @@ function createFormCard(index) {
                 <div class="form-group">
                     <label for="type-${index}">សាមណេរ / ភិក្ខុ <span class="required">*</span></label>
                     <select name="type" id="type-${index}" required>
-                        <option value="">-- ជ្រើសរើស --</option>
-                        <option value="សាមណេរ">សាមណេរ</option>
-                        <option value="ភិក្ខុ">ភិក្ខុ</option>
+                        ${FormOptions.optionsHtml('monk_type')}
                     </select>
                 </div>
             </div>
@@ -135,34 +133,13 @@ function createFormCard(index) {
                 <div class="form-group">
                     <label for="home-${index}">ស្នាក់នៅកុដិ <span class="required">*</span></label>
                     <select name="home" id="home-${index}" required>
-                        <option value="">-- ជ្រើសរើសកុដិ --</option>
-                        <option value="កុដិលេខ១">កុដិលេខ១</option>
-                        <option value="កុដិលេខ២_ជាន់ក្រោម">កុដិលេខ២ ជាន់ក្រោម</option>
-                        <option value="កុដិលេខ២_ជាន់លើ">កុដិលេខ២ ជាន់លើ</option>
-                        <option value="កុដិលេខ៤">កុដិលេខ៤</option>
-                        <option value="កុដិធំ_ជាន់ទី១">កុដិធំ ជាន់ទី១</option>
-                        <option value="កុដិធំ_ជាន់ទី២">កុដិធំ ជាន់ទី២</option>
-                        <option value="កុដិធំ_ជាន់ទី៣">កុដិធំ ជាន់ទី៣</option>
-                        <option value="កុដិហោត្រៃ">កុដិហោត្រៃ</option>
-                        <option value="សាលាបាលីចាស់">សាលាបាលីចាស់</option>
-                        <option value="សាលាពុទ្ធិក">សាលាពុទ្ធិក</option>
+                        ${FormOptions.optionsHtml('residence')}
                     </select>
                 </div>
                 <div class="form-group">
                     <label for="position-${index}">តួនាទីក្នុងវត្ត <span class="required">*</span></label>
                     <select name="position" id="position-${index}" required>
-                        <option value="">-- ជ្រើសរើសតួនាទី --</option>
-                        <option value="សមណសិស្ស">សមណសិស្ស</option>
-                        <option value="ព្រះអធិការ">ព្រះអធិការ</option>
-                        <option value="ព្រះគ្រូសូត្រស្តាំ">ព្រះគ្រូសូត្រស្តាំ</option>
-                        <option value="ព្រះគ្រូសូត្រឆ្វេង">ព្រះគ្រូសូត្រឆ្វេង</option>
-                        <option value="ព្រះគ្រូវិន័យធរ">ព្រះគ្រូវិន័យធរ</option>
-                        <option value="ព្រះគ្រូលេខា">ព្រះគ្រូលេខា</option>
-                        <option value="ព្រះគ្រូប្រធានការក">ព្រះគ្រូប្រធានការក</option>
-                        <option value="ព្រះគ្រូអនុប្រធានការកទី១">ព្រះគ្រូអនុប្រធានការកទី១</option>
-                        <option value="ព្រះគ្រូអនុប្រធានការកទី២">ព្រះគ្រូអនុប្រធានការកទី២</option>
-                        <option value="មេកុដិ">មេកុដិ</option>
-                        <option value="អនុកុដិ">អនុកុដិ</option>
+                        ${FormOptions.optionsHtml('position')}
                     </select>
                 </div>
             </div>
@@ -170,21 +147,13 @@ function createFormCard(index) {
                 <div class="form-group">
                     <label for="education_level-${index}">កម្រិតសិក្សា <span class="required">*</span></label>
                     <select id="education_level-${index}" name="education_level" required>
-                        <option value="">-- ជ្រើសរើស --</option>
-                        <option value="បឋមសិក្សា">បឋមសិក្សា</option>
-                        <option value="អនុវិទ្យាល័យ">អនុវិទ្យាល័យ</option>
-                        <option value="វិទ្យាល័យ">វិទ្យាល័យ</option>
-                        <option value="មហាវិទ្យាល័យ">មហាវិទ្យាល័យ</option>
+                        ${FormOptions.optionsHtml('education_level')}
                     </select>
                 </div>
                 <div class="form-group">
                     <label for="academic_level-${index}">សិក្សាថ្នាក់ <span class="required">*</span></label>
                     <select name="academic_level" id="academic_level-${index}" required>
-                        <option value="">-- ជ្រើសរើសឆ្នាំ --</option>
-                        <option value="ឆ្នាំទី១">ឆ្នាំទី ១</option>
-                        <option value="ឆ្នាំទី២">ឆ្នាំទី ២</option>
-                        <option value="ឆ្នាំទី៣">ឆ្នាំទី ៣</option>
-                        <option value="ឆ្នាំទី៤">ឆ្នាំទី ៤</option>
+                        ${FormOptions.optionsHtml('academic_year')}
                     </select>
                 </div>
             </div>
@@ -443,6 +412,16 @@ function clearAllForms() {
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function () {
+    FormOptions.load()
+        .then(() => {
+            FormOptions.applyAll(document.getElementById('forms-container'));
+            FormOptions.initAdmin();
+        })
+        .catch((err) => {
+            console.error(err);
+            alert('មិនអាចផ្ទុកជម្រើសទម្រង់បាន');
+        });
+
     // Inject dup-alert div into static form cards (Form 1 & 2)
     document.querySelectorAll('.form-card').forEach(card => {
         if (!card.querySelector('.dup-alert')) {

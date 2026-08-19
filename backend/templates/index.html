@@ -60,6 +60,21 @@
                 <span class="action-hint">បំពេញទម្រង់ខាងក្រោម រួចចុចរក្សាទុក</span>
             </div>
             <div class="action-buttons">
+                <button type="button" class="btn-options" id="btn-manage-options">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="4" y1="21" x2="4" y2="14"></line>
+                        <line x1="4" y1="10" x2="4" y2="3"></line>
+                        <line x1="12" y1="21" x2="12" y2="12"></line>
+                        <line x1="12" y1="8" x2="12" y2="3"></line>
+                        <line x1="20" y1="21" x2="20" y2="16"></line>
+                        <line x1="20" y1="12" x2="20" y2="3"></line>
+                        <line x1="1" y1="14" x2="7" y2="14"></line>
+                        <line x1="9" y1="8" x2="15" y2="8"></line>
+                        <line x1="17" y1="16" x2="23" y2="16"></line>
+                    </svg>
+                    គ្រប់គ្រងជម្រើស
+                </button>
                 <button type="button" class="btn-add" onclick="addNewForm()">
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
                         stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -121,9 +136,7 @@
                         <div class="form-group">
                             <label for="type-1">សាមណេរ / ភិក្ខុ <span class="required">*</span></label>
                             <select name="type" id="type-1" required>
-                                <option value="">-- ជ្រើសរើស --</option>
-                                <option value="សាមណេរ">សាមណេរ</option>
-                                <option value="ភិក្ខុ">ភិក្ខុ</option>
+                                <option value="">កំពុងផ្ទុក…</option>
                             </select>
                         </div>
                     </div>
@@ -131,34 +144,13 @@
                         <div class="form-group">
                             <label for="home-1">ស្នាក់នៅកុដិ <span class="required">*</span></label>
                             <select name="home" id="home-1" required>
-                                <option value="">-- ជ្រើសរើសកុដិ --</option>
-                                <option value="កុដិលេខ១">កុដិលេខ១</option>
-                                <option value="កុដិលេខ២_ជាន់ក្រោម">កុដិលេខ២ ជាន់ក្រោម</option>
-                                <option value="កុដិលេខ២_ជាន់លើ">កុដិលេខ២ ជាន់លើ</option>
-                                <option value="កុដិលេខ៤">កុដិលេខ៤</option>
-                                <option value="កុដិធំ_ជាន់ទី១">កុដិធំ ជាន់ទី១</option>
-                                <option value="កុដិធំ_ជាន់ទី២">កុដិធំ ជាន់ទី២</option>
-                                <option value="កុដិធំ_ជាន់ទី៣">កុដិធំ ជាន់ទី៣</option>
-                                <option value="កុដិហោត្រៃ">កុដិហោត្រៃ</option>
-                                <option value="សាលាបាលីចាស់">សាលាបាលីចាស់</option>
-                                <option value="សាលាពុទ្ធិក">សាលាពុទ្ធិក</option>
+                                <option value="">កំពុងផ្ទុក…</option>
                             </select>
                         </div>
                         <div class="form-group">
                             <label for="position-1">តួនាទីក្នុងវត្ត <span class="required">*</span></label>
                             <select name="position" id="position-1" required>
-                                <option value="">-- ជ្រើសរើសតួនាទី --</option>
-                                <option value="សមណសិស្ស">សមណសិស្ស</option>
-                                <option value="ព្រះអធិការ">ព្រះអធិការ</option>
-                                <option value="ព្រះគ្រូសូត្រស្តាំ">ព្រះគ្រូសូត្រស្តាំ</option>
-                                <option value="ព្រះគ្រូសូត្រឆ្វេង">ព្រះគ្រូសូត្រឆ្វេង</option>
-                                <option value="ព្រះគ្រូវិន័យធរ">ព្រះគ្រូវិន័យធរ</option>
-                                <option value="ព្រះគ្រូលេខា">ព្រះគ្រូលេខា</option>
-                                <option value="ព្រះគ្រូប្រធានការក">ព្រះគ្រូប្រធានការក</option>
-                                <option value="ព្រះគ្រូអនុប្រធានការកទី១">ព្រះគ្រូអនុប្រធានការកទី១</option>
-                                <option value="ព្រះគ្រូអនុប្រធានការកទី២">ព្រះគ្រូអនុប្រធានការកទី២</option>
-                                <option value="មេកុដិ">មេកុដិ</option>
-                                <option value="អនុកុដិ">អនុកុដិ</option>
+                                <option value="">កំពុងផ្ទុក…</option>
                             </select>
                         </div>
                     </div>
@@ -166,21 +158,13 @@
                         <div class="form-group">
                             <label for="education_level-1">កម្រិតសិក្សា <span class="required">*</span></label>
                             <select id="education_level-1" name="education_level" required>
-                                <option value="">-- ជ្រើសរើស --</option>
-                                <option value="បឋមសិក្សា">បឋមសិក្សា</option>
-                                <option value="អនុវិទ្យាល័យ">អនុវិទ្យាល័យ</option>
-                                <option value="វិទ្យាល័យ">វិទ្យាល័យ</option>
-                                <option value="មហាវិទ្យាល័យ">មហាវិទ្យាល័យ</option>
+                                <option value="">កំពុងផ្ទុក…</option>
                             </select>
                         </div>
                         <div class="form-group">
                             <label for="academic_level-1">សិក្សាថ្នាក់ <span class="required">*</span></label>
                             <select name="academic_level" id="academic_level-1" required>
-                                <option value="">-- ជ្រើសរើសឆ្នាំ --</option>
-                                <option value="ឆ្នាំទី១">ឆ្នាំទី ១</option>
-                                <option value="ឆ្នាំទី២">ឆ្នាំទី ២</option>
-                                <option value="ឆ្នាំទី៣">ឆ្នាំទី ៣</option>
-                                <option value="ឆ្នាំទី៤">ឆ្នាំទី ៤</option>
+                                <option value="">កំពុងផ្ទុក…</option>
                             </select>
                         </div>
                     </div>
@@ -220,9 +204,7 @@
                         <div class="form-group">
                             <label for="type-2">សាមណេរ / ភិក្ខុ <span class="required">*</span></label>
                             <select name="type" id="type-2" required>
-                                <option value="">-- ជ្រើសរើស --</option>
-                                <option value="សាមណេរ">សាមណេរ</option>
-                                <option value="ភិក្ខុ">ភិក្ខុ</option>
+                                <option value="">កំពុងផ្ទុក…</option>
                             </select>
                         </div>
                     </div>
@@ -230,34 +212,13 @@
                         <div class="form-group">
                             <label for="home-2">ស្នាក់នៅកុដិ <span class="required">*</span></label>
                             <select name="home" id="home-2" required>
-                                <option value="">-- ជ្រើសរើសកុដិ --</option>
-                                <option value="កុដិលេខ១">កុដិលេខ១</option>
-                                <option value="កុដិលេខ២_ជាន់ក្រោម">កុដិលេខ២ ជាន់ក្រោម</option>
-                                <option value="កុដិលេខ២_ជាន់លើ">កុដិលេខ២ ជាន់លើ</option>
-                                <option value="កុដិលេខ៤">កុដិលេខ៤</option>
-                                <option value="កុដិធំ_ជាន់ទី១">កុដិធំ ជាន់ទី១</option>
-                                <option value="កុដិធំ_ជាន់ទី២">កុដិធំ ជាន់ទី២</option>
-                                <option value="កុដិធំ_ជាន់ទី៣">កុដិធំ ជាន់ទី៣</option>
-                                <option value="កុដិហោត្រៃ">កុដិហោត្រៃ</option>
-                                <option value="សាលាបាលីចាស់">សាលាបាលីចាស់</option>
-                                <option value="សាលាពុទ្ធិក">សាលាពុទ្ធិក</option>
+                                <option value="">កំពុងផ្ទុក…</option>
                             </select>
                         </div>
                         <div class="form-group">
                             <label for="position-2">តួនាទីក្នុងវត្ត <span class="required">*</span></label>
                             <select name="position" id="position-2" required>
-                                <option value="">-- ជ្រើសរើសតួនាទី --</option>
-                                <option value="សមណសិស្ស">សមណសិស្ស</option>
-                                <option value="ព្រះអធិការ">ព្រះអធិការ</option>
-                                <option value="ព្រះគ្រូសូត្រស្តាំ">ព្រះគ្រូសូត្រស្តាំ</option>
-                                <option value="ព្រះគ្រូសូត្រឆ្វេង">ព្រះគ្រូសូត្រឆ្វេង</option>
-                                <option value="ព្រះគ្រូវិន័យធរ">ព្រះគ្រូវិន័យធរ</option>
-                                <option value="ព្រះគ្រូលេខា">ព្រះគ្រូលេខា</option>
-                                <option value="ព្រះគ្រូប្រធានការក">ព្រះគ្រូប្រធានការក</option>
-                                <option value="ព្រះគ្រូអនុប្រធានការកទី១">ព្រះគ្រូអនុប្រធានការកទី១</option>
-                                <option value="ព្រះគ្រូអនុប្រធានការកទី២">ព្រះគ្រូអនុប្រធានការកទី២</option>
-                                <option value="មេកុដិ">មេកុដិ</option>
-                                <option value="អនុកុដិ">អនុកុដិ</option>
+                                <option value="">កំពុងផ្ទុក…</option>
                             </select>
                         </div>
                     </div>
@@ -265,21 +226,13 @@
                         <div class="form-group">
                             <label for="education_level-2">កម្រិតសិក្សា <span class="required">*</span></label>
                             <select id="education_level-2" name="education_level" required>
-                                <option value="">-- ជ្រើសរើស --</option>
-                                <option value="បឋមសិក្សា">បឋមសិក្សា</option>
-                                <option value="អនុវិទ្យាល័យ">អនុវិទ្យាល័យ</option>
-                                <option value="វិទ្យាល័យ">វិទ្យាល័យ</option>
-                                <option value="មហាវិទ្យាល័យ">មហាវិទ្យាល័យ</option>
+                                <option value="">កំពុងផ្ទុក…</option>
                             </select>
                         </div>
                         <div class="form-group">
                             <label for="academic_level-2">សិក្សាថ្នាក់ <span class="required">*</span></label>
                             <select name="academic_level" id="academic_level-2" required>
-                                <option value="">-- ជ្រើសរើសឆ្នាំ --</option>
-                                <option value="ឆ្នាំទី១">ឆ្នាំទី ១</option>
-                                <option value="ឆ្នាំទី២">ឆ្នាំទី ២</option>
-                                <option value="ឆ្នាំទី៣">ឆ្នាំទី ៣</option>
-                                <option value="ឆ្នាំទី៤">ឆ្នាំទី ៤</option>
+                                <option value="">កំពុងផ្ទុក…</option>
                             </select>
                         </div>
                     </div>
@@ -301,6 +254,86 @@
         </footer>
     </div>
 
+    <div id="options-modal" class="options-modal" hidden>
+        <div class="options-backdrop" data-close-options></div>
+        <div class="options-box" role="dialog" aria-modal="true" aria-labelledby="options-modal-title">
+            <header class="options-head">
+                <span class="options-head-icon" aria-hidden="true">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="4" y1="21" x2="4" y2="14"></line>
+                        <line x1="4" y1="10" x2="4" y2="3"></line>
+                        <line x1="12" y1="21" x2="12" y2="12"></line>
+                        <line x1="12" y1="8" x2="12" y2="3"></line>
+                        <line x1="20" y1="21" x2="20" y2="16"></line>
+                        <line x1="20" y1="12" x2="20" y2="3"></line>
+                        <line x1="1" y1="14" x2="7" y2="14"></line>
+                        <line x1="9" y1="8" x2="15" y2="8"></line>
+                        <line x1="17" y1="16" x2="23" y2="16"></line>
+                    </svg>
+                </span>
+                <div class="options-head-text">
+                    <h2 id="options-modal-title">គ្រប់គ្រងជម្រើសទម្រង់</h2>
+                    <p class="options-sub">ជ្រើសប្រភេទ · បន្ថែម ឬកែប្រែជម្រើស</p>
+                </div>
+                <button type="button" class="options-close" data-close-options aria-label="បិទ">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2.4" stroke-linecap="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </header>
+
+            <div class="options-tabs" role="tablist">
+                <button type="button" class="options-tab is-active" data-field="monk_type">
+                    ប្រភេទ <span class="options-tab-count" data-count-for="monk_type">0</span>
+                </button>
+                <button type="button" class="options-tab" data-field="residence">
+                    កុដិ <span class="options-tab-count" data-count-for="residence">0</span>
+                </button>
+                <button type="button" class="options-tab" data-field="position">
+                    តួនាទី <span class="options-tab-count" data-count-for="position">0</span>
+                </button>
+                <button type="button" class="options-tab" data-field="education_level">
+                    កម្រិត <span class="options-tab-count" data-count-for="education_level">0</span>
+                </button>
+                <button type="button" class="options-tab" data-field="academic_year">
+                    ថ្នាក់ <span class="options-tab-count" data-count-for="academic_year">0</span>
+                </button>
+            </div>
+
+            <div class="options-body">
+                <div class="options-list-head">
+                    <h3 id="options-active-label">សាមណេរ / ភិក្ខុ</h3>
+                    <span class="options-list-hint">តម្រៀបតាមអាទិភាព</span>
+                </div>
+                <div id="options-list" class="options-list"></div>
+            </div>
+
+            <form class="options-add-form" id="options-add-form" onsubmit="return false;">
+                <div class="options-editing-banner" id="options-editing-banner" hidden>
+                    កំពុងកែប្រែ៖ <strong id="options-editing-name"></strong>
+                </div>
+                <div class="options-add-row">
+                    <div class="form-group form-group-grow">
+                        <label for="options-label-input">ឈ្មោះជម្រើស</label>
+                        <input type="text" id="options-label-input" placeholder="បញ្ចូលឈ្មោះជម្រើស">
+                    </div>
+                    <div class="form-group options-priority-group">
+                        <label for="options-priority-input">អាទិភាព</label>
+                        <input type="number" id="options-priority-input" min="1" step="1" placeholder="ឧ. ១">
+                    </div>
+                    <div class="options-form-actions">
+                        <button type="button" class="btn-clear options-cancel-btn" id="options-cancel-btn" hidden>បោះបង់</button>
+                        <button type="button" class="btn-add" id="options-add-btn">បន្ថែម</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="/static/js/form_options.js"></script>
     <script src="/static/js/script.js"></script>
 </body>
 

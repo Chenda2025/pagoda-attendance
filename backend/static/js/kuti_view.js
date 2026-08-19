@@ -117,15 +117,22 @@
         document.getElementById('monk-id').value = '';
         document.getElementById('monk-residence').value = KUTI_RESIDENCE;
 
+        if (window.FormOptions) {
+            FormOptions.fillSelect(document.getElementById('monk-type'), 'monk_type', monk && monk.monk_type);
+            FormOptions.fillSelect(document.getElementById('monk-position'), 'position', monk && monk.position);
+            FormOptions.fillSelect(document.getElementById('monk-education'), 'education_level', monk && monk.education_level);
+            FormOptions.fillSelect(document.getElementById('monk-academic'), 'academic_year', monk && monk.academic_year);
+        }
+
         if (mode === 'edit' && monk) {
             monkModalTitle.textContent = 'កែប្រែទិន្នន័យ';
             document.getElementById('monk-id').value = monk.id;
             document.getElementById('monk-fullname').value = monk.fullname || '';
             document.getElementById('monk-vassa').value = monk.vassa_years ?? 0;
-            document.getElementById('monk-type').value = monk.monk_type || 'សាមណេរ';
-            document.getElementById('monk-position').value = monk.position || 'សមណសិស្ស';
-            document.getElementById('monk-education').value = monk.education_level || 'បឋមសិក្សា';
-            document.getElementById('monk-academic').value = monk.academic_year || 'ឆ្នាំទី១';
+            document.getElementById('monk-type').value = monk.monk_type || '';
+            document.getElementById('monk-position').value = monk.position || '';
+            document.getElementById('monk-education').value = monk.education_level || '';
+            document.getElementById('monk-academic').value = monk.academic_year || '';
             document.getElementById('monk-living').value = monk.living_status || 'កំពុងស្នាក់នៅ';
         } else {
             monkModalTitle.textContent = 'បន្ថែមទិន្នន័យ';
@@ -195,7 +202,11 @@
                 return;
             }
             closeMonkModal();
-            await load();
+            if (data.pending) {
+                alert(data.message || 'បានដាក់ស្នើ — រង់ចាំអនុម័តពីអ្នកគ្រប់គ្រង');
+            } else {
+                await load();
+            }
         } catch (_) {
             alert('មិនអាចរក្សាទុកបាន');
         } finally {
@@ -387,5 +398,10 @@
         }
     });
 
+    if (window.FormOptions) {
+        FormOptions.load()
+            .then(() => FormOptions.applyAll(document))
+            .catch(() => {});
+    }
     load();
 })();

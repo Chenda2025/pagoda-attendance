@@ -2,6 +2,7 @@ import os
 from flask import Flask
 from routes import main_bp
 from create_table import create_monks_table, create_summaries_tables, create_pending_submissions_table, create_seat_order_table, create_permission_table, create_kuti_share_table, create_app_users_table, create_telegram_notify_table, create_telegram_contract_table
+from form_options_service import create_form_options_table, seed_form_options
 from auth_service import seed_default_users, purge_old_activity
 from conn import connect_db
 
@@ -62,6 +63,13 @@ def _auto_setup():
         print('[startup] Telegram contract table created / verified.')
     except Exception as e:
         print(f'[startup] telegram-contract warning: {e}')
+
+    try:
+        create_form_options_table()
+        seed_form_options()
+        print('[startup] Form field options created / verified.')
+    except Exception as e:
+        print(f'[startup] form-options warning: {e}')
 
     try:
         create_app_users_table()
