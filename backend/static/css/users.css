@@ -928,18 +928,76 @@
 .usr-toast.ok { background: #1f6b4a; color: #fff; }
 .usr-toast.err { background: #9b1c1c; color: #fff; }
 
-/* ── Responsive: computer / tablet / phone ── */
+/* ── Responsive: computer / iPad / phone ── */
+
+/* Large tablet & iPad landscape — stack panels so list gets full width */
+@media (max-width: 1180px) {
+    .users-grid {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+    .users-create-panel .form-row {
+        grid-template-columns: 1fr 1fr;
+    }
+    .users-list-panel,
+    .users-create-panel,
+    .users-activity-panel {
+        padding: 18px 20px 20px;
+    }
+}
+
 @media (max-width: 1100px) {
     .users-stats { grid-template-columns: repeat(2, 1fr); }
 }
 
-@media (max-width: 960px) {
-    .users-grid { grid-template-columns: 1fr; }
-    .users-create-panel .form-row { grid-template-columns: 1fr 1fr; }
-    .users-list-panel .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+/* iPad portrait, iPad mini, small tablet */
+@media (max-width: 1024px) {
+    .users-page.gov-shell {
+        padding: 14px 16px 24px;
+        gap: 14px;
+    }
+    .users-list-panel .table-wrap,
+    .users-activity-panel .table-wrap {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scroll-behavior: smooth;
+    }
+    .users-list-panel .users-table,
+    .users-activity-panel .activity-table {
+        min-width: 0;
+    }
+    .users-list-panel .users-table th:nth-child(n),
+    .users-list-panel .users-table td:nth-child(n) {
+        width: auto;
+    }
+    .users-table .col-hide-ipad,
+    .activity-table .col-hide-ipad {
+        display: none;
+    }
+    .users-table th,
+    .users-table td,
+    .activity-table th,
+    .activity-table td {
+        padding: 10px 12px;
+        font-size: 12.5px;
+    }
+    .user-cell-name strong { font-size: 13.5px; }
+    .perm-cell { width: auto; min-width: 96px; }
+    .btn-icon {
+        width: 36px;
+        height: 36px;
+        font-size: 15px;
+    }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 960px) {
+    .users-create-panel .form-row {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+/* iPad portrait — card rows instead of cramped table */
+@media (max-width: 768px) {
     .users-user-chip .users-chip-meta { display: none; }
     .users-topbar { position: static; }
     .users-create-panel .form-row,
@@ -947,12 +1005,15 @@
     .perm-grid { grid-template-columns: 1fr; }
     .panel-head-row { flex-direction: column; }
     .panel-head-accent.panel-head-row { flex-direction: column; }
-    .activity-toolbar { width: 100%; }
+    .activity-toolbar {
+        width: 100%;
+        flex-wrap: wrap;
+    }
     .filter-select { flex: 1; min-width: 0; width: 100%; }
     .stat-card { padding: 14px 16px; }
     .stat-value { font-size: 20px; }
     .users-tabs { gap: 4px; }
-    .users-tab { font-size: 13px; padding: 10px 8px; }
+    .users-tab { font-size: 13px; padding: 10px 10px; }
     .usr-modal { padding: 10px; align-items: flex-end; }
     .usr-modal-box { max-width: 100%; border-radius: 16px 16px 12px 12px; }
     .usr-modal-actions { flex-direction: column-reverse; }
@@ -1008,6 +1069,10 @@
         padding-top: 10px;
     }
     .users-table td.cell-actions::before { display: none; }
+    .users-table .col-hide-ipad,
+    .activity-table .col-hide-ipad {
+        display: flex !important;
+    }
     .users-table .perm-cell { width: auto; }
     .perm-drop-menu { left: auto; right: 0; }
     .cell-empty { display: block !important; text-align: center; }
@@ -1016,9 +1081,14 @@
     .users-activity-panel .table-wrap { overflow: hidden; }
 }
 
+@media (max-width: 640px) {
+    .users-tab { font-size: 13px; padding: 10px 8px; }
+}
+
 @media (max-width: 480px) {
     .users-stats { grid-template-columns: 1fr 1fr; }
     .users-create-panel,
     .users-list-panel,
     .users-activity-panel { padding: 14px 14px 16px; }
+    .users-page.gov-shell { padding: 10px 12px 20px; }
 }

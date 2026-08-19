@@ -178,8 +178,8 @@ async function loadUsers() {
             <td data-label="តួនាទី">${roleBadge(u.role)}</td>
             <td class="perm-cell" data-label="សិទ្ធិ">${permDropdown(u.permissions)}</td>
             <td data-label="ស្ថានភាព">${statusBadge(u)}</td>
-            <td data-label="Face ID">${faceBadge(u.face_enrolled)}</td>
-            <td data-label="ចូលចុងក្រោយ"><small>${formatDate(u.last_login_at)}</small></td>
+            <td class="col-hide-ipad" data-label="Face ID">${faceBadge(u.face_enrolled)}</td>
+            <td class="col-hide-ipad" data-label="ចូលចុងក្រោយ"><small>${formatDate(u.last_login_at)}</small></td>
             <td class="cell-actions">
                 ${u.is_active ? '' : `<button class="btn-icon unlock" data-unlock="${u.id}" data-name="${esc(u.username)}" title="បើកគណនីឡើងវិញ">🔓</button>`}
                 <button class="btn-icon" data-edit="${u.id}" title="កែ">✎</button>
@@ -215,7 +215,7 @@ async function loadActivity() {
             <td data-label="សកម្មភាព">${esc(ACTION_LABELS[l.action] || l.action)}</td>
             <td data-label="ម៉ូឌុល"><span class="badge badge-module">${esc(MODULE_LABELS[l.module] || l.module || '—')}</span></td>
             <td data-label="ព័ត៌មាន"><small>${esc(l.detail || '')}</small></td>
-            <td data-label="IP"><small>${esc(l.ip_address || '')}</small></td>
+            <td class="col-hide-ipad" data-label="IP"><small>${esc(l.ip_address || '')}</small></td>
         </tr>
     `).join('');
 }
