@@ -14,6 +14,7 @@ from auth_service import (
     delete_user, save_face_enrollment, touch_last_login, find_user_by_face,
     user_allowed, user_home, log_activity, list_activity, purge_old_activity,
     verify_password, unlock_user, register_failed_password, bind_device,
+    device_is_trusted, trusted_devices,
     MODULE_LABELS, ALL_PERMISSIONS, ACTIVITY_RETENTION_DAYS,
     MAX_PASSWORD_ATTEMPTS, LOCK_REASON_PASSWORD,
 )
@@ -176,16 +177,52 @@ def _log_act(action, module=None, detail=None, username=None, user_id=None):
 
 
 def _login_user(user, ip=None, location=None):
+    session.permanent = True
     session['user_id'] = user['id']
     session['username'] = user['username']
     session['role'] = user['role']
     session['permissions'] = user.get('permissions') or []
     session['face_enrolled'] = user.get('face_enrolled', False)
+    session['last_activity'] = time.time()
     touch_last_login(user['id'], ip, location)
 
 
 def _allowed(role, path):
     return user_allowed(_session_user() if session.get('user_id') else role, path)
+
+
+IDLE_TIMEOUT_SECONDS = 15 * 60
+# Background polls must not keep a walked-away session alive
+IDLE_SKIP_TOUCH = frozenset({'/api/seat-order'})
+
+
+def _touch_activity():
+    session['last_activity'] = time.time()
+
+
+def _idle_expired():
+    last = session.get('last_activity')
+    if last is None:
+        _touch_activity()
+        return False
+    try:
+        return (time.time() - float(last)) > IDLE_TIMEOUT_SECONDS
+    except (TypeError, ValueError):
+        _touch_activity()
+        return False
+
+
+def _idle_logout_response():
+    if session.get('username'):
+        _log_act('logout_idle', 'auth', 'no action for 15 minutes')
+    session.clear()
+    if request.path.startswith('/api/'):
+        return jsonify({
+            'success': False,
+            'idle': True,
+            'message': 'គ្មានសកម្មភាព ១៥ នាទី — សូមចូលម្តងទៀត',
+        }), 401
+    return redirect(url_for('main_bp.login_page', idle=1, next=request.path))
 
 
 @main_bp.before_request
@@ -203,6 +240,9 @@ def check_auth():
     if not role:
         return redirect(url_for('main_bp.login_page', next=request.path))
 
+    if _idle_expired():
+        return _idle_logout_response()
+
     # First-time face setup after password login
     if not session.get('face_enrolled') and path not in ('/setup-face', '/api/auth/face-enroll'):
         return redirect(url_for('main_bp.setup_face_page'))
@@ -211,10 +251,14 @@ def check_auth():
         home = user_home(_session_user())
         if home != '/':
             return redirect(home)
+        _touch_activity()
         return
 
     if not _allowed(role, path):
         abort(403)
+
+    if path not in IDLE_SKIP_TOUCH:
+        _touch_activity()
 
 
 @main_bp.errorhandler(403)
@@ -254,7 +298,7 @@ def login_page():
             _log_act('login_password', 'auth', 'password login', user['username'], user['id'])
             # Password proves ownership, so trust this browser for Face ID from now on
             if device_id and bind_device(user['id'], device_id):
-                _log_act('device_rebound', 'auth', f'trusted device {device_id[:16]}…',
+                _log_act('device_bound', 'auth', f'added trusted device {device_id[:16]}…',
                          user['username'], user['id'])
             if not user.get('face_enrolled'):
                 return redirect(url_for('main_bp.setup_face_page'))
@@ -287,6 +331,9 @@ def login_page():
             _log_act('login_failed', 'auth', f'unknown username: {username[:60]}', username)
             error = 'ឈ្មោះអ្នកប្រើ ឬ លេខសម្ងាត់មិនត្រឹមត្រូវ'
 
+    if not error and request.args.get('idle'):
+        error = 'គ្មានសកម្មភាព ១៥ នាទី — សូមចូលប្រព័ន្ធម្តងទៀត'
+
     return render_template('login.html', error=error, locked=locked,
                            face_fails=face_fails)
 
@@ -314,24 +361,24 @@ def api_face_login():
         return jsonify({'success': False, 'message': 'មិនស្គាល់មុខ', 'unknown_face': True}), 401
 
     ip = _client_ip()
-    stored_device = user.get('device_id') or ''
-
-    # Known face on an unrecognised device (new browser, cleared storage) — fall back
-    # to the password, which re-binds this device on success.
-    if stored_device and device_id and stored_device != device_id:
+    if not device_is_trusted(user, device_id):
+        known = trusted_devices(user)
+        preview = (known[-1][:16] + '…') if known else '—'
         _log_act('login_face_device_mismatch', 'auth',
-                 f'device mismatch (enrolled={stored_device[:16]}…, seen={device_id[:16]}…)',
+                 f'new device (trusted={len(known)}, last={preview}, seen={(device_id or "")[:16]}…)',
                  user['username'], user['id'])
         return jsonify({
             'success': False,
             'need_password': True,
             'new_device': True,
             'message': ('ឧបករណ៍ថ្មី — សូមបញ្ចូលឈ្មោះ និងលេខសម្ងាត់ម្តង '
-                        'ដើម្បីអនុញ្ញាតឧបករណ៍នេះ'),
+                        'ដើម្បីបន្ថែមឧបករណ៍នេះ (អាចស្កេនមុខបានច្រើនឧបករណ៍)'),
         }), 401
 
     location = _geo_lookup(ip)
     _login_user(user, ip, location)
+    if device_id:
+        bind_device(user['id'], device_id)
     _log_act('login_face', 'auth', f'face login (dist={dist:.3f})', user['username'], user['id'])
     return jsonify({
         'success': True,
@@ -357,12 +404,48 @@ def api_face_enroll():
     return jsonify({'success': True, 'redirect': user_home(_session_user())})
 
 
+@main_bp.route('/api/auth/idle-ping', methods=['POST'])
+def api_idle_ping():
+    if not session.get('user_id'):
+        return jsonify({'success': False, 'idle': True}), 401
+    if _idle_expired():
+        return _idle_logout_response()
+    _touch_activity()
+    return jsonify({'success': True, 'idle_minutes': 15})
+
+
 @main_bp.route('/logout')
 def logout():
+    idle = request.args.get('idle')
     if session.get('username'):
-        _log_act('logout', 'auth')
+        _log_act('logout_idle' if idle else 'logout', 'auth',
+                 'no action for 15 minutes' if idle else None)
     session.clear()
+    if idle:
+        return redirect(url_for('main_bp.login_page', idle=1))
     return redirect(url_for('main_bp.login_page'))
+
+
+@main_bp.after_request
+def inject_idle_timeout_script(response):
+    if not session.get('user_id'):
+        return response
+    if response.status_code != 200:
+        return response
+    if 'text/html' not in (response.headers.get('Content-Type') or ''):
+        return response
+    if getattr(response, 'direct_passthrough', False):
+        return response
+    try:
+        html = response.get_data(as_text=True)
+    except (RuntimeError, UnicodeDecodeError):
+        return response
+    if 'idle-timeout.js' in html or '</body>' not in html.lower():
+        return response
+    html = html.replace('</body>', '<script src="/static/js/idle-timeout.js?v=3" defer></script>\n</body>', 1)
+    html = html.replace('</BODY>', '<script src="/static/js/idle-timeout.js?v=3" defer></script>\n</BODY>', 1)
+    response.set_data(html)
+    return response
 
 
 # ============ USER MANAGEMENT (admin) ============

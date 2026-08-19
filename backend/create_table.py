@@ -479,10 +479,17 @@ def create_app_users_table():
             ('lock_reason',     'VARCHAR(160)'),
             ('last_ip',         'VARCHAR(64)'),
             ('last_location',   'VARCHAR(160)'),
+            ('device_ids',      "JSONB NOT NULL DEFAULT '[]'::jsonb"),
         ):
             cursor.execute(
                 f'ALTER TABLE app_users ADD COLUMN IF NOT EXISTS {column} {ddl};'
             )
+        cursor.execute("""
+            UPDATE app_users
+            SET device_ids = jsonb_build_array(device_id)
+            WHERE COALESCE(device_id, '') <> ''
+              AND (device_ids IS NULL OR device_ids = '[]'::jsonb);
+        """)
 
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS activity_log (

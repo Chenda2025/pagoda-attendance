@@ -39,6 +39,9 @@ FACE_MATCH_THRESHOLD = 0.55
 # Wrong passwords allowed on one account before it is locked
 MAX_PASSWORD_ATTEMPTS = 3
 
+# Face ID may be used from several phones/tablets/computers for the same person
+MAX_TRUSTED_DEVICES = 12
+
 LOCK_REASON_DEVICE = 'ឧបករណ៍ខុសពីការចុះឈ្មោះ'
 LOCK_REASON_PASSWORD = f'បញ្ចូលលេខសម្ងាត់ខុសលើសពី {MAX_PASSWORD_ATTEMPTS} ដង'
 
@@ -67,7 +70,8 @@ _USER_COLUMNS = """
     id, username, password_hash, display_name, role, permissions,
     face_descriptor, device_id, face_enrolled, is_active,
     created_at, last_login_at, created_by,
-    failed_attempts, login_count, locked_at, lock_reason, last_ip, last_location
+    failed_attempts, login_count, locked_at, lock_reason, last_ip, last_location,
+    device_ids
 """
 
 
@@ -100,6 +104,7 @@ def _row_to_user(row):
         'lock_reason': row[16],
         'last_ip': row[17],
         'last_location': row[18],
+        'device_ids': _parse_device_ids(row[19] if len(row) > 19 else None) or _parse_device_ids(row[7]),
     }
 
 
@@ -204,41 +209,99 @@ def delete_user(user_id):
     return ok
 
 
+def _parse_device_ids(value):
+    """Normalise stored device data to a unique list (legacy string or JSON array)."""
+    if not value:
+        return []
+    items = []
+    if isinstance(value, list):
+        items = value
+    elif isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return []
+        if text.startswith('['):
+            try:
+                parsed = json.loads(text)
+                items = parsed if isinstance(parsed, list) else [text]
+            except (TypeError, ValueError):
+                items = [text]
+        else:
+            items = [text]
+    else:
+        return []
+    seen, out = set(), []
+    for item in items:
+        device = str(item).strip()[:128]
+        if device and device not in seen:
+            seen.add(device)
+            out.append(device)
+    return out
+
+
+def trusted_devices(user):
+    ids = _parse_device_ids((user or {}).get('device_ids'))
+    if not ids:
+        ids = _parse_device_ids((user or {}).get('device_id'))
+    return ids
+
+
+def device_is_trusted(user, device_id):
+    """True when this browser may use Face ID without a password re-bind."""
+    trusted = trusted_devices(user)
+    if not trusted:
+        return True
+    return bool(device_id) and device_id in trusted
+
+
 def save_face_enrollment(user_id, descriptors, device_id):
     """Store one or many angle descriptors (Face ID style multi-angle enrollment)."""
     conn = connect_db()
     cur = conn.cursor()
     cur.execute("""
         UPDATE app_users
-        SET face_descriptor = %s::jsonb, device_id = %s, face_enrolled = TRUE
+        SET face_descriptor = %s::jsonb, face_enrolled = TRUE
         WHERE id = %s
-    """, (json.dumps(_as_descriptor_list(descriptors)), device_id, user_id))
+    """, (json.dumps(_as_descriptor_list(descriptors)), user_id))
     ok = cur.rowcount > 0
     conn.commit()
     cur.close()
     conn.close()
+    if ok and device_id:
+        bind_device(user_id, device_id)
     return ok
 
 
 def bind_device(user_id, device_id):
-    """Trust a new browser/device for Face ID after a successful password login.
+    """Add a browser/device to the trusted Face ID list (does not drop the others).
 
-    Returns True when the stored device actually changed.
+    Returns True when this device was newly added.
     """
     if not device_id:
         return False
     conn = connect_db()
     cur = conn.cursor()
+    cur.execute('SELECT device_id, device_ids FROM app_users WHERE id = %s', (user_id,))
+    row = cur.fetchone()
+    if not row:
+        cur.close()
+        conn.close()
+        return False
+    devices = _parse_device_ids(row[1]) or _parse_device_ids(row[0])
+    already = device_id in devices
+    if not already:
+        devices.append(device_id)
+        if len(devices) > MAX_TRUSTED_DEVICES:
+            devices = devices[-MAX_TRUSTED_DEVICES:]
     cur.execute("""
         UPDATE app_users
-        SET device_id = %s
-        WHERE id = %s AND COALESCE(device_id, '') <> %s
-    """, (device_id, user_id, device_id))
-    changed = cur.rowcount > 0
+        SET device_id = %s, device_ids = %s::jsonb
+        WHERE id = %s
+    """, (device_id, json.dumps(devices), user_id))
     conn.commit()
     cur.close()
     conn.close()
-    return changed
+    return not already
 
 
 def touch_last_login(user_id, ip=None, location=None):

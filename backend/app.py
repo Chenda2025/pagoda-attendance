@@ -5,8 +5,12 @@ from create_table import create_monks_table, create_summaries_tables, create_pen
 from auth_service import seed_default_users, purge_old_activity
 from conn import connect_db
 
+from datetime import timedelta
+
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'pagoda-niroth-rangsay-2026-secret')
+app.permanent_session_lifetime = timedelta(hours=12)
+app.config['SESSION_REFRESH_EACH_REQUEST'] = False
 app.register_blueprint(main_bp)
 
 
