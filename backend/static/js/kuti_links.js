@@ -9,6 +9,19 @@
     const leaderHint = document.getElementById('leader-hint');
     const newBox = document.getElementById('new-link-box');
     const newUrl = document.getElementById('new-link-url');
+    const linksCountEl = document.getElementById('links-count');
+
+    const KHMER = '០១២៣៤៥៦៧៨៩';
+    const toKhmer = (n) => String(n).replace(/\d/g, (d) => KHMER[d]);
+
+    function setLinksCount(n) {
+        if (!linksCountEl) return;
+        if (typeof n !== 'number') {
+            linksCountEl.textContent = '—';
+            return;
+        }
+        linksCountEl.textContent = `${toKhmer(n)} តំណ`;
+    }
 
     function escapeHtml(s) {
         return String(s)
@@ -114,6 +127,8 @@
     }
 
     function renderLinks(links) {
+        setLinksCount(links.length);
+
         if (!links.length) {
             body.innerHTML = '<tr><td colspan="5" class="muted">មិនទាន់មានតំណ — បង្កើតខាងលើ</td></tr>';
             cards.innerHTML = '<p class="muted card-empty">មិនទាន់មានតំណ — បង្កើតខាងលើ</p>';
@@ -158,6 +173,7 @@
     }
 
     async function loadLinks() {
+        setLinksCount(null);
         body.innerHTML = '<tr><td colspan="5" class="muted">កំពុងផ្ទុក...</td></tr>';
         cards.innerHTML = '<p class="muted card-empty">កំពុងផ្ទុក...</p>';
         try {
@@ -166,6 +182,7 @@
             if (!data.success) throw new Error(data.message || 'fail');
             renderLinks(data.links || []);
         } catch (e) {
+            setLinksCount(null);
             body.innerHTML = '<tr><td colspan="5" class="muted">មិនអាចផ្ទុកបាន</td></tr>';
             cards.innerHTML = '<p class="muted card-empty">មិនអាចផ្ទុកបាន</p>';
         }

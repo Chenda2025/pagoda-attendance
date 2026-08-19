@@ -172,6 +172,26 @@
     border-bottom: 1px solid var(--line);
 }
 
+.list-head-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.links-count-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: #eef3f9;
+    color: var(--navy);
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
 .list-head .panel-title { margin: 0; }
 
 .list-head .gov-btn {

@@ -10,7 +10,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&family=Kantumruy+Pro:wght@400;500;600;700&family=Moul&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/gov-shell.css?v=2">
     <link rel="stylesheet" href="/static/css/export_preview.css?v=3">
-    <link rel="stylesheet" href="/static/css/kuti_status.css?v=11">
+    <link rel="stylesheet" href="/static/css/kuti_status.css?v=12">
 </head>
 <body class="gov-page-body">
 <div class="gov-shell kuti-status-page">
@@ -37,7 +37,6 @@
             <a href="/" class="gov-btn">← ផ្ទាំងគ្រប់គ្រង</a>
             <div class="gov-topbar-titles">
                 <h1 class="gov-page-title">ពិនិត្យស្ថានភាពមេកុដិ</h1>
-                <p class="gov-page-sub">មើលស្ថានភាពតាមតំណភ្ជាប់ · ចំនួនសមាជិក · ចូលមើលតំណ</p>
             </div>
         </div>
         <div class="gov-topbar-actions">
@@ -67,9 +66,9 @@
 
     <section class="gov-panel">
         <div class="panel-toolbar">
-            <div>
+            <div class="panel-title-row">
                 <h2 class="panel-title">តំណមេកុដិសកម្ម</h2>
-                <p class="panel-desc">ចុចលើកុដិដើម្បីមើលបញ្ជីឈ្មោះ · ឬ «បើកតំណ» ដើម្បីមើលដូចមេកុដិ</p>
+                <span class="kuti-count-pill" id="active-kuti-count" aria-live="polite">—</span>
             </div>
             <input type="search" id="status-search" class="status-search" placeholder="ស្វែងរកកុដិ / មេកុដិ…">
         </div>
@@ -97,9 +96,9 @@
 
     <section class="gov-panel missing-panel" id="missing-panel" style="display:none">
         <div class="panel-toolbar">
-            <div>
+            <div class="panel-title-row">
                 <h2 class="panel-title">កុដិមិនទាន់មានតំណសកម្ម</h2>
-                <p class="panel-desc">ចុចលើកុដិដើម្បីមើលបញ្ជីឈ្មោះ — បង្កើតតំណនៅទំព័រ «តំណមេកុដិ»</p>
+                <span class="kuti-count-pill kuti-count-pill-warn" id="missing-kuti-count" aria-live="polite">—</span>
             </div>
         </div>
         <div id="missing-body" class="missing-grid"></div>
@@ -232,6 +231,6 @@
 <script src="/static/js/export_preview.js?v=2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="/static/js/kuti_status.js?v=11"></script>
+<script src="/static/js/kuti_status.js?v=12"></script>
 </body>
 </html>

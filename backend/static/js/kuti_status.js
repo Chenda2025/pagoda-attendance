@@ -124,6 +124,16 @@ function render() {
 const KHMER = '០១២៣៤៥៦៧៨៩';
 const toKhmer = (n) => String(n).replace(/\d/g, (d) => KHMER[d]);
 
+function setKutiCount(elId, n) {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    if (typeof n !== 'number') {
+        el.textContent = '—';
+        return;
+    }
+    el.textContent = `${toKhmer(n)} កុដិ`;
+}
+
 function monkItemHtml(m) {
     const typeCls = m.monk_type === 'ភិក្ខុ' ? 'type-bhikkhu' : 'type-samanera';
     const typePill = m.monk_type
@@ -351,6 +361,8 @@ async function exportExcel() {
 async function loadStatus() {
     const body = document.getElementById('status-body');
     body.innerHTML = '<tr><td colspan="8" class="cell-empty">កំពុងផ្ទុក…</td></tr>';
+    setKutiCount('active-kuti-count', null);
+    setKutiCount('missing-kuti-count', null);
 
     try {
         const res = await fetch('/api/kuti-status');
@@ -361,6 +373,9 @@ async function loadStatus() {
         missingLinks = json.missing || [];
         const s = json.summary || {};
 
+        setKutiCount('active-kuti-count', statusLinks.length);
+        setKutiCount('missing-kuti-count', missingLinks.length);
+
         document.getElementById('sum-links').textContent = s.links ?? statusLinks.length;
         document.getElementById('sum-active').textContent = s.monks_active ?? '—';
         document.getElementById('sum-total').textContent = s.monks_total ?? '—';
@@ -368,6 +383,8 @@ async function loadStatus() {
 
         render();
     } catch (err) {
+        setKutiCount('active-kuti-count', null);
+        setKutiCount('missing-kuti-count', null);
         body.innerHTML = `<tr><td colspan="8" class="cell-empty">${esc(err.message)}</td></tr>`;
     }
 }
