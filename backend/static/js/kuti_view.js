@@ -27,6 +27,8 @@
         let cls = 'badge-living-active';
         if (s === 'ឈប់ស្នាក់នៅ') cls = 'badge-living-left';
         else if (s === 'នៅស្រុក') cls = 'badge-living-home';
+        else if (s === 'ឈឺនៅពេទ្យ') cls = 'badge-living-sick-hosp';
+        else if (s === 'ឈឺនៅស្រុក') cls = 'badge-living-sick-home';
         return `<span class="badge-living ${cls}">${escapeHtml(s)}</span>`;
     }
 

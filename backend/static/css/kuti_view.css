@@ -181,6 +181,8 @@
 .badge-living-active { background: #e6f5ee; color: #1f6b4a; }
 .badge-living-left { background: #fff0f0; color: #c92a2a; }
 .badge-living-home { background: #fff8e6; color: #9a6b00; }
+.badge-living-sick-hosp { background: #ede9fe; color: #6d28d9; }
+.badge-living-sick-home { background: #e0f2fe; color: #0369a1; }
 .row-departed td { opacity: 0.72; }
 
 .row-actions {

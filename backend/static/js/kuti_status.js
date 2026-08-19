@@ -3,6 +3,8 @@
 const STAY = 'កំពុងស្នាក់នៅ';
 const LEFT = 'ឈប់ស្នាក់នៅ';
 const HOME = 'នៅស្រុក';
+const SICK_HOSP = 'ឈឺនៅពេទ្យ';
+const SICK_HOME = 'ឈឺនៅស្រុក';
 
 let statusLinks = [];
 let missingLinks = [];
@@ -145,11 +147,12 @@ function monkItemHtml(m) {
     `;
 }
 
-function updateSummaryStats(stay, home, left) {
-    const total = stay + home + left;
+function updateSummaryStats(stay, home, left, sickHosp, sickHome, total) {
     document.getElementById('chip-stay').textContent = toKhmer(stay);
     document.getElementById('chip-home').textContent = toKhmer(home);
     document.getElementById('chip-left').textContent = toKhmer(left);
+    document.getElementById('chip-sick-hosp').textContent = toKhmer(sickHosp);
+    document.getElementById('chip-sick-home').textContent = toKhmer(sickHome);
     document.getElementById('chip-total').textContent = toKhmer(total);
 }
 
@@ -186,10 +189,14 @@ async function openMonkModal(residence) {
     currentLabel = '';
     title.textContent = 'កំពុងផ្ទុក…';
     sub.textContent = '';
-    updateSummaryStats(0, 0, 0);
+    updateSummaryStats(0, 0, 0, 0, 0, 0);
     fillList('list-left', 'count-left', []);
     fillList('list-home', 'count-home', []);
     fillList('list-stay', 'count-stay', []);
+    fillList('list-sick-hosp', 'count-sick-hosp', []);
+    fillList('list-sick-home', 'count-sick-home', []);
+    const countOther = document.getElementById('count-other');
+    if (countOther) countOther.textContent = '0';
     modal.style.display = 'flex';
     document.body.style.overflow = 'hidden';
     setModalLoading(true);
@@ -207,11 +214,24 @@ async function openMonkModal(residence) {
         const stay = monks.filter(m => (m.living_status || STAY) === STAY);
         const left = monks.filter(m => m.living_status === LEFT);
         const home = monks.filter(m => m.living_status === HOME);
+        const sickHosp = monks.filter(m => m.living_status === SICK_HOSP);
+        const sickHome = monks.filter(m => m.living_status === SICK_HOME);
 
-        updateSummaryStats(stay.length, home.length, left.length);
+        updateSummaryStats(
+            stay.length,
+            home.length,
+            left.length,
+            sickHosp.length,
+            sickHome.length,
+            monks.length,
+        );
         fillList('list-stay', 'count-stay', stay);
         fillList('list-home', 'count-home', home);
         fillList('list-left', 'count-left', left);
+        fillList('list-sick-hosp', 'count-sick-hosp', sickHosp);
+        fillList('list-sick-home', 'count-sick-home', sickHome);
+        const countOther = document.getElementById('count-other');
+        if (countOther) countOther.textContent = home.length + left.length + sickHosp.length + sickHome.length;
     } catch (err) {
         title.textContent = 'មានបញ្ហា';
         sub.textContent = err.message;

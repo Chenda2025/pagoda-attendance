@@ -10,7 +10,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&family=Kantumruy+Pro:wght@400;500;600;700&family=Moul&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/gov-shell.css?v=2">
     <link rel="stylesheet" href="/static/css/export_preview.css?v=3">
-    <link rel="stylesheet" href="/static/css/kuti_status.css?v=7">
+    <link rel="stylesheet" href="/static/css/kuti_status.css?v=11">
 </head>
 <body class="gov-page-body">
 <div class="gov-shell kuti-status-page">
@@ -130,6 +130,8 @@
                 <span class="monk-stat-chip chip-stay"><span id="chip-stay">0</span> ស្នាក់</span>
                 <span class="monk-stat-chip chip-home"><span id="chip-home">0</span> ស្រុក</span>
                 <span class="monk-stat-chip chip-left"><span id="chip-left">0</span> ឈប់</span>
+                <span class="monk-stat-chip chip-sick-hosp"><span id="chip-sick-hosp">0</span> ពេទ្យ</span>
+                <span class="monk-stat-chip chip-sick-home"><span id="chip-sick-home">0</span> ឈឺស្រុក</span>
                 <span class="monk-stat-chip chip-total"><span id="chip-total">0</span> សរុប</span>
             </div>
 
@@ -166,11 +168,10 @@
                 <div class="monk-loading-cols">
                     <div class="monk-loading-col"></div>
                     <div class="monk-loading-col"></div>
-                    <div class="monk-loading-col"></div>
                 </div>
             </div>
             <div class="monk-cols" id="monk-cols">
-                <section class="monk-col monk-col-left">
+                <section class="monk-col monk-col-stay">
                     <header class="monk-col-head">
                         <div class="monk-col-label">
                             <span class="monk-col-dot" aria-hidden="true"></span>
@@ -180,25 +181,48 @@
                     </header>
                     <ul class="monk-list" id="list-stay"></ul>
                 </section>
-                <section class="monk-col monk-col-center">
-                    <header class="monk-col-head">
+                <section class="monk-col monk-col-other">
+                    <header class="monk-col-head monk-col-head-other">
                         <div class="monk-col-label">
                             <span class="monk-col-dot" aria-hidden="true"></span>
-                            <h4>ទៅស្រុក</h4>
+                            <h4>ស្ថានភាពផ្សេង</h4>
                         </div>
-                        <span class="monk-col-count" id="count-home">0</span>
+                        <span class="monk-col-count" id="count-other">0</span>
                     </header>
-                    <ul class="monk-list" id="list-home"></ul>
-                </section>
-                <section class="monk-col monk-col-right">
-                    <header class="monk-col-head">
-                        <div class="monk-col-label">
-                            <span class="monk-col-dot" aria-hidden="true"></span>
-                            <h4>ឈប់ស្នាក់នៅ</h4>
+                    <div class="monk-other-body">
+                        <div class="monk-subcol monk-subcol-home">
+                            <header class="monk-subcol-head">
+                                <span class="monk-subcol-dot" aria-hidden="true"></span>
+                                <h5>ទៅស្រុក</h5>
+                                <span class="monk-subcol-count" id="count-home">0</span>
+                            </header>
+                            <ul class="monk-list" id="list-home"></ul>
                         </div>
-                        <span class="monk-col-count" id="count-left">0</span>
-                    </header>
-                    <ul class="monk-list" id="list-left"></ul>
+                        <div class="monk-subcol monk-subcol-left">
+                            <header class="monk-subcol-head">
+                                <span class="monk-subcol-dot" aria-hidden="true"></span>
+                                <h5>ឈប់ស្នាក់នៅ</h5>
+                                <span class="monk-subcol-count" id="count-left">0</span>
+                            </header>
+                            <ul class="monk-list" id="list-left"></ul>
+                        </div>
+                        <div class="monk-subcol monk-subcol-sick-hosp">
+                            <header class="monk-subcol-head">
+                                <span class="monk-subcol-dot" aria-hidden="true"></span>
+                                <h5>ឈឺនៅពេទ្យ</h5>
+                                <span class="monk-subcol-count" id="count-sick-hosp">0</span>
+                            </header>
+                            <ul class="monk-list" id="list-sick-hosp"></ul>
+                        </div>
+                        <div class="monk-subcol monk-subcol-sick-home">
+                            <header class="monk-subcol-head">
+                                <span class="monk-subcol-dot" aria-hidden="true"></span>
+                                <h5>ឈឺនៅស្រុក</h5>
+                                <span class="monk-subcol-count" id="count-sick-home">0</span>
+                            </header>
+                            <ul class="monk-list" id="list-sick-home"></ul>
+                        </div>
+                    </div>
                 </section>
             </div>
         </div>
@@ -208,6 +232,6 @@
 <script src="/static/js/export_preview.js?v=2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="/static/js/kuti_status.js?v=8"></script>
+<script src="/static/js/kuti_status.js?v=11"></script>
 </body>
 </html>

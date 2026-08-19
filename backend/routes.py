@@ -46,7 +46,14 @@ _VALID_POSITIONS        = {
 }
 _VALID_EDUCATION_LEVELS = {'បឋមសិក្សា', 'អនុវិទ្យាល័យ', 'វិទ្យាល័យ', 'មហាវិទ្យាល័យ'}
 _VALID_ACADEMIC_YEARS   = {'ឆ្នាំទី១', 'ឆ្នាំទី២', 'ឆ្នាំទី៣', 'ឆ្នាំទី៤'}
-_VALID_LIVING_STATUSES  = {'កំពុងស្នាក់នៅ', 'ឈប់ស្នាក់នៅ', 'នៅស្រុក'}
+LIVING_STATUSES = (
+    'កំពុងស្នាក់នៅ',
+    'ឈប់ស្នាក់នៅ',
+    'នៅស្រុក',
+    'ឈឺនៅពេទ្យ',
+    'ឈឺនៅស្រុក',
+)
+_VALID_LIVING_STATUSES  = set(LIVING_STATUSES)
 _ACTIVE_LIVING_STATUS   = 'កំពុងស្នាក់នៅ'
 
 # Discipline / contract thresholds (bi-weekly report rules)
@@ -1448,11 +1455,13 @@ def api_kuti_status():
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
-def _make_kuti_status_export_html(label, monks, stay, home, left):
-    """Pagoda-formatted HTML report — 3 columns by living status."""
+def _make_kuti_status_export_html(label, monks, stay, home, left, sick_hosp=None, sick_home=None):
+    """Pagoda-formatted HTML report — columns by living status."""
     import html as _html
     from datetime import date
 
+    sick_hosp = sick_hosp or []
+    sick_home = sick_home or []
     today = date.today().strftime('%d/%m/%Y')
     bhikkhu = sum(1 for m in monks if m['monk_type'] == 'ភិក្ខុ')
     samanera = sum(1 for m in monks if m['monk_type'] == 'សាមណេរ')
@@ -1546,6 +1555,10 @@ body {{
 .chip-home strong {{ color: #b45309; }}
 .chip-left {{ background: #fee2e2; border-color: #f5a5a5; }}
 .chip-left strong {{ color: #9b1c1c; }}
+.chip-sick-hosp {{ background: #ede9fe; border-color: #c4b5fd; }}
+.chip-sick-hosp strong {{ color: #6d28d9; }}
+.chip-sick-home {{ background: #e0f2fe; border-color: #7dd3fc; }}
+.chip-sick-home strong {{ color: #0369a1; }}
 
 .cols {{
     display: grid; grid-template-columns: 1fr; gap: 12px; align-items: start;
@@ -1610,6 +1623,8 @@ td.empty {{ text-align: center; color: #94a3b8; padding: 16px; }}
         <div class="chip chip-stay"><span>កំពុងស្នាក់នៅ</span><strong>{len(stay)}</strong></div>
         <div class="chip chip-home"><span>ទៅស្រុក</span><strong>{len(home)}</strong></div>
         <div class="chip chip-left"><span>ឈប់ស្នាក់នៅ</span><strong>{len(left)}</strong></div>
+        <div class="chip chip-sick-hosp"><span>ឈឺនៅពេទ្យ</span><strong>{len(sick_hosp)}</strong></div>
+        <div class="chip chip-sick-home"><span>ឈឺនៅស្រុក</span><strong>{len(sick_home)}</strong></div>
         <div class="chip"><span>សរុប</span><strong>{len(monks)}</strong></div>
     </div>
 
@@ -1617,6 +1632,8 @@ td.empty {{ text-align: center; color: #94a3b8; padding: 16px; }}
         {_col('កំពុងស្នាក់នៅ', stay, '#1f6b4a', '#f0faf5', '#f7fdf9')}
         {_col('ទៅស្រុក', home, '#b45309', '#fffaf3', '#fffbf5')}
         {_col('ឈប់ស្នាក់នៅ', left, '#9b1c1c', '#fff5f5', '#fffafa')}
+        {_col('ឈឺនៅពេទ្យ', sick_hosp, '#6d28d9', '#f5f3ff', '#faf9ff')}
+        {_col('ឈឺនៅស្រុក', sick_home, '#0369a1', '#f0f9ff', '#f8fcff')}
     </div>
 
     <div class="footer">
@@ -1653,8 +1670,12 @@ def api_kuti_status_export():
             FROM monk_tbl
             WHERE residence = %s
             ORDER BY
-                CASE living_status WHEN 'កំពុងស្នាក់នៅ' THEN 0
-                     WHEN 'នៅស្រុក' THEN 1 ELSE 2 END,
+                CASE living_status
+                     WHEN 'កំពុងស្នាក់នៅ' THEN 0
+                     WHEN 'នៅស្រុក' THEN 1
+                     WHEN 'ឈឺនៅពេទ្យ' THEN 2
+                     WHEN 'ឈឺនៅស្រុក' THEN 3
+                     ELSE 4 END,
                 monk_type, position, vassa_years DESC, fullname
         """, (residence,))
         rows = cur.fetchall()
@@ -1676,10 +1697,12 @@ def api_kuti_status_export():
     stay = [m for m in monks if m['living_status'] == _ACTIVE_LIVING_STATUS]
     home = [m for m in monks if m['living_status'] == 'នៅស្រុក']
     left = [m for m in monks if m['living_status'] == 'ឈប់ស្នាក់នៅ']
+    sick_hosp = [m for m in monks if m['living_status'] == 'ឈឺនៅពេទ្យ']
+    sick_home = [m for m in monks if m['living_status'] == 'ឈឺនៅស្រុក']
     label = _residence_label(residence)
 
     if fmt == 'html':
-        return _make_kuti_status_export_html(label, monks, stay, home, left), 200, {
+        return _make_kuti_status_export_html(label, monks, stay, home, left, sick_hosp, sick_home), 200, {
             'Content-Type': 'text/html; charset=utf-8',
         }
 
@@ -1698,6 +1721,8 @@ def api_kuti_status_export():
         ('កំពុងស្នាក់នៅ', stay, '1F6B4A', 'E6F5EE'),
         ('ទៅស្រុក', home, 'B45309', 'FEF3E2'),
         ('ឈប់ស្នាក់នៅ', left, '9B1C1C', 'FEE2E2'),
+        ('ឈឺនៅពេទ្យ', sick_hosp, '6D28D9', 'EDE9FE'),
+        ('ឈឺនៅស្រុក', sick_home, '0369A1', 'E0F2FE'),
     ]
 
     first = True
@@ -1980,7 +2005,7 @@ def kuti_public_view(token):
         positions=positions,
         education_levels=['បឋមសិក្សា', 'អនុវិទ្យាល័យ', 'វិទ្យាល័យ', 'មហាវិទ្យាល័យ'],
         academic_years=['ឆ្នាំទី១', 'ឆ្នាំទី២', 'ឆ្នាំទី៣', 'ឆ្នាំទី៤'],
-        living_statuses=['កំពុងស្នាក់នៅ', 'ឈប់ស្នាក់នៅ', 'នៅស្រុក'],
+        living_statuses=list(LIVING_STATUSES),
     )
 
 
