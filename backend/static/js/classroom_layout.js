@@ -40,26 +40,106 @@
     let draftRows = [];
     let pickerTarget = null; // { rowId, tableId, slot }
     let dirty = false;
+    let editMode = ''; // '' | 'add' | 'update' | 'delete'
 
     const canvas = document.getElementById('layout-canvas');
     const canvasEmpty = document.getElementById('canvas-empty');
     const saveHint = document.getElementById('save-hint');
     const saveBtn = document.getElementById('btn-save');
-    const legendEl = document.getElementById('cl-legend');
     const setupModal = document.getElementById('setup-modal');
     const pickerModal = document.getElementById('picker-modal');
+    const introModal = document.getElementById('intro-modal');
     const addRowModal = document.getElementById('add-row-modal');
     const addTableModal = document.getElementById('add-table-modal');
     const rowEditModal = document.getElementById('row-edit-modal');
     const tableEditModal = document.getElementById('table-edit-modal');
     const tableDeleteModal = document.getElementById('table-delete-modal');
+    const tableClearModal = document.getElementById('table-clear-modal');
 
     const ICON_ADD = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
     const ICON_EDIT = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
     const ICON_DEL = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+    const ICON_CLEAR = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>';
+    const ICON_CHEVRON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>';
 
-    function closeAllRowMenus() {
-        document.querySelectorAll('.cl-row-menu.open').forEach((el) => el.classList.remove('open'));
+    const EDIT_MODE_META = {
+        add: {
+            label: 'បន្ថែម',
+            bar: 'របៀប៖ បន្ថែម',
+            hint: 'ប្រើប៊ូតុងលើជួរ — បន្ថែមជួរ ឬ បន្ថែមតុ (កំណត់ទីតាំងកន្លែង)',
+        },
+        update: {
+            label: 'កែប្រែ',
+            bar: 'របៀប៖ កែប្រែ',
+            hint: 'កែជួរ/តុ · កំណត់ទីតាំង · ចុចឈ្មោះលើតុដើម្បីជ្រើសសង្ឃ',
+        },
+        delete: {
+            label: 'លុប / សម្អាត',
+            bar: 'របៀប៖ លុប / សម្អាត',
+            hint: 'លុបជួរ ឬ តុ · សម្អាតឈ្មោះ (ទាំងអស់ / ជួរ / តុ)',
+        },
+    };
+
+    function closeTopMenus() {
+        document.querySelectorAll('details.cl-top-menu[open]').forEach((el) => {
+            el.removeAttribute('open');
+        });
+    }
+
+    function setEditMode(mode) {
+        editMode = mode === 'add' || mode === 'update' || mode === 'delete' ? mode : '';
+        const menu = document.getElementById('edit-mode-menu');
+        const labelEl = document.getElementById('edit-mode-label');
+        const bar = document.getElementById('cl-mode-bar');
+        const barText = document.getElementById('cl-mode-bar-text');
+        const barHint = document.getElementById('cl-mode-bar-hint');
+        if (labelEl) labelEl.textContent = editMode ? EDIT_MODE_META[editMode].label : 'កែប្រែ';
+        if (menu) menu.classList.toggle('is-active', !!editMode);
+        if (bar) {
+            bar.hidden = !editMode;
+            bar.dataset.mode = editMode || '';
+        }
+        if (barText) barText.textContent = editMode ? EDIT_MODE_META[editMode].bar : '';
+        if (barHint) barHint.textContent = editMode ? EDIT_MODE_META[editMode].hint : '';
+        document.querySelectorAll('#edit-mode-menu [data-edit-mode]').forEach((btn) => {
+            btn.classList.toggle('is-active', (btn.getAttribute('data-edit-mode') || '') === editMode);
+        });
+        closeAllRowMenus();
+        closeTopMenus();
+        renderCanvas();
+    }
+
+    function renderRowActions(row) {
+        if (!editMode) {
+            return '<div class="cl-row-actions cl-row-actions-idle" title="ជ្រើស «កែប្រែ» ខាងលើដើម្បីគ្រប់គ្រង"></div>';
+        }
+        if (editMode === 'add') {
+            return `
+                <div class="cl-row-actions" data-mode="add">
+                    <button type="button" class="cl-icon-btn cl-icon-add" data-row-action="add-row" data-row="${row.id}" title="បន្ថែមជួរ" aria-label="បន្ថែមជួរ">${ICON_ADD}<span>ជួរ</span></button>
+                    <button type="button" class="cl-icon-btn cl-icon-add" data-row-action="add-table" data-row="${row.id}" title="បន្ថែមតុ · ទីតាំងកន្លែង" aria-label="បន្ថែមតុ">${ICON_ADD}<span>តុ</span></button>
+                </div>`;
+        }
+        if (editMode === 'update') {
+            return `
+                <div class="cl-row-actions" data-mode="update">
+                    <button type="button" class="cl-icon-btn cl-icon-edit" data-row-action="edit-row" data-row="${row.id}" title="កែជួរ" aria-label="កែជួរ">${ICON_EDIT}<span>ជួរ</span></button>
+                    <button type="button" class="cl-icon-btn cl-icon-edit" data-row-action="edit-table" data-row="${row.id}" title="កែតុ · ទីតាំងកន្លែង" aria-label="កែតុ">${ICON_EDIT}<span>តុ / ទីតាំង</span></button>
+                </div>`;
+        }
+        return `
+            <div class="cl-row-actions" data-mode="delete">
+                <button type="button" class="cl-icon-btn cl-icon-del" data-row-action="delete-row" data-row="${row.id}" title="លុបជួរ" aria-label="លុបជួរ">${ICON_DEL}<span>ជួរ</span></button>
+                <button type="button" class="cl-icon-btn cl-icon-del" data-row-action="delete-table" data-row="${row.id}" title="លុបតុ" aria-label="លុបតុ">${ICON_DEL}<span>តុ</span></button>
+                <div class="cl-row-menu">
+                    <button type="button" class="cl-icon-btn cl-icon-clear" data-menu-toggle title="សម្អាតឈ្មោះ" aria-label="សម្អាត" aria-haspopup="true">${ICON_CLEAR}<span>សម្អាត</span> ${ICON_CHEVRON}</button>
+                    <div class="cl-row-dropdown" role="menu">
+                        <button type="button" data-row-action="clear-all" data-row="${row.id}">ទាំងអស់</button>
+                        <button type="button" data-row-action="clear-row" data-row="${row.id}">ជួរនេះ</button>
+                        <button type="button" data-row-action="clear-table" data-row="${row.id}">តុនេះ</button>
+                    </div>
+                </div>
+            </div>`;
     }
 
     function uid(prefix) {
@@ -419,16 +499,16 @@
             canvas.hidden = true;
             canvas.innerHTML = '';
             if (canvasEmpty) canvasEmpty.hidden = false;
-            if (legendEl) legendEl.hidden = true;
             return;
         }
 
         if (canvasEmpty) canvasEmpty.hidden = true;
         canvas.hidden = false;
-        if (legendEl) legendEl.hidden = false;
 
         canvas.innerHTML = rows.map((row) => {
             const tableCount = row.tables.length;
+            let seatCount = 0;
+            row.tables.forEach((t) => { seatCount += slotsForTable(t).length; });
             const tablesHtml = row.tables.map((table, ti) => {
                 const orient = table.orientation === 'vertical' ? 'vertical' : 'horizontal';
                 const activeSlots = slotsForTable(table);
@@ -444,32 +524,15 @@
                     <header class="cl-row-head">
                         <span class="cl-row-priority">${toKhmer(row.priority)}</span>
                         <h3 class="cl-row-name">${escapeHtml(row.name)}</h3>
-                        <span class="cl-row-meta">${toKhmer(tableCount)} តុ</span>
-                        <div class="cl-row-actions">
-                            <div class="cl-row-menu">
-                                <button type="button" class="cl-row-action cl-row-action-add" data-menu-toggle title="បន្ថែម" aria-label="បន្ថែម">${ICON_ADD}</button>
-                                <div class="cl-row-dropdown">
-                                    <button type="button" data-row-action="add-row" data-row="${row.id}">បន្ថែមជួរ</button>
-                                    <button type="button" data-row-action="add-table" data-row="${row.id}">បន្ថែមតុ</button>
-                                </div>
-                            </div>
-                            <div class="cl-row-menu">
-                                <button type="button" class="cl-row-action cl-row-action-edit" data-menu-toggle title="កែប្រែ" aria-label="កែប្រែ">${ICON_EDIT}</button>
-                                <div class="cl-row-dropdown">
-                                    <button type="button" data-row-action="edit-row" data-row="${row.id}">កែជួរ</button>
-                                    <button type="button" data-row-action="edit-table" data-row="${row.id}">កែតុ</button>
-                                </div>
-                            </div>
-                            <div class="cl-row-menu">
-                                <button type="button" class="cl-row-action cl-row-action-del" data-menu-toggle title="លុប" aria-label="លុប">${ICON_DEL}</button>
-                                <div class="cl-row-dropdown">
-                                    <button type="button" class="danger" data-row-action="delete-row" data-row="${row.id}">លុបជួរ</button>
-                                    <button type="button" class="danger" data-row-action="delete-table" data-row="${row.id}">លុបតុ</button>
-                                </div>
-                            </div>
+                        ${renderRowActions(row)}
+                        <div class="cl-row-meta-group">
+                            <span class="cl-row-meta">${toKhmer(tableCount)} តុ</span>
+                            <span class="cl-row-meta">${toKhmer(seatCount)} កន្លែង</span>
                         </div>
                     </header>
-                    <div class="cl-tables-row">${tablesHtml}</div>
+                    <div class="cl-tables-scroll">
+                        <div class="cl-tables-row">${tablesHtml}</div>
+                    </div>
                 </div>`;
         }).join('');
 
@@ -480,6 +543,10 @@
     function bindCanvasEvents() {
         canvas.querySelectorAll('.cl-seat:not(.disabled), .cl-name:not(.disabled)').forEach((btn) => {
             btn.addEventListener('click', () => {
+                if (editMode && editMode !== 'update') {
+                    toast('បើករបៀប «កែប្រែ» ដើម្បីជ្រើសឈ្មោះ', false);
+                    return;
+                }
                 pickerTarget = {
                     rowId: btn.dataset.row,
                     tableId: btn.dataset.table,
@@ -517,6 +584,9 @@
                 else if (action === 'edit-table') openEditTable(rowId);
                 else if (action === 'delete-row') deleteRow(rowId);
                 else if (action === 'delete-table') openDeleteTable(rowId);
+                else if (action === 'clear-all') clearNamesAll();
+                else if (action === 'clear-row') clearNamesRow(rowId);
+                else if (action === 'clear-table') openClearTable(rowId);
             });
         });
     }
@@ -751,6 +821,54 @@
 
     function closeDeleteTable() {
         tableDeleteModal.hidden = true;
+    }
+
+    function clearTableSeats(table) {
+        if (!table) return 0;
+        let n = 0;
+        if (!table.seats) table.seats = {};
+        slotsForTable(table).forEach((slot) => {
+            if (table.seats[slot] != null) n += 1;
+            table.seats[slot] = null;
+        });
+        return n;
+    }
+
+    function clearNamesAll() {
+        if (!confirm('សម្អាតឈ្មោះទាំងអស់ក្នុងប្លង់ទាំងមូល?')) return;
+        let n = 0;
+        layout.rows.forEach((row) => {
+            row.tables.forEach((t) => { n += clearTableSeats(t); });
+        });
+        markDirty();
+        renderCanvas();
+        toast(n ? `បានសម្អាត ${toKhmer(n)} កន្លែង` : 'មិនមានឈ្មោះដើម្បីសម្អាត');
+    }
+
+    function clearNamesRow(rowId) {
+        const row = layout.rows.find((r) => r.id === rowId);
+        if (!row) return;
+        if (!confirm(`សម្អាតឈ្មោះទាំងអស់ក្នុងជួរ «${row.name}»?`)) return;
+        let n = 0;
+        row.tables.forEach((t) => { n += clearTableSeats(t); });
+        markDirty();
+        renderCanvas();
+        toast(n ? `បានសម្អាត ${toKhmer(n)} កន្លែង` : 'មិនមានឈ្មោះដើម្បីសម្អាត');
+    }
+
+    function openClearTable(rowId) {
+        const row = layout.rows.find((r) => r.id === rowId);
+        if (!row || !row.tables.length) {
+            toast('មិនមានតុក្នុងជួរនេះ', false);
+            return;
+        }
+        document.getElementById('table-clear-row-id').value = rowId;
+        fillTableSelect(document.getElementById('table-clear-select'), row, row.tables[0].id);
+        tableClearModal.hidden = false;
+    }
+
+    function closeClearTable() {
+        tableClearModal.hidden = true;
     }
 
     function deleteRow(rowId) {
@@ -1055,6 +1173,26 @@
     document.getElementById('btn-setup-empty')?.addEventListener('click', openSetup);
     document.getElementById('btn-save').addEventListener('click', saveLayout);
     document.getElementById('btn-auto-fill').addEventListener('click', autoFillAlphabetical);
+    document.getElementById('btn-intro')?.addEventListener('click', () => {
+        if (introModal) introModal.hidden = false;
+    });
+
+    document.querySelectorAll('#edit-mode-menu [data-edit-mode]').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setEditMode(btn.getAttribute('data-edit-mode') || '');
+        });
+    });
+
+    document.addEventListener('click', (e) => {
+        const menu = document.getElementById('edit-mode-menu');
+        if (menu && menu.open && !(e.target.closest && e.target.closest('#edit-mode-menu'))) {
+            menu.removeAttribute('open');
+        }
+        const inRow = e.target.closest && e.target.closest('.cl-row-menu');
+        if (!inRow) closeAllRowMenus();
+    });
 
     document.getElementById('row-form').addEventListener('submit', (e) => {
         e.preventDefault();
@@ -1093,15 +1231,15 @@
         el.addEventListener('click', () => {
             if (el.dataset.close === 'setup') closeSetup();
             if (el.dataset.close === 'picker') closePicker();
+            if (el.dataset.close === 'intro' && introModal) introModal.hidden = true;
             if (el.dataset.close === 'add-row') closeAddRow();
             if (el.dataset.close === 'add-table') closeAddTable();
             if (el.dataset.close === 'row-edit') closeEditRow();
             if (el.dataset.close === 'table-edit') closeEditTable();
             if (el.dataset.close === 'table-delete') closeDeleteTable();
+            if (el.dataset.close === 'table-clear') closeClearTable();
         });
     });
-
-    document.addEventListener('click', () => closeAllRowMenus());
 
     function bindOrientSeat(orientId, seatsId, onChange) {
         const orientEl = document.getElementById(orientId);
@@ -1252,6 +1390,23 @@
         closeDeleteTable();
         renderCanvas();
         toast('បានលុបតុ');
+    });
+
+    document.getElementById('table-clear-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const rowId = document.getElementById('table-clear-row-id').value;
+        const row = layout.rows.find((r) => r.id === rowId);
+        if (!row) return;
+        const tableId = document.getElementById('table-clear-select').value;
+        const table = row.tables.find((t) => t.id === tableId);
+        if (!table) return;
+        if (!confirm(`សម្អាតឈ្មោះទាំងអស់ក្នុង «${table.label}»?`)) return;
+        const n = clearTableSeats(table);
+        markDirty();
+        closeClearTable();
+        scrollFocus = { rowId, tableId: table.id };
+        renderCanvas();
+        toast(n ? `បានសម្អាត ${toKhmer(n)} កន្លែង` : 'មិនមានឈ្មោះដើម្បីសម្អាត');
     });
 
     document.getElementById('btn-clear-seat').addEventListener('click', clearSeat);

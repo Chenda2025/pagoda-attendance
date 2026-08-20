@@ -40,15 +40,11 @@ const moveState = {
 
 function isBhikkhuOrderValid(stored, cols, chief) {
     if (!stored || !stored.length) return true;
-
     const chiefSeat = Math.floor(cols / 2);
     const first = stored[chiefSeat] ?? null;
-    if (chief ? first !== chief.id : first !== null) return false;
-    for (let i = 0; i < cols; i++) {
-        if (i === chiefSeat) continue;
-        if ((stored[i] ?? null) !== null) return false;
-    }
-    return true;
+    if (!chief) return true;
+    // Center of row 1 stays the chief; other first-row seats may be occupied.
+    return first === chief.id || first === null;
 }
 
 function buildGridLayout(type, defaultSorted, rows, cols) {
@@ -65,18 +61,16 @@ function buildGridLayout(type, defaultSorted, rows, cols) {
     const storedIsValid = type !== 'bhikkhu' || isBhikkhuOrderValid(stored, cols, chief);
     const storedForLayout = storedIsValid ? stored : null;
 
-    // Keep the first bhikkhu row exclusively for the chief monk.
-    if (type === 'bhikkhu' && total > 0) {
-        if (chief) {
-            grid[chiefSeat] = chief;
-            placed.add(chief.id);
-        }
+    // Center of the first bhikkhu row is reserved for the chief monk.
+    if (type === 'bhikkhu' && total > 0 && chief) {
+        grid[chiefSeat] = chief;
+        placed.add(chief.id);
     }
 
     if (storedForLayout && storedForLayout.length) {
         for (let i = 0; i < Math.min(storedForLayout.length, total); i++) {
             const id = storedForLayout[i];
-            if (type === 'bhikkhu' && i < firstDataIndex) continue;
+            if (type === 'bhikkhu' && i === chiefSeat) continue;
             if (id === null) continue;
             const m = byId.get(id);
             if (m && !placed.has(id)) {
@@ -141,13 +135,19 @@ async function persistSeatOrder(type, grid) {
     } catch { /* non-fatal */ }
 }
 
+function bhikkhuChiefSeatIndex() {
+    const cols = clamp(parseInt(document.getElementById('bhikkhu-cols')?.value) || 5, 1, 30);
+    return Math.floor(cols / 2);
+}
+
+function isBhikkhuChiefSeat(pos) {
+    return pos === bhikkhuChiefSeatIndex();
+}
+
 async function swapMonks(type, posA, posB) {
-    if (type === 'bhikkhu') {
-        const cols = clamp(parseInt(document.getElementById('bhikkhu-cols')?.value) || 5, 1, 30);
-        if (posA < cols || posB < cols) {
-            showToast('ជួរទី១ ទុកសម្រាប់ ព្រះអធិការ', 'error');
-            return;
-        }
+    if (type === 'bhikkhu' && (isBhikkhuChiefSeat(posA) || isBhikkhuChiefSeat(posB))) {
+        showToast('កន្លែងកណ្តាលជួរទី១ ទុកសម្រាប់ ព្រះអធិការ', 'error');
+        return;
     }
 
     const current = type === 'bhikkhu' ? currentBhikkhu : currentSamanera;
@@ -180,12 +180,9 @@ async function swapMonks(type, posA, posB) {
 async function handleMoveClick(type, cell) {
     const pos   = parseInt(cell.dataset.pos);
     const state = moveState[type];
-    if (type === 'bhikkhu') {
-        const cols = clamp(parseInt(document.getElementById('bhikkhu-cols')?.value) || 5, 1, 30);
-        if (pos < cols) {
-            showToast('ជួរទី១ ទុកសម្រាប់ ព្រះអធិការ', 'error');
-            return;
-        }
+    if (type === 'bhikkhu' && isBhikkhuChiefSeat(pos)) {
+        showToast('កន្លែងកណ្តាលជួរទី១ ទុកសម្រាប់ ព្រះអធិការ', 'error');
+        return;
     }
 
     if (state.selectedPos === null) {
@@ -584,7 +581,7 @@ function renderGrid(containerId, monks, rows, cols, type, overflowCount = 0, eli
         for (let c = 0; c < cols; c++) {
             const idx = r * cols + c;
             const monk = monks[idx];
-            const isReserved = type === 'bhikkhu' && idx < cols;
+            const isReserved = type === 'bhikkhu' && idx === Math.floor(cols / 2);
             if (monk) {
                 const sub = (type === 'bhikkhu' || SAMANERA_ADMIN_RANK[monk.position])
                     ? escapeHtml(monk.position)
@@ -630,7 +627,7 @@ function renderGrid(containerId, monks, rows, cols, type, overflowCount = 0, eli
                         ${permIcon}
                     </td>`;
             } else {
-                html += `<td class="seat-cell seat-empty${isReserved ? ' seat-reserved' : ''}" data-pos="${idx}" data-type="${type}" data-reserved="${isReserved ? '1' : '0'}" title="${isReserved ? 'ជួរទី១ ទុកសម្រាប់ ព្រះអធិការ' : ''}"><span class="seat-num">${idx + 1}</span></td>`;
+                html += `<td class="seat-cell seat-empty${isReserved ? ' seat-reserved' : ''}" data-pos="${idx}" data-type="${type}" data-reserved="${isReserved ? '1' : '0'}" title="${isReserved ? 'កន្លែងកណ្តាលជួរទី១ ទុកសម្រាប់ ព្រះអធិការ' : ''}"><span class="seat-num">${idx + 1}</span></td>`;
             }
         }
         html += '</tr>';
