@@ -3092,6 +3092,68 @@ def layout():
     return render_template('layout.html', role=session.get('role', ''))
 
 
+@main_bp.route('/classroom-layout')
+def classroom_layout_page():
+    return render_template('classroom_layout.html', username=session.get('username', ''))
+
+
+@main_bp.route('/api/classroom-layout', methods=['GET'])
+def get_classroom_layout():
+    import json as _json
+    try:
+        conn = connect_db()
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT layout_data, updated_at FROM classroom_layout WHERE id = 1"
+        )
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        layout = row[0] if row else {'rows': []}
+        if isinstance(layout, str):
+            layout = _json.loads(layout)
+        updated_at = row[1].isoformat() if row and row[1] else None
+        return jsonify({
+            'success': True,
+            'layout': layout,
+            'updated_at': updated_at,
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@main_bp.route('/api/classroom-layout', methods=['POST'])
+def save_classroom_layout():
+    if not user_allowed(_session_user(), '/classroom-layout'):
+        abort(403)
+    import json as _json
+    data = request.get_json(silent=True) or {}
+    layout = data.get('layout')
+    if not isinstance(layout, dict) or 'rows' not in layout:
+        return jsonify({'success': False, 'message': 'layout.rows is required'}), 400
+    try:
+        conn = connect_db()
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO classroom_layout (id, layout_data, updated_at)
+            VALUES (1, %s::jsonb, NOW())
+            ON CONFLICT (id) DO UPDATE
+                SET layout_data = EXCLUDED.layout_data,
+                    updated_at = NOW()
+            RETURNING updated_at
+        """, (_json.dumps(layout),))
+        row = cur.fetchone()
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({
+            'success': True,
+            'updated_at': row[0].isoformat() if row else None,
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 @main_bp.route('/api/check', methods=['GET'])
 def check_system():
     """Check DB connection, record count, and existing triggers on monk_tbl"""

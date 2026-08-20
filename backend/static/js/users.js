@@ -2,6 +2,7 @@ const MODULES = {
     entry:       'បញ្ចូលទិន្នន័យ',
     view:        'មើលទិន្នន័យ',
     layout:      'ប្លង់អាសនៈ',
+    classroom_layout: 'ប្លងសាលាឆាន់',
     approve:     'អនុម័ត',
     report:      'របាយការណ៍',
     report_book: 'សៀវភៅរបាយការណ៍',

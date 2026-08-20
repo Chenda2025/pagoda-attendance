@@ -366,6 +366,7 @@ body {
 .mod-entry   { background: #e8eef8; color: var(--navy); }
 .mod-view    { background: #e6f5ee; color: var(--success); }
 .mod-layout  { background: #e4f1f7; color: #2f6f8f; }
+.mod-classroom { background: #fef3e2; color: #b45309; }
 .mod-approve { background: #fff4e5; color: var(--warn); }
 .mod-report  { background: #f7efd4; color: #8a6d12; }
 .mod-book    { background: #efe8f7; color: #5b3d8a; }

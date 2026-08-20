@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="km">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ប្លងសាលាឆាន់ — វត្តនិរោធរង្សី</title>
+    <link rel="icon" type="image/jpeg" href="/static/logo.jpg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&family=Kantumruy+Pro:wght@400;500;600;700&family=Moul&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/gov-shell.css">
+    <link rel="stylesheet" href="/static/css/classroom_layout.css?v=21">
+</head>
+
+<body class="gov-page-body">
+    <div class="gov-shell gov-shell-wide classroom-layout-page">
+
+        <header class="gov-masthead">
+            <div class="gov-masthead-inner">
+                <div class="gov-col gov-col-left">
+                    <p>មន្ទីរធម្មការ និងសាសនា រាជធានីភ្នំពេញ</p>
+                    <p>សាលាពុទ្ធិកអនុវិទ្យាល័យសង្ឃ</p>
+                    <p class="gov-pagoda">វត្តនិរោធរង្សី</p>
+                </div>
+                <div class="gov-col gov-col-center">
+                    <img src="/static/logo.jpg" alt="វត្តនិរោធរង្សី" class="gov-seal">
+                </div>
+                <div class="gov-col gov-col-right">
+                    <p class="gov-kingdom">ព្រះរាជាណាចក្រកម្ពុជា</p>
+                    <p class="gov-motto">ជាតិ សាសនា ព្រះមហាក្សត្រ</p>
+                </div>
+            </div>
+        </header>
+
+        <div class="gov-topbar cl-page-bar">
+            <div class="gov-topbar-left">
+                <a href="/" class="gov-back-link" aria-label="ត្រឡប់ទៅផ្ទាំងគ្រប់គ្រង">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="15 18 9 12 15 6"/>
+                    </svg>
+                    ផ្ទាំងគ្រប់គ្រង
+                </a>
+                <div class="cl-title-block">
+                    <h1 class="gov-page-title">ប្លងសាលាឆាន់</h1>
+                    <p class="cl-page-sub">រៀបចំតុ · ជ្រើសឈ្មោះសង្ឃតាមកន្លែង</p>
+                </div>
+            </div>
+            <div class="gov-topbar-actions cl-actions">
+                <div class="cl-action-group" role="group" aria-label="សកម្មភាព">
+                    <button type="button" class="gov-btn gov-btn-primary" id="btn-setup">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                        កំណត់ប្លង់
+                    </button>
+                    <button type="button" class="gov-btn" id="btn-auto-fill">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M7 12h10"/><path d="M10 18h4"/></svg>
+                        រៀបតាមអក្សរ
+                    </button>
+                </div>
+                <button type="button" class="gov-btn gov-btn-success cl-save-btn" id="btn-save">
+                    <span class="cl-save-dot" id="save-dot" aria-hidden="true"></span>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                    រក្សាទុក
+                </button>
+            </div>
+        </div>
+
+        <section class="cl-stats-bar" id="cl-stats-bar" aria-label="ស្ថិតិប្លង់">
+            <article class="cl-stat-card">
+                <span class="cl-stat-value" id="stat-rows">០</span>
+                <span class="cl-stat-label">ជួរ</span>
+            </article>
+            <article class="cl-stat-card">
+                <span class="cl-stat-value" id="stat-tables">០</span>
+                <span class="cl-stat-label">តុ</span>
+            </article>
+            <article class="cl-stat-card">
+                <span class="cl-stat-value" id="stat-seats">០</span>
+                <span class="cl-stat-label">កន្លែង</span>
+            </article>
+            <article class="cl-stat-card cl-stat-accent">
+                <span class="cl-stat-value" id="stat-filled">០</span>
+                <span class="cl-stat-label">បានជ្រើស</span>
+            </article>
+        </section>
+
+        <main class="gov-main">
+            <section class="gov-panel cl-canvas-panel">
+                <div class="cl-panel-toolbar">
+                    <div class="cl-panel-head-left">
+                        <h2 class="panel-title">ប្លង់តុឆាន</h2>
+                        <span class="cl-status-pill" id="save-hint" aria-live="polite">—</span>
+                    </div>
+                    <div class="cl-legend" id="cl-legend" hidden>
+                        <span class="cl-legend-item"><span class="cl-legend-dot empty"></span>ទទេ</span>
+                        <span class="cl-legend-item"><span class="cl-legend-dot filled"></span>មានឈ្មោះ</span>
+                        <span class="cl-legend-item"><span class="cl-legend-tag">ផ្តេក</span>៦កន្លែង</span>
+                        <span class="cl-legend-item"><span class="cl-legend-tag vert">បញ្ឈរ</span>៨កន្លែង</span>
+                    </div>
+                </div>
+
+                <div class="cl-canvas-area">
+                    <div class="cl-empty-state" id="canvas-empty">
+                        <div class="cl-empty-icon" aria-hidden="true">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <rect x="3" y="3" width="7" height="7" rx="1"/>
+                                <rect x="14" y="3" width="7" height="7" rx="1"/>
+                                <rect x="3" y="14" width="7" height="7" rx="1"/>
+                                <rect x="14" y="14" width="7" height="7" rx="1"/>
+                            </svg>
+                        </div>
+                        <h3 class="cl-empty-title">មិនទាន់មានប្លង់</h3>
+                        <p class="cl-empty-desc">កំណត់ជួរ → តុ → កន្លែង រួចជ្រើសឈ្មោះសង្ឃ</p>
+                        <ol class="cl-empty-steps">
+                            <li><strong>១</strong> បន្ថែមជួរ និងលំដាប់</li>
+                            <li><strong>២</strong> កំណត់តុ ផ្តេក ឬ បញ្ឈរ</li>
+                            <li><strong>៣</strong> ចុចកន្លែងដើម្បីជ្រើសឈ្មោះ</li>
+                        </ol>
+                        <button type="button" class="gov-btn gov-btn-primary cl-empty-cta" id="btn-setup-empty">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            ចាប់ផ្តើមកំណត់ប្លង់
+                        </button>
+                    </div>
+                    <div id="layout-canvas" class="cl-canvas" hidden></div>
+                </div>
+            </section>
+        </main>
+
+        <footer class="gov-footer">
+            <span>© វត្តនិរោធរង្សី</span>
+        </footer>
+    </div>
+
+    <!-- Setup wizard -->
+    <div id="setup-modal" class="cl-modal" hidden>
+        <div class="cl-modal-backdrop" data-close="setup"></div>
+        <div class="cl-modal-box cl-modal-lg" role="dialog" aria-modal="true" aria-labelledby="setup-title">
+            <header class="cl-modal-head">
+                <h2 id="setup-title">កំណត់ប្លងសាលាឆាន់</h2>
+                <button type="button" class="cl-modal-close" data-close="setup" aria-label="បិទ">&times;</button>
+            </header>
+
+            <nav class="cl-steps" aria-label="ជំហាន">
+                <button type="button" class="cl-step active" data-step="1">១ · ជួរ</button>
+                <button type="button" class="cl-step" data-step="2">២ · តុ</button>
+                <button type="button" class="cl-step" data-step="3">៣ · កន្លែង</button>
+                <button type="button" class="cl-step" data-step="4">៤ · រួចរាល់</button>
+            </nav>
+
+            <div class="cl-modal-body">
+                <!-- Step 1: Rows -->
+                <div class="cl-step-panel active" data-panel="1">
+                    <p class="cl-step-desc">បញ្ចូលឈ្មោះជួរ និងលំដាប់ (១ = ខាងលើ)</p>
+                    <form id="row-form" class="cl-inline-form">
+                        <div class="form-field">
+                            <label for="row-name">ឈ្មោះជួរ</label>
+                            <input type="text" id="row-name" placeholder="ឧ. ជួរទី១" required>
+                        </div>
+                        <div class="form-field cl-field-sm">
+                            <label for="row-priority">លំដាប់</label>
+                            <input type="number" id="row-priority" min="1" value="1" required>
+                        </div>
+                        <button type="submit" class="gov-btn gov-btn-primary">បន្ថែមជួរ</button>
+                    </form>
+                    <ul class="cl-row-list" id="wizard-row-list"></ul>
+                </div>
+
+                <!-- Step 2: Tables -->
+                <div class="cl-step-panel" data-panel="2">
+                    <p class="cl-step-desc">កំណត់ចំនួនតុក្នុងមួយជួរ · បញ្ឈរ (៨កន្លែង) ឬ ផ្តេក (៦កន្លែង) · អាចដាក់តុជាប់គ្នា</p>
+                    <div id="wizard-table-config"></div>
+                </div>
+
+                <!-- Step 3: Seats -->
+                <div class="cl-step-panel" data-panel="3">
+                    <p class="cl-step-desc">កំណត់ចំនួនកន្លែងក្នុងមួយតុ · អាចទុកទទេ</p>
+                    <div id="wizard-seat-config"></div>
+                </div>
+
+                <!-- Step 4: Done -->
+                <div class="cl-step-panel" data-panel="4">
+                    <p class="cl-step-desc">ប្លង់ត្រូវបានកំណត់ — ចុចលើកន្លែងទទេដើម្បីជ្រើសឈ្មោះ ឬ «រៀបតាមអក្សរ»</p>
+                    <div class="cl-summary" id="wizard-summary"></div>
+                </div>
+            </div>
+
+            <footer class="cl-modal-foot">
+                <button type="button" class="gov-btn" id="btn-prev-step" disabled>ថយក្រោយ</button>
+                <button type="button" class="gov-btn gov-btn-primary" id="btn-next-step">បន្ទាប់</button>
+            </footer>
+        </div>
+    </div>
+
+    <!-- Monk picker -->
+    <div id="picker-modal" class="cl-modal" hidden>
+        <div class="cl-modal-backdrop" data-close="picker"></div>
+        <div class="cl-modal-box" role="dialog" aria-modal="true" aria-labelledby="picker-title">
+            <header class="cl-modal-head">
+                <h2 id="picker-title">ជ្រើសឈ្មោះ</h2>
+                <button type="button" class="cl-modal-close" data-close="picker" aria-label="បិទ">&times;</button>
+            </header>
+            <div class="cl-modal-body">
+                <input type="search" id="picker-search" class="cl-search" placeholder="ស្វែងរក…" autocomplete="off">
+                <ul class="cl-monk-list" id="picker-list"></ul>
+                <button type="button" class="gov-btn cl-clear-seat" id="btn-clear-seat">ទុកទទេ</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add row modal -->
+    <div id="add-row-modal" class="cl-modal" hidden>
+        <div class="cl-modal-backdrop" data-close="add-row"></div>
+        <div class="cl-modal-box" role="dialog" aria-modal="true" aria-labelledby="add-row-title">
+            <header class="cl-modal-head">
+                <h2 id="add-row-title">បន្ថែមជួរ</h2>
+                <button type="button" class="cl-modal-close" data-close="add-row" aria-label="បិទ">&times;</button>
+            </header>
+            <form id="add-row-form" class="cl-modal-body cl-edit-form">
+                <div class="form-field">
+                    <label for="add-row-name">ឈ្មោះជួរ</label>
+                    <input type="text" id="add-row-name" placeholder="ឧ. ជួរទី២" required>
+                </div>
+                <div class="form-field">
+                    <label for="add-row-total">ចំនួនតុ</label>
+                    <input type="number" id="add-row-total" min="1" max="20" value="1" required>
+                </div>
+                <div class="form-field">
+                    <label for="add-row-priority">លំដាប់</label>
+                    <input type="number" id="add-row-priority" min="1" value="1" required>
+                </div>
+                <footer class="cl-edit-actions">
+                    <button type="button" class="gov-btn" data-close="add-row">បោះបង់</button>
+                    <button type="submit" class="gov-btn gov-btn-primary">បន្ថែម</button>
+                </footer>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add table modal -->
+    <div id="add-table-modal" class="cl-modal" hidden>
+        <div class="cl-modal-backdrop" data-close="add-table"></div>
+        <div class="cl-modal-box" role="dialog" aria-modal="true" aria-labelledby="add-table-title">
+            <header class="cl-modal-head">
+                <h2 id="add-table-title">បន្ថែមតុ</h2>
+                <button type="button" class="cl-modal-close" data-close="add-table" aria-label="បិទ">&times;</button>
+            </header>
+            <form id="add-table-form" class="cl-modal-body cl-edit-form">
+                <input type="hidden" id="add-table-row-id">
+                <div class="form-field">
+                    <label for="add-table-total">ចំនួនតុ</label>
+                    <input type="number" id="add-table-total" min="1" max="20" value="1" required>
+                </div>
+                <div class="form-field">
+                    <label for="add-table-orient">ទិសដៅ</label>
+                    <select id="add-table-orient">
+                        <option value="horizontal">ផ្តេក (៦កន្លែង)</option>
+                        <option value="vertical">បញ្ឈរ (៨កន្លែង)</option>
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label for="add-table-seats">ចំនួនកន្លែង / តុ</label>
+                    <input type="number" id="add-table-seats" min="0" max="8" value="6" required>
+                </div>
+                <div class="form-field cl-seat-template-field">
+                    <label>ទីតាំងកន្លែង <span class="cl-st-count" id="add-table-slot-count"></span></label>
+                    <p class="cl-st-help">ចុចលើកន្លែងដើម្បីជ្រើសទីតាំង (ត្រូវជ្រើសឱ្យគ្រប់ចំនួន)</p>
+                    <div id="add-table-preview" class="cl-seat-template" aria-label="គំរូទីតាំងកន្លែង"></div>
+                </div>
+                <footer class="cl-edit-actions">
+                    <button type="button" class="gov-btn" data-close="add-table">បោះបង់</button>
+                    <button type="submit" class="gov-btn gov-btn-primary">បន្ថែម</button>
+                </footer>
+            </form>
+        </div>
+    </div>
+
+    <!-- Update row modal -->
+    <div id="row-edit-modal" class="cl-modal" hidden>
+        <div class="cl-modal-backdrop" data-close="row-edit"></div>
+        <div class="cl-modal-box" role="dialog" aria-modal="true" aria-labelledby="row-edit-title">
+            <header class="cl-modal-head">
+                <h2 id="row-edit-title">កែជួរ</h2>
+                <button type="button" class="cl-modal-close" data-close="row-edit" aria-label="បិទ">&times;</button>
+            </header>
+            <form id="row-edit-form" class="cl-modal-body cl-edit-form">
+                <input type="hidden" id="row-edit-id">
+                <div class="form-field">
+                    <label for="row-edit-name">ឈ្មោះជួរ</label>
+                    <input type="text" id="row-edit-name" required>
+                </div>
+                <div class="form-field">
+                    <label for="row-edit-priority">លំដាប់</label>
+                    <input type="number" id="row-edit-priority" min="1" required>
+                </div>
+                <footer class="cl-edit-actions">
+                    <button type="button" class="gov-btn" data-close="row-edit">បោះបង់</button>
+                    <button type="submit" class="gov-btn gov-btn-primary">រក្សាទុក</button>
+                </footer>
+            </form>
+        </div>
+    </div>
+
+    <!-- Update table modal -->
+    <div id="table-edit-modal" class="cl-modal" hidden>
+        <div class="cl-modal-backdrop" data-close="table-edit"></div>
+        <div class="cl-modal-box" role="dialog" aria-modal="true" aria-labelledby="table-edit-title">
+            <header class="cl-modal-head">
+                <h2 id="table-edit-title">កែតុ</h2>
+                <button type="button" class="cl-modal-close" data-close="table-edit" aria-label="បិទ">&times;</button>
+            </header>
+            <form id="table-edit-form" class="cl-modal-body cl-edit-form">
+                <input type="hidden" id="table-edit-row-id">
+                <div class="form-field">
+                    <label for="table-edit-select">ជ្រើសតុ</label>
+                    <select id="table-edit-select" required></select>
+                </div>
+                <div class="form-field">
+                    <label for="table-edit-orient">ទិសដៅ</label>
+                    <select id="table-edit-orient">
+                        <option value="horizontal">ផ្តេក (៦កន្លែង)</option>
+                        <option value="vertical">បញ្ឈរ (៨កន្លែង)</option>
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label for="table-edit-seats">ចំនួនកន្លែង</label>
+                    <input type="number" id="table-edit-seats" min="0" max="8" value="6" required>
+                </div>
+                <div class="form-field cl-seat-template-field">
+                    <label>ទីតាំងកន្លែង <span class="cl-st-count" id="table-edit-slot-count"></span></label>
+                    <p class="cl-st-help">ចុចលើកន្លែងដើម្បីជ្រើសទីតាំង (ត្រូវជ្រើសឱ្យគ្រប់ចំនួន)</p>
+                    <div id="table-edit-preview" class="cl-seat-template" aria-label="គំរូទីតាំងកន្លែង"></div>
+                </div>
+                <footer class="cl-edit-actions">
+                    <button type="button" class="gov-btn" data-close="table-edit">បោះបង់</button>
+                    <button type="submit" class="gov-btn gov-btn-primary">រក្សាទុក</button>
+                </footer>
+            </form>
+        </div>
+    </div>
+
+    <!-- Delete table modal -->
+    <div id="table-delete-modal" class="cl-modal" hidden>
+        <div class="cl-modal-backdrop" data-close="table-delete"></div>
+        <div class="cl-modal-box" role="dialog" aria-modal="true" aria-labelledby="table-delete-title">
+            <header class="cl-modal-head">
+                <h2 id="table-delete-title">លុបតុ</h2>
+                <button type="button" class="cl-modal-close" data-close="table-delete" aria-label="បិទ">&times;</button>
+            </header>
+            <form id="table-delete-form" class="cl-modal-body cl-edit-form">
+                <input type="hidden" id="table-delete-row-id">
+                <div class="form-field">
+                    <label for="table-delete-select">ជ្រើសតុដើម្បីលុប</label>
+                    <select id="table-delete-select" required></select>
+                </div>
+                <footer class="cl-edit-actions">
+                    <button type="button" class="gov-btn" data-close="table-delete">បោះបង់</button>
+                    <button type="submit" class="gov-btn gov-btn-danger">លុប</button>
+                </footer>
+            </form>
+        </div>
+    </div>
+
+    <div id="toast" class="cl-toast" aria-live="polite"></div>
+
+    <script src="/static/js/classroom_layout.js?v=21"></script>
+</body>
+
+</html>

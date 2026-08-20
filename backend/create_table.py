@@ -419,6 +419,33 @@ def create_seat_order_table():
         if conn: conn.close()
 
 
+def create_classroom_layout_table():
+    """Store sala-chan (classroom) table/seat layout as JSON."""
+    conn = None
+    try:
+        conn = connect_db()
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS classroom_layout (
+                id           SERIAL PRIMARY KEY,
+                layout_data  JSONB NOT NULL DEFAULT '{"rows":[]}',
+                updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+        cursor.execute("""
+            INSERT INTO classroom_layout (id, layout_data)
+            VALUES (1, '{"rows":[]}')
+            ON CONFLICT (id) DO NOTHING;
+        """)
+        conn.commit()
+        cursor.close()
+    except Exception as e:
+        print(f'Database error creating classroom_layout: {e}')
+        if conn: conn.rollback()
+    finally:
+        if conn: conn.close()
+
+
 def create_permission_table():
     """Create the monk_permission table."""
     conn = None
