@@ -85,6 +85,7 @@
 
     let draftAddSlots = [];
     let draftEditSlots = [];
+    let scrollFocus = null; // { rowId, tableId } after add/edit
 
     function normalizeSeatSlots(orientation, seatCount, seatSlots) {
         const vertical = orientation === 'vertical';
@@ -472,6 +473,11 @@
                 </div>`;
         }).join('');
 
+        bindCanvasEvents();
+        scrollTablesIntoView();
+    }
+
+    function bindCanvasEvents() {
         canvas.querySelectorAll('.cl-seat:not(.disabled), .cl-name:not(.disabled)').forEach((btn) => {
             btn.addEventListener('click', () => {
                 pickerTarget = {
@@ -511,6 +517,28 @@
                 else if (action === 'edit-table') openEditTable(rowId);
                 else if (action === 'delete-row') deleteRow(rowId);
                 else if (action === 'delete-table') openDeleteTable(rowId);
+            });
+        });
+    }
+
+    function scrollTablesIntoView() {
+        const focus = scrollFocus;
+        scrollFocus = null;
+        requestAnimationFrame(() => {
+            if (focus && focus.tableId) {
+                const el = canvas.querySelector(`.cl-table-wrap[data-table="${focus.tableId}"]`);
+                if (el) {
+                    el.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' });
+                    el.classList.add('cl-table-focus');
+                    setTimeout(() => el.classList.remove('cl-table-focus'), 1200);
+                    return;
+                }
+            }
+            /* One-row strips: keep latest tables visible from the right */
+            canvas.querySelectorAll('.cl-tables-row').forEach((rowEl) => {
+                if (rowEl.scrollWidth > rowEl.clientWidth) {
+                    rowEl.scrollTo({ left: rowEl.scrollWidth, behavior: 'smooth' });
+                }
             });
         });
     }
@@ -743,6 +771,7 @@
         const swap = dir === 'left' ? idx - 1 : idx + 1;
         if (swap < 0 || swap >= row.tables.length) return;
         [row.tables[idx], row.tables[swap]] = [row.tables[swap], row.tables[idx]];
+        scrollFocus = { rowId, tableId };
         markDirty();
         renderCanvas();
     }
@@ -1155,6 +1184,8 @@
             row.tables.push(makeTable(`តុ ${toKhmer(row.tables.length + 1)}`, orient, seats, slots));
         }
         renumberTables(row);
+        const last = row.tables[row.tables.length - 1];
+        scrollFocus = last ? { rowId: row.id, tableId: last.id } : { rowId: row.id };
         markDirty();
         closeAddTable();
         renderCanvas();
@@ -1195,6 +1226,7 @@
             return;
         }
         applyTableOrientation(table, orient, seats, slots);
+        scrollFocus = { rowId, tableId: table.id };
         markDirty();
         closeEditTable();
         renderCanvas();

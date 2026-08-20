@@ -639,10 +639,36 @@
 
 .cl-tables-row {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: flex-start;
-    justify-content: center;
-    gap: 10px;
+    justify-content: flex-start;
+    gap: 12px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 4px 4px 12px;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+    scrollbar-color: #94a3b8 transparent;
+}
+
+.cl-tables-row::-webkit-scrollbar {
+    height: 8px;
+}
+
+.cl-tables-row::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 999px;
+}
+
+.cl-tables-row::-webkit-scrollbar-thumb {
+    background: #94a3b8;
+    border-radius: 999px;
+}
+
+.cl-tables-row::-webkit-scrollbar-thumb:hover {
+    background: #64748b;
 }
 
 /* ── Table widget ── */
@@ -662,6 +688,11 @@
 .cl-table-wrap:hover {
     border-color: var(--line, #d8dee6);
     box-shadow: 0 4px 12px rgba(7, 30, 61, 0.06);
+}
+
+.cl-table-wrap.cl-table-focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
 }
 
 .cl-table-label {
@@ -1400,8 +1431,8 @@
     }
 
     .cl-tables-row {
-        flex-direction: column;
-        align-items: center;
+        flex-wrap: nowrap;
+        justify-content: flex-start;
     }
 }
 
