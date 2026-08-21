@@ -40,7 +40,7 @@
                         <div class="exp-preview-brand">
                             <img src="/static/logo.jpg" alt="" class="exp-preview-seal">
                             <div class="exp-preview-head-text">
-                                <p class="exp-preview-org">មន្ទីរធម្មការ និងសាសនា · សាលាពុទ្ធិកអនុវិទ្យាល័យសង្ឃ</p>
+                                <p class="exp-preview-org">មន្ទីរធម្មការ និងសាសនា · សាលាអនុគណខណ្ឌច្បារអំពៅ</p>
                                 <p class="exp-preview-pagoda">វត្តនិរោធរង្សី</p>
                                 <h2 class="exp-preview-title" id="exp-preview-title"></h2>
                                 <p class="exp-preview-sub" id="exp-preview-sub"></p>

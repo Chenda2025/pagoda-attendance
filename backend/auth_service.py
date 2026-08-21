@@ -17,6 +17,7 @@ MODULE_PATHS = {
     'kuti_links':  ('/kuti-links', '/kuti-status', '/api/kuti-links', '/api/kuti-status',
                     '/api/kuti/'),
     'telegram_notify': ('/telegram-notify', '/api/telegram-notify'),
+    'telegram_bot': ('/telegram-settings', '/api/telegram-settings'),
     'users':       ('/users', '/api/users', '/api/activity-log'),
 }
 
@@ -30,6 +31,7 @@ MODULE_LABELS = {
     'report_book': 'សៀវភៅរបាយការណ៍',
     'kuti_links':  'តំណមេកុដិ',
     'telegram_notify': 'កិច្ចសន្យា',
+    'telegram_bot': 'កំណត់ Telegram Bot',
     'users':       'គ្រប់គ្រងអ្នកប្រើ',
 }
 

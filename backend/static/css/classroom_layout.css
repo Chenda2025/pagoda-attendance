@@ -489,11 +489,6 @@
     background: #fffbeb;
 }
 
-.cl-mode-bar[data-mode="attendance"] {
-    border-color: #c4b5fd;
-    background: #f5f3ff;
-}
-
 .cl-mode-bar[data-mode="delete"] {
     border-color: #fecaca;
     background: #fef2f2;
@@ -511,7 +506,6 @@
 
 .cl-mode-bar[data-mode="add"] .cl-mode-bar-label { color: #15803d; }
 .cl-mode-bar[data-mode="names"] .cl-mode-bar-label { color: #b45309; }
-.cl-mode-bar[data-mode="attendance"] .cl-mode-bar-label { color: #6d28d9; }
 .cl-mode-bar[data-mode="delete"] .cl-mode-bar-label { color: #b91c1c; }
 
 .cl-mode-bar-hint {
@@ -617,11 +611,6 @@
 .cl-row-actions[data-mode="names"] {
     background: #fffbeb;
     border-color: #fcd34d;
-}
-
-.cl-row-actions[data-mode="attendance"] {
-    background: #f5f3ff;
-    border-color: #c4b5fd;
 }
 
 .cl-row-actions[data-mode="delete"] {
@@ -1782,16 +1771,17 @@
     .cl-stat-value { font-size: 18px; }
 }
 
-/* ── Attendance mode ── */
-.cl-canvas.cl-att-mode .cl-name.filled {
-    outline: 2px dashed #8b5cf6;
-    outline-offset: 1px;
+/* ── Attendance (click filled name anytime) ── */
+.cl-canvas .cl-name.filled {
     cursor: pointer;
 }
 
-.cl-canvas.cl-att-mode .cl-name.filled:hover {
-    outline-style: solid;
+.cl-canvas .cl-name.filled:hover {
     background: #f5f3ff;
+}
+
+.cl-canvas.cl-names-mode .cl-name.filled:hover {
+    background: #fffbeb;
 }
 
 .cl-name.cl-att-absent {
@@ -1881,10 +1871,50 @@
 .cl-att-btn-clear:hover { background: #e2e8f0; }
 
 .cl-perm-monk {
-    margin: 0 0 4px;
-    font-size: 14px;
-    font-weight: 700;
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: #c05621;
+    line-height: 1.4;
+}
+
+.cl-perm-head {
+    align-items: flex-start;
+    gap: 12px;
+    padding: 16px 18px;
+    background:
+        linear-gradient(135deg, rgba(192, 86, 33, 0.08), transparent 55%),
+        linear-gradient(180deg, #fffaf5 0%, #fff 100%);
+    border-bottom: 1px solid #f3e8d8;
+}
+
+.cl-perm-head-icon {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: 11px;
+    display: grid;
+    place-items: center;
+    color: #fff;
+    background: linear-gradient(145deg, #f6ad55, #c05621);
+    box-shadow: 0 6px 14px rgba(192, 86, 33, 0.28);
+}
+
+.cl-perm-head-text {
+    flex: 1;
+    min-width: 0;
+}
+
+.cl-perm-head-text h2 {
+    margin: 0 0 2px;
+    font-size: 17px;
+    font-family: var(--display, 'Moul', serif);
     color: var(--navy, #0c2d5a);
+}
+
+.cl-perm-body {
+    gap: 14px;
+    padding: 18px 20px 16px;
 }
 
 .cl-perm-dates {
@@ -1893,25 +1923,115 @@
     gap: 12px;
 }
 
+.cl-perm-body .form-field input,
+.cl-perm-body .form-field textarea {
+    padding: 11px 12px;
+    border-radius: 10px;
+    background: #fbfcfe;
+    transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+}
+
+.cl-perm-body .form-field input:focus,
+.cl-perm-body .form-field textarea:focus {
+    outline: none;
+    background: #fff;
+    border-color: #f6ad55;
+    box-shadow: 0 0 0 3px rgba(246, 173, 85, 0.22);
+}
+
+.cl-perm-shift-section[hidden],
+#cl-perm-shift-group[hidden] {
+    display: none !important;
+}
+
+.cl-perm-shift-section {
+    padding: 12px;
+    border-radius: 12px;
+    background: #faf5ff;
+    border: 1px solid #e9d8fd;
+}
+
 .cl-perm-shift-btns {
     display: flex;
     gap: 8px;
+    flex-wrap: wrap;
 }
 
 .cl-perm-shift-btn {
     flex: 1;
-    padding: 8px 10px;
-    border: 1px solid var(--line, #d8dee6);
-    border-radius: 8px;
+    min-width: 88px;
+    padding: 10px 12px;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 10px;
     background: #fff;
     font-family: inherit;
     font-size: 13px;
     font-weight: 600;
+    color: #4a5568;
     cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
+}
+
+.cl-perm-shift-btn:hover {
+    border-color: #c4b5fd;
+    background: #f8f5ff;
 }
 
 .cl-perm-shift-btn.is-active {
-    border-color: #6d28d9;
+    border-color: #7c3aed;
     background: #f5f3ff;
     color: #6d28d9;
+    box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.12);
+}
+
+.cl-perm-shift-hint {
+    margin: 8px 0 0;
+    font-size: 11.5px;
+    color: #64748b;
+}
+
+.cl-perm-foot {
+    justify-content: stretch;
+    gap: 10px;
+    padding: 14px 18px 16px;
+    background: #fafbfc;
+}
+
+.cl-perm-btn {
+    flex: 1;
+    min-height: 42px;
+    padding: 10px 16px;
+    border-radius: 10px;
+    border: 1px solid transparent;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.12s, opacity 0.15s;
+}
+
+.cl-perm-btn:active { transform: scale(0.98); }
+.cl-perm-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.cl-perm-btn-cancel {
+    background: #edf2f7;
+    color: #4a5568;
+    border-color: #e2e8f0;
+}
+
+.cl-perm-btn-cancel:hover { background: #e2e8f0; }
+
+.cl-perm-btn-save {
+    background: linear-gradient(135deg, #dd6b20, #c05621);
+    color: #fff;
+    border-color: transparent;
+    box-shadow: 0 6px 14px rgba(192, 86, 33, 0.28);
+}
+
+.cl-perm-btn-save:hover { opacity: 0.94; }
+
+@media (max-width: 520px) {
+    .cl-perm-dates {
+        grid-template-columns: 1fr;
+    }
 }

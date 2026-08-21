@@ -10,7 +10,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&family=Kantumruy+Pro:wght@400;500;600;700&family=Moul&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/gov-shell.css">
-    <link rel="stylesheet" href="/static/css/classroom_layout.css?v=38">
+    <link rel="stylesheet" href="/static/css/classroom_layout.css?v=42">
 </head>
 
 <body class="gov-page-body">
@@ -20,7 +20,7 @@
             <div class="gov-masthead-inner">
                 <div class="gov-col gov-col-left">
                     <p>មន្ទីរធម្មការ និងសាសនា រាជធានីភ្នំពេញ</p>
-                    <p>សាលាពុទ្ធិកអនុវិទ្យាល័យសង្ឃ</p>
+                    <p>សាលាអនុគណខណ្ឌច្បារអំពៅ</p>
                     <p class="gov-pagoda">វត្តនិរោធរង្សី</p>
                 </div>
                 <div class="gov-col gov-col-center">
@@ -60,7 +60,6 @@
                         <button type="button" data-edit-mode="add">បន្ថែម</button>
                         <button type="button" data-edit-mode="update">កែប្រែ</button>
                         <button type="button" data-edit-mode="names">ជ្រើស / ប្តូរឈ្មោះ</button>
-                        <button type="button" data-edit-mode="attendance">វត្តមាន</button>
                         <button type="button" data-edit-mode="delete">លុប / សម្អាត</button>
                         <div class="cl-top-dd-sep"></div>
                         <button type="button" data-edit-mode="">បិទកែប្រែ</button>
@@ -428,10 +427,10 @@
                     <li><strong>បន្ថែម</strong> — បង្ហាញប៊ូតុងបន្ថែមជួរ / តុ (កំណត់ទីតាំង)</li>
                     <li><strong>កែប្រែ</strong> — កែជួរ/តុ និងទីតាំងកន្លែង</li>
                     <li><strong>ជ្រើស / ប្តូរឈ្មោះ</strong> — ចុចកន្លែងលើតុដើម្បីដាក់ឈ្មោះ</li>
-                    <li><strong>វត្តមាន</strong> — ចុចឈ្មោះលើតុ៖ អវត្តមាន / ច្បាប់ / យឺត / លុបចោល</li>
                     <li><strong>លុប / សម្អាត</strong> — លុបជួរ/តុ ឬ សម្អាតឈ្មោះ</li>
                     <li><strong>បិទកែប្រែ</strong> — លាក់ប៊ូតុងគ្រប់គ្រងលើជួរ</li>
                 </ul>
+                <p class="cl-intro-note">ចុចឈ្មោះលើតុបានគ្រប់ពេល ដើម្បីកត់ អវត្តមាន / ច្បាប់ / យឺត (ដូចប្លង់អាសនៈ)។</p>
 
                 <h3>ប្រភេទតុ</h3>
                 <ul class="cl-intro-list">
@@ -464,13 +463,23 @@
     <!-- Permission modal -->
     <div id="cl-perm-modal" class="cl-modal" hidden>
         <div class="cl-modal-backdrop" data-close="cl-perm"></div>
-        <div class="cl-modal-box" role="dialog" aria-modal="true" aria-labelledby="cl-perm-title">
-            <header class="cl-modal-head">
-                <h2 id="cl-perm-title">សុំច្បាប់</h2>
+        <div class="cl-modal-box cl-perm-box" role="dialog" aria-modal="true" aria-labelledby="cl-perm-title">
+            <header class="cl-modal-head cl-perm-head">
+                <div class="cl-perm-head-icon" aria-hidden="true">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                        <line x1="16" y1="2" x2="16" y2="6"></line>
+                        <line x1="8" y1="2" x2="8" y2="6"></line>
+                        <line x1="3" y1="10" x2="21" y2="10"></line>
+                    </svg>
+                </div>
+                <div class="cl-perm-head-text">
+                    <h2 id="cl-perm-title">សុំច្បាប់</h2>
+                    <p class="cl-perm-monk" id="cl-perm-monk-name"></p>
+                </div>
                 <button type="button" class="cl-modal-close" data-close="cl-perm" aria-label="បិទ">&times;</button>
             </header>
-            <div class="cl-modal-body cl-edit-form">
-                <p class="cl-perm-monk" id="cl-perm-monk-name"></p>
+            <div class="cl-modal-body cl-edit-form cl-perm-body">
                 <div class="cl-perm-dates">
                     <div class="form-field">
                         <label for="cl-perm-start">ចាប់ពី</label>
@@ -481,26 +490,28 @@
                         <input type="date" id="cl-perm-end">
                     </div>
                 </div>
-                <div class="form-field" id="cl-perm-shift-group" hidden>
+                <div class="form-field cl-perm-shift-section" id="cl-perm-shift-group" hidden>
                     <label>វេន (ថ្ងៃតែមួយ)</label>
-                    <div class="cl-perm-shift-btns" role="group">
+                    <div class="cl-perm-shift-btns" role="group" aria-label="វេន">
                         <button type="button" class="cl-perm-shift-btn" data-shift="ព្រឹក">ព្រឹក</button>
-                        <button type="button" class="cl-perm-shift-btn is-active" data-shift="ល្ងាច">ល្ងាច</button>
+                        <button type="button" class="cl-perm-shift-btn" data-shift="ថ្ងៃត្រង់">ថ្ងៃត្រង់</button>
+                        <button type="button" class="cl-perm-shift-btn is-active" data-shift="ទាំងពីរ" title="ព្រឹកផង និង ថ្ងៃត្រង់ផង">ទាំងពីរ</button>
                     </div>
+                    <p class="cl-perm-shift-hint">ទាំងពីរ = ព្រឹកផង និង ថ្ងៃត្រង់ផង</p>
                 </div>
                 <div class="form-field">
                     <label for="cl-perm-reason">មូលហេតុ</label>
-                    <textarea id="cl-perm-reason" rows="3" placeholder="ស្រេចចិត្ត"></textarea>
+                    <textarea id="cl-perm-reason" rows="3" placeholder="បញ្ចូលមូលហេតុសុំច្បាប់..."></textarea>
                 </div>
             </div>
-            <footer class="cl-modal-foot">
-                <button type="button" class="gov-btn" data-close="cl-perm">បោះបង់</button>
-                <button type="button" class="gov-btn gov-btn-primary" id="cl-btn-save-perm">រក្សាទុក</button>
+            <footer class="cl-modal-foot cl-perm-foot">
+                <button type="button" class="cl-perm-btn cl-perm-btn-cancel" data-close="cl-perm">បោះបង់</button>
+                <button type="button" class="cl-perm-btn cl-perm-btn-save" id="cl-btn-save-perm">រក្សាទុក</button>
             </footer>
         </div>
     </div>
 
-    <script src="/static/js/classroom_layout.js?v=38"></script>
+    <script src="/static/js/classroom_layout.js?v=42"></script>
 </body>
 
 </html>

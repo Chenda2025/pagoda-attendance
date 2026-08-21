@@ -8,6 +8,7 @@ const MODULES = {
     report_book: 'សៀវភៅរបាយការណ៍',
     kuti_links:  'តំណមេកុដិ',
     telegram_notify: 'កិច្ចសន្យា',
+    telegram_bot: 'កំណត់ Telegram Bot',
     users:       'គ្រប់គ្រងអ្នកប្រើ',
 };
 

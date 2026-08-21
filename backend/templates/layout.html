@@ -13,7 +13,7 @@
         rel="stylesheet">
     <link rel="stylesheet" href="/static/css/gov-shell.css">
     <link rel="stylesheet" href="/static/css/export_preview.css?v=3">
-    <link rel="stylesheet" href="/static/css/layout.css?v=11">
+    <link rel="stylesheet" href="/static/css/layout.css?v=13">
 </head>
 
 <body>
@@ -23,7 +23,7 @@
             <div class="gov-masthead-inner">
                 <div class="gov-col gov-col-left">
                     <p>មន្ទីរធម្មការ និងសាសនា រាជធានីភ្នំពេញ</p>
-                    <p>សាលាពុទ្ធិកអនុវិទ្យាល័យសង្ឃ</p>
+                    <p>សាលាអនុគណខណ្ឌច្បារអំពៅ</p>
                     <p class="gov-pagoda">វត្តនិរោធរង្សី</p>
                 </div>
                 <div class="gov-col gov-col-center">
@@ -387,20 +387,15 @@
                     <label class="perm-shift-label">វេន (ថ្ងៃតែមួយ)</label>
                     <div class="perm-shift-btns" role="group" aria-label="វេន">
                         <button type="button" class="perm-shift-btn" data-shift="ព្រឹក" id="perm-shift-morning">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <circle cx="12" cy="12" r="5"></circle>
-                                <line x1="12" y1="1" x2="12" y2="3"></line>
-                                <line x1="12" y1="21" x2="12" y2="23"></line>
-                                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-                                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <circle cx="12" cy="12" r="4"></circle>
+                                <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path>
                             </svg>
                             ព្រឹក
                         </button>
                         <button type="button" class="perm-shift-btn is-active" data-shift="ល្ងាច" id="perm-shift-evening">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M21 14.5A8.5 8.5 0 1 1 9.5 3 7 7 0 0 0 21 14.5z"></path>
                             </svg>
                             ល្ងាច
                         </button>
@@ -436,7 +431,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script>const PAGE_ROLE = "{{ role }}";</script>
     <script src="/static/js/export_preview.js?v=2"></script>
-    <script src="/static/js/layout.js?v=16"></script>
+    <script src="/static/js/layout.js?v=18"></script>
 </body>
 
 </html>

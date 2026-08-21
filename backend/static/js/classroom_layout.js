@@ -40,7 +40,7 @@
     let draftRows = [];
     let pickerTarget = null; // { rowId, tableId, slot }
     let dirty = false;
-    let editMode = ''; // '' | 'add' | 'update' | 'names' | 'attendance' | 'delete'
+    let editMode = ''; // '' | 'add' | 'update' | 'names' | 'delete'
     let attendanceMap = new Map(); // monk_id → 'absent' | 'permission' | 'late'
     let permissionsMap = new Map(); // monk_id → { end_date, days_left, ... }
     let activeAttMonkId = null;
@@ -84,12 +84,6 @@
             hint: 'ចុចកន្លែងលើតុដើម្បីជ្រើស ឬ ប្តូរឈ្មោះសង្ឃ',
             where: 'ចុចកន្លែងលើតុខាងក្រោម ↓',
         },
-        attendance: {
-            label: 'វត្តមាន',
-            bar: 'របៀប៖ វត្តមាន',
-            hint: 'ចុចឈ្មោះលើតុ — អវត្តមាន / ច្បាប់ / យឺត / លុបចោល',
-            where: 'ចុចឈ្មោះលើតុខាងក្រោម ↓',
-        },
         delete: {
             label: 'លុប / សម្អាត',
             bar: 'របៀប៖ លុប / សម្អាត',
@@ -111,7 +105,7 @@
     }
 
     function setEditMode(mode) {
-        editMode = mode === 'add' || mode === 'update' || mode === 'names' || mode === 'attendance' || mode === 'delete' ? mode : '';
+        editMode = mode === 'add' || mode === 'update' || mode === 'names' || mode === 'delete' ? mode : '';
         applyEditModeChrome();
         hideAttPopover();
         closeAllRowMenus();
@@ -143,25 +137,18 @@
         });
         if (canvas) {
             canvas.classList.toggle('cl-names-mode', editMode === 'names');
-            canvas.classList.toggle('cl-att-mode', editMode === 'attendance');
         }
     }
 
     function renderRowActions(row) {
-        if (!editMode || editMode === 'names' || editMode === 'attendance') {
+        if (!editMode || editMode === 'names') {
             if (editMode === 'names') {
                 return `
                     <div class="cl-row-actions" data-mode="names">
                         <span class="cl-names-row-hint">ចុចកន្លែងលើតុ</span>
                     </div>`;
             }
-            if (editMode === 'attendance') {
-                return `
-                    <div class="cl-row-actions" data-mode="attendance">
-                        <span class="cl-names-row-hint">ចុចឈ្មោះលើតុ</span>
-                    </div>`;
-            }
-            return '<div class="cl-row-actions cl-row-actions-idle" title="ជ្រើសរបៀបពីម៉ឺនុយ «កែប្រែ» ខាងលើ"></div>';
+            return '<div class="cl-row-actions cl-row-actions-idle" title="ជ្រើសរបៀបពីម៉ឺនុយ «កែប្រែ» ខាងលើ · ចុចឈ្មោះលើតុដើម្បីកត់វត្តមាន"></div>';
         }
         if (editMode === 'add') {
             return `
@@ -566,7 +553,6 @@
         if (canvasEmpty) canvasEmpty.hidden = true;
         canvas.hidden = false;
         canvas.classList.toggle('cl-names-mode', editMode === 'names');
-        canvas.classList.toggle('cl-att-mode', editMode === 'attendance');
 
         canvas.innerHTML = rows.map((row) => {
             const tableCount = row.tables.length;
@@ -611,21 +597,7 @@
                 const monkId = btn.dataset.monkId ? parseInt(btn.dataset.monkId, 10) : null;
                 const monkName = btn.dataset.monkName || '';
 
-                /* Attendance popover — same as ប្លង់អាសនៈ when idle or in វត្តមាន */
-                if ((!editMode || editMode === 'attendance') && monkId) {
-                    if (!editMode) {
-                        editMode = 'attendance';
-                        applyEditModeChrome();
-                    }
-                    showAttPopover(btn, monkId, monkName);
-                    return;
-                }
-                if (editMode === 'attendance' && !monkId) {
-                    toast('កន្លែងនេះមិនទាន់មានឈ្មោះ', false);
-                    return;
-                }
-
-                /* Name pick / change */
+                /* Name pick / change mode */
                 if (editMode === 'names') {
                     pickerTarget = {
                         rowId: btn.dataset.row,
@@ -636,8 +608,14 @@
                     return;
                 }
 
-                if (editMode) {
-                    toast('បើករបៀប «វត្តមាន» ឬ «ជ្រើស / ប្តូរឈ្មោះ» ពីម៉ឺនុយខាងលើ', false);
+                /* Attendance anytime on a filled seat (same as ប្លង់អាសនៈ) */
+                if (monkId) {
+                    showAttPopover(btn, monkId, monkName);
+                    return;
+                }
+
+                if (editMode === 'add' || editMode === 'update' || editMode === 'delete') {
+                    toast('បើករបៀប «ជ្រើស / ប្តូរឈ្មោះ» ដើម្បីដាក់ឈ្មោះ', false);
                     return;
                 }
 
@@ -1225,7 +1203,7 @@
     function permissionBadgeText(permInfo) {
         if (!permInfo || permInfo.days_left < 0) return 'ច្បាប់';
         if (permInfo.same_day && permInfo.shift) return `ច្បាប់ (${permInfo.shift})`;
-        if (permInfo.days_left === 0) return 'ច្បាប់ (ល្ងាចនេះ)';
+        if (permInfo.days_left === 0) return 'ច្បាប់ (ថ្ងៃនេះ)';
         return `ច្បាប់ (សល់${permInfo.days_left} ថ្ងៃ)`;
     }
 
@@ -1289,15 +1267,30 @@
 
     function getSelectedClPermShift() {
         const active = document.querySelector('.cl-perm-shift-btn.is-active');
-        return active ? active.dataset.shift : 'ល្ងាច';
+        return active ? active.dataset.shift : 'ទាំងពីរ';
+    }
+
+    function isSameDayClPermission() {
+        const start = document.getElementById('cl-perm-start')?.value;
+        const end = document.getElementById('cl-perm-end')?.value;
+        return !!(start && end && start === end);
     }
 
     function syncClPermShiftVisibility() {
         const group = document.getElementById('cl-perm-shift-group');
         if (!group) return;
-        const start = document.getElementById('cl-perm-start')?.value;
-        const end = document.getElementById('cl-perm-end')?.value;
-        group.hidden = !(start && end && start === end);
+        // One day → show shift; 2+ days → dates only (no shift)
+        group.hidden = !isSameDayClPermission();
+    }
+
+    function setSelectedClPermShift(shift) {
+        const allowed = ['ព្រឹក', 'ថ្ងៃត្រង់', 'ទាំងពីរ'];
+        let value = shift;
+        if (value === 'ល្ងាច') value = 'ថ្ងៃត្រង់';
+        if (!allowed.includes(value)) value = 'ទាំងពីរ';
+        document.querySelectorAll('.cl-perm-shift-btn').forEach((btn) => {
+            btn.classList.toggle('is-active', btn.dataset.shift === value);
+        });
     }
 
     function openClPermModal(monkId, monkName) {
@@ -1310,11 +1303,10 @@
         document.getElementById('cl-perm-start').value = info?.start_date || today;
         document.getElementById('cl-perm-end').value = info?.end_date || today;
         document.getElementById('cl-perm-reason').value = info?.reason || '';
-        document.querySelectorAll('.cl-perm-shift-btn').forEach((btn) => {
-            btn.classList.toggle('is-active', btn.dataset.shift === (info?.shift === 'ព្រឹក' ? 'ព្រឹក' : 'ល្ងាច'));
-        });
+        setSelectedClPermShift(info?.shift || 'ទាំងពីរ');
         syncClPermShiftVisibility();
         if (modal) modal.hidden = false;
+        document.getElementById('cl-perm-reason')?.focus();
     }
 
     function closeClPermModal() {
@@ -1487,11 +1479,10 @@
 
     document.getElementById('cl-perm-start')?.addEventListener('change', syncClPermShiftVisibility);
     document.getElementById('cl-perm-end')?.addEventListener('change', syncClPermShiftVisibility);
+    document.getElementById('cl-perm-start')?.addEventListener('input', syncClPermShiftVisibility);
+    document.getElementById('cl-perm-end')?.addEventListener('input', syncClPermShiftVisibility);
     document.querySelectorAll('.cl-perm-shift-btn').forEach((btn) => {
-        btn.addEventListener('click', () => {
-            document.querySelectorAll('.cl-perm-shift-btn').forEach((b) => b.classList.remove('is-active'));
-            btn.classList.add('is-active');
-        });
+        btn.addEventListener('click', () => setSelectedClPermShift(btn.dataset.shift));
     });
 
     document.getElementById('cl-btn-save-perm')?.addEventListener('click', async () => {

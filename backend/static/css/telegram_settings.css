@@ -1,0 +1,359 @@
+/* Telegram bot settings page */
+
+.tg-settings-page {
+    max-width: 920px;
+}
+
+.tg-settings-page .gov-main {
+    width: 100%;
+    padding: 0 0 8px;
+}
+
+.tg-settings-panel {
+    overflow: hidden;
+    padding: 0;
+}
+
+.tg-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    flex-wrap: wrap;
+    padding: 18px 22px;
+    background:
+        linear-gradient(135deg, rgba(34, 158, 217, 0.08), transparent 55%),
+        linear-gradient(180deg, #f8fafc 0%, #fff 100%);
+    border-bottom: 1px solid var(--line, #d8dee6);
+}
+
+.tg-panel-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+
+.tg-brand-icon {
+    flex-shrink: 0;
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    display: grid;
+    place-items: center;
+    color: #fff;
+    background: linear-gradient(145deg, #2aabee, #229ed9);
+    box-shadow: 0 6px 16px rgba(34, 158, 217, 0.35);
+}
+
+.tg-panel-title {
+    margin: 0;
+    font-family: var(--display, 'Moul', serif);
+    font-size: 17px;
+    font-weight: 400;
+    color: var(--navy, #0c2d5a);
+    line-height: 1.35;
+}
+
+.tg-panel-sub {
+    margin: 2px 0 0;
+    font-size: 12.5px;
+    color: var(--muted, #5c6b7a);
+}
+
+.tg-settings-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    font-size: 12.5px;
+    font-weight: 600;
+    background: #f1f5f9;
+    color: #475569;
+    border: 1px solid #e2e8f0;
+}
+
+.tg-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #94a3b8;
+    box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.25);
+}
+
+.tg-settings-status.is-ok {
+    background: #ecfdf5;
+    color: #047857;
+    border-color: #a7f3d0;
+}
+
+.tg-settings-status.is-ok .tg-status-dot {
+    background: #10b981;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.22);
+}
+
+.tg-settings-status.is-off {
+    background: #fef2f2;
+    color: #b91c1c;
+    border-color: #fecaca;
+}
+
+.tg-settings-status.is-off .tg-status-dot {
+    background: #ef4444;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
+}
+
+.tg-settings-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 22px;
+}
+
+.tg-settings-form .form-field {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+
+.tg-settings-form label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink, #1a2332);
+}
+
+.tg-settings-form input[type="text"],
+.tg-settings-form input[type="password"] {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 12px 14px;
+    border: 1px solid var(--line, #d8dee6);
+    border-radius: 10px;
+    font-size: 14px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    background: #fbfcfe;
+    color: var(--ink, #1a2332);
+    transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+}
+
+.tg-settings-form input:hover {
+    border-color: #c5ceda;
+}
+
+.tg-settings-form input:focus {
+    outline: none;
+    background: #fff;
+    border-color: #229ED9;
+    box-shadow: 0 0 0 3px rgba(34, 158, 217, 0.18);
+}
+
+.tg-input-wrap {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+}
+
+.tg-input-wrap input {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.tg-eye-btn {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-width: 96px;
+    padding: 0 14px;
+    border: 1px solid var(--line, #d8dee6);
+    border-radius: 10px;
+    background: #f0f4fa;
+    color: var(--navy, #0c2d5a);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
+}
+
+.tg-eye-btn:hover {
+    background: #e4ebf5;
+    border-color: rgba(12, 45, 90, 0.28);
+}
+
+.tg-eye-btn.is-shown {
+    background: #eef8fd;
+    border-color: rgba(34, 158, 217, 0.45);
+    color: #0b6fa4;
+}
+
+.tg-eye-btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(34, 158, 217, 0.22);
+}
+
+.tg-eye-label {
+    line-height: 1;
+}
+
+.tg-enabled {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 14px 16px;
+    border: 1px solid var(--line, #d8dee6);
+    border-radius: 12px;
+    background: linear-gradient(180deg, #f8fafc, #fff);
+    cursor: pointer;
+    user-select: none;
+}
+
+.tg-enabled-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.tg-enabled-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink, #1a2332);
+}
+
+.tg-enabled-hint {
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--muted, #5c6b7a);
+}
+
+.tg-switch {
+    position: relative;
+    flex-shrink: 0;
+    width: 46px;
+    height: 28px;
+}
+
+.tg-switch input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    margin: 0;
+    cursor: pointer;
+    z-index: 1;
+}
+
+.tg-switch-track {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: 999px;
+    background: #cbd5e1;
+    transition: background 0.2s;
+    position: relative;
+}
+
+.tg-switch-track::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.25);
+    transition: transform 0.2s;
+}
+
+.tg-switch input:checked + .tg-switch-track {
+    background: linear-gradient(135deg, #2aabee, #1a8bc7);
+}
+
+.tg-switch input:checked + .tg-switch-track::after {
+    transform: translateX(18px);
+}
+
+.tg-switch input:focus-visible + .tg-switch-track {
+    box-shadow: 0 0 0 3px rgba(34, 158, 217, 0.28);
+}
+
+.tg-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 4px;
+    padding-top: 4px;
+}
+
+.tg-actions .gov-btn {
+    min-height: 42px;
+    padding: 10px 16px;
+}
+
+.tg-btn-test {
+    background: #eef8fd;
+    color: #0b6fa4;
+    border-color: rgba(34, 158, 217, 0.35);
+}
+
+.tg-btn-test:hover {
+    background: #e0f2fb;
+    border-color: rgba(34, 158, 217, 0.5);
+}
+
+.tg-panel-foot {
+    padding: 12px 22px 16px;
+    border-top: 1px solid #eef2f7;
+    background: #fafbfc;
+}
+
+.tg-updated {
+    margin: 0;
+    font-size: 12px;
+    color: var(--muted, #5c6b7a);
+    min-height: 1.2em;
+}
+
+.tg-toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    padding: 12px 20px;
+    border-radius: 10px;
+    background: var(--navy, #0c2d5a);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 500;
+    z-index: 9999;
+    opacity: 0;
+    pointer-events: none;
+    box-shadow: 0 10px 30px rgba(7, 30, 61, 0.28);
+    transition: opacity 0.2s, transform 0.2s;
+}
+
+.tg-toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+.tg-toast.err { background: #b91c1c; }
+
+@media (max-width: 640px) {
+    .tg-panel-head,
+    .tg-settings-form,
+    .tg-panel-foot {
+        padding-left: 16px;
+        padding-right: 16px;
+    }
+
+    .tg-actions .gov-btn {
+        flex: 1 1 100%;
+        justify-content: center;
+    }
+}

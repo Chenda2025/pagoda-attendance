@@ -125,8 +125,17 @@ def _session_user():
 
 # Only accounts auto-disabled by repeated failed logins are reported here;
 # ordinary logins and admin enable/disable stay silent.
-_SECURITY_TG_TOKEN   = '8950898077:AAHNR0tTgtJWy17wMXooKwg4nfQLGdfe5aw'
-_SECURITY_TG_CHAT_ID = -1003960014484
+# Telegram bot token/chat_id come from UI config (telegram_bot_config table).
+
+def _tg_bot_creds():
+    """Return (token, chat_id) from DB settings; empty strings if missing/disabled."""
+    try:
+        from telegram_config_service import get_telegram_bot_creds
+        token, chat_id = get_telegram_bot_creds()
+        return (token or '').strip(), str(chat_id or '').strip()
+    except Exception as e:
+        print(f'[telegram-config] {e}')
+        return '', ''
 
 _geo_cache: dict = {}
 _PRIVATE_IP_PREFIXES = ('10.', '192.168.', '127.', '172.16.', '172.17.', '172.18.',
@@ -188,7 +197,9 @@ def _send_account_locked_alert(user, username, ip, location, device_id,
     def _worker():
         try:
             import requests as req
-            _tg_send_message(_SECURITY_TG_TOKEN, _SECURITY_TG_CHAT_ID, text, req)
+            token, chat_id = _tg_bot_creds()
+            if token and chat_id:
+                _tg_send_message(token, chat_id, text, req)
         except Exception as e:
             print(f'[lock-alert] telegram failed: {e}')
 
@@ -744,9 +755,6 @@ def dashboard_stats():
 
 # ============ TELEGRAM NOTIFY LOG ============
 
-_TELEGRAM_ATTEND_TOKEN   = '8950898077:AAHNR0tTgtJWy17wMXooKwg4nfQLGdfe5aw'
-_TELEGRAM_ATTEND_CHAT_ID = -1003960014484
-
 
 def _log_telegram_notify(monk_id, fullname, notify_type, ref_date, absent_count=0,
                          perm_count=0, detail=None):
@@ -817,7 +825,10 @@ def _send_absent_alert_telegram(monk_id, date_str, absent_count, perm_count, not
     msg = _build_absent_alert_message(
         fullname, kuti, kuti_head, kuti_deputy, absent_count, perm_count, date_str,
     )
-    tg = _tg_send_message(_TELEGRAM_ATTEND_TOKEN, _TELEGRAM_ATTEND_CHAT_ID, msg, req)
+    token, chat_id = _tg_bot_creds()
+    if not token or not chat_id:
+        return False, 'Telegram bot មិនទាន់កំណត់'
+    tg = _tg_send_message(token, chat_id, msg, req)
     if not tg.get('ok'):
         return False, tg.get('description', 'Telegram error')
     _log_telegram_notify(
@@ -1003,7 +1014,7 @@ td.name {{ font-weight: 600; }}
 </style></head><body><div class="page">
 <div class="masthead">
   <div class="mast-left"><p>មន្ទីរធម្មការ និងសាសនា រាជធានីភ្នំពេញ</p>
-  <p>សាលាពុទ្ធិកអនុវិទ្យាល័យសង្ឃ</p><p class="mast-pagoda">វត្តនិរោធរង្សី</p></div>
+  <p>សាលាអនុគណខណ្ឌច្បារអំពៅ</p><p class="mast-pagoda">វត្តនិរោធរង្សី</p></div>
   <div class="mast-center"><div style="width:52px;height:52px;border-radius:50%;border:2px solid #c9a227;
   display:flex;align-items:center;justify-content:center;font-family:Moul;font-size:9px;color:#0c2d5a">វត្ត</div></div>
   <div class="mast-right"><p class="mast-kingdom">ព្រះរាជាណាចក្រកម្ពុជា</p>
@@ -1029,6 +1040,69 @@ def telegram_notify_page():
     if not user_allowed(_session_user(), '/telegram-notify'):
         abort(403)
     return render_template('telegram_notify.html', username=session.get('username', ''))
+
+
+@main_bp.route('/telegram-settings')
+def telegram_settings_page():
+    if not user_allowed(_session_user(), '/telegram-settings'):
+        abort(403)
+    return render_template('telegram_settings.html', username=session.get('username', ''))
+
+
+@main_bp.route('/api/telegram-settings', methods=['GET'])
+def api_telegram_settings_get():
+    if not user_allowed(_session_user(), '/telegram-settings'):
+        abort(403)
+    from telegram_config_service import get_telegram_bot_config
+    return jsonify({'success': True, 'config': get_telegram_bot_config(mask_token=True)})
+
+
+@main_bp.route('/api/telegram-settings', methods=['POST'])
+def api_telegram_settings_save():
+    if not user_allowed(_session_user(), '/telegram-settings'):
+        abort(403)
+    try:
+        from telegram_config_service import save_telegram_bot_config, get_telegram_bot_config
+        data = request.get_json(silent=True) or {}
+        ok, err = save_telegram_bot_config(
+            bot_token=data.get('bot_token'),
+            chat_id=data.get('chat_id'),
+            bot_label=data.get('bot_label'),
+            enabled=data.get('enabled'),
+            keep_token_if_blank=True,
+        )
+        if not ok:
+            return jsonify({'success': False, 'message': err or 'save failed'}), 500
+        _log_act('telegram_bot_config_save', 'telegram_bot', data.get('chat_id') or '')
+        return jsonify({'success': True, 'config': get_telegram_bot_config(mask_token=True)})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@main_bp.route('/api/telegram-settings/test', methods=['POST'])
+def api_telegram_settings_test():
+    if not user_allowed(_session_user(), '/telegram-settings'):
+        abort(403)
+    try:
+        import requests as req
+        token, chat_id = _tg_bot_creds()
+        if not token or not chat_id:
+            return jsonify({
+                'success': False,
+                'message': 'សូមរក្សាទុក Bot Token និង Chat ID ជាមុន',
+            }), 400
+        from datetime import datetime as _dt
+        msg = (
+            '✅ សារសាកល្បងពីប្រព័ន្ធវត្តនិរោធរង្សី\n'
+            f'ពេលវេលា: {_dt.now().strftime("%d/%m/%Y %H:%M:%S")}\n'
+            'ការកំណត់ Telegram Bot ដំណើរការធម្មតា។'
+        )
+        tg = _tg_send_message(token, chat_id, msg, req)
+        if not tg.get('ok'):
+            return jsonify({'success': False, 'message': tg.get('description', 'Telegram error')}), 500
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 
 @main_bp.route('/api/telegram-notify', methods=['GET'])
@@ -1237,9 +1311,13 @@ def api_telegram_contract_report_send_image():
         if not caption:
             caption = f'📋 របាយការណ៍កិច្ចសន្យារួច — {period}'
 
+        token, chat_id = _tg_bot_creds()
+        if not token or not chat_id:
+            return jsonify({'success': False, 'message': 'សូមកំណត់ Telegram Bot នៅទំព័រ «កំណត់ Telegram Bot»'}), 400
+
         tg = req.post(
-            f'https://api.telegram.org/bot{_TELEGRAM_ATTEND_TOKEN}/sendPhoto',
-            data={'chat_id': _TELEGRAM_ATTEND_CHAT_ID, 'caption': caption},
+            f'https://api.telegram.org/bot{token}/sendPhoto',
+            data={'chat_id': chat_id, 'caption': caption},
             files={'photo': ('contract_report.png', image_bytes, 'image/png')},
             timeout=30,
         ).json()
@@ -1694,7 +1772,7 @@ td.empty {{ text-align: center; color: #94a3b8; padding: 16px; }}
     <div class="masthead">
         <div class="mast-left">
             <p>មន្ទីរធម្មការ និងសាសនា រាជធានីភ្នំពេញ</p>
-            <p>សាលាពុទ្ធិកអនុវិទ្យាល័យសង្ឃ</p>
+            <p>សាលាអនុគណខណ្ឌច្បារអំពៅ</p>
             <p class="mast-pagoda">វត្តនិរោធរង្សី</p>
         </div>
         <div class="mast-center"><div class="mast-seal">វត្ត</div></div>
@@ -3342,8 +3420,11 @@ def add_permission():
 
         same_day = s_date == e_date
         if same_day:
-            if shift not in ('ព្រឹក', 'ល្ងាច'):
+            # Layout (អាសនៈ): ព្រឹក / ល្ងាច · Sala Chan: ព្រឹក / ថ្ងៃត្រង់ / ទាំងពីរ
+            if shift == 'យប់':
                 shift = 'ល្ងាច'
+            if shift not in ('ព្រឹក', 'ថ្ងៃត្រង់', 'ទាំងពីរ', 'ល្ងាច'):
+                shift = 'ព្រឹក'
         else:
             shift = None
 
@@ -3791,8 +3872,9 @@ def export_attendance_report():
         buf.seek(0)
 
         if action in ('telegram', 'telegram-both'):
-            TELEGRAM_TOKEN   = '8950898077:AAHNR0tTgtJWy17wMXooKwg4nfQLGdfe5aw'
-            TELEGRAM_CHAT_ID = -1003960014484
+            TELEGRAM_TOKEN, TELEGRAM_CHAT_ID = _tg_bot_creds()
+            if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
+                return jsonify({'success': False, 'message': 'សូមកំណត់ Telegram Bot នៅទំព័រ «កំណត់ Telegram Bot»'}), 400
             fname   = f"attendance_report_{end_date.isoformat()}.docx"
             caption = (
                 f"📋 របាយការណ៍វត្តមាន — {end_date.strftime('%d/%m/%Y')}\n"
@@ -3931,8 +4013,9 @@ def _tg_send_message(token, chat_id, text, req_lib, timeout=10):
 
 @main_bp.route('/api/attendance/submit', methods=['POST'])
 def submit_attendance():
-    TELEGRAM_TOKEN   = '8950898077:AAHNR0tTgtJWy17wMXooKwg4nfQLGdfe5aw'
-    TELEGRAM_CHAT_ID = -1003960014484  # Channel: គ្រប់គ្រង អវត្តមាន-ច្បាប់ ថ្វាយបង្គំប្រចាំថ្ងៃ
+    TELEGRAM_TOKEN, TELEGRAM_CHAT_ID = _tg_bot_creds()
+    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
+        return jsonify({'success': False, 'message': 'សូមកំណត់ Telegram Bot នៅទំព័រ «កំណត់ Telegram Bot»'}), 400
 
     try:
         import requests as req
@@ -4043,8 +4126,9 @@ def submit_attendance():
 
 @main_bp.route('/api/attendance/submit-image', methods=['POST'])
 def submit_attendance_image():
-    TELEGRAM_TOKEN   = '8950898077:AAHNR0tTgtJWy17wMXooKwg4nfQLGdfe5aw'
-    TELEGRAM_CHAT_ID = -1003960014484
+    TELEGRAM_TOKEN, TELEGRAM_CHAT_ID = _tg_bot_creds()
+    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
+        return jsonify({'success': False, 'message': 'សូមកំណត់ Telegram Bot នៅទំព័រ «កំណត់ Telegram Bot»'}), 400
 
     try:
         import requests as req
@@ -5679,8 +5763,9 @@ def submit_report_image():
             return jsonify({'success': False, 'message': 'រកមិនឃើញរូបភាព'}), 400
             
         file = request.files['image']
-        TELEGRAM_TOKEN   = '8950898077:AAHNR0tTgtJWy17wMXooKwg4nfQLGdfe5aw'
-        TELEGRAM_CHAT_ID = -1003960014484
+        TELEGRAM_TOKEN, TELEGRAM_CHAT_ID = _tg_bot_creds()
+        if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
+            return jsonify({'success': False, 'message': 'សូមកំណត់ Telegram Bot នៅទំព័រ «កំណត់ Telegram Bot»'}), 400
         
         caption = request.form.get('caption', "ប្រគេនរបាយការណ៍វត្តមាន (បំប្លែងជារូបភាព)")
         
@@ -5736,8 +5821,9 @@ def unified_export():
         fmt         = request.args.get('fmt',    'docx')
         action      = request.args.get('action', 'download')
 
-        TELEGRAM_TOKEN   = '8950898077:AAHNR0tTgtJWy17wMXooKwg4nfQLGdfe5aw'
-        TELEGRAM_CHAT_ID = -1003960014484
+        TELEGRAM_TOKEN, TELEGRAM_CHAT_ID = _tg_bot_creds()
+        if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
+            return jsonify({'success': False, 'message': 'សូមកំណត់ Telegram Bot នៅទំព័រ «កំណត់ Telegram Bot»'}), 400
 
         monks, type_label, subtitle, period_start, period_end = _fetch_export_data(report_type, request.args)
         monks = _apply_report_filters(monks, request.args)

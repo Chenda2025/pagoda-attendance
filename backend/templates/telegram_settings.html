@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="km">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>កំណត់ Telegram Bot — វត្តនិរោធរង្សី</title>
+    <link rel="icon" type="image/jpeg" href="/static/logo.jpg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&family=Kantumruy+Pro:wght@400;500;600;700&family=Moul&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/gov-shell.css">
+    <link rel="stylesheet" href="/static/css/telegram_settings.css?v=4">
+</head>
+<body class="gov-page-body">
+<div class="gov-shell tg-settings-page">
+
+    <header class="gov-masthead">
+        <div class="gov-masthead-inner">
+            <div class="gov-col gov-col-left">
+                <p>មន្ទីរធម្មការ និងសាសនា រាជធានីភ្នំពេញ</p>
+                <p>សាលាអនុគណខណ្ឌច្បារអំពៅ</p>
+                <p class="gov-pagoda">វត្តនិរោធរង្សី</p>
+            </div>
+            <div class="gov-col gov-col-center">
+                <img src="/static/logo.jpg" alt="វត្តនិរោធរង្សី" class="gov-seal">
+            </div>
+            <div class="gov-col gov-col-right">
+                <p class="gov-kingdom">ព្រះរាជាណាចក្រកម្ពុជា</p>
+                <p class="gov-motto">ជាតិ សាសនា ព្រះមហាក្សត្រ</p>
+            </div>
+        </div>
+    </header>
+
+    <div class="gov-topbar">
+        <div class="gov-topbar-left">
+            <a href="/" class="gov-btn gov-btn-back" aria-label="ត្រឡប់">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+                ផ្ទាំងគ្រប់គ្រង
+            </a>
+            <div class="gov-topbar-titles">
+                <h1 class="gov-page-title">កំណត់ Telegram Bot</h1>
+            </div>
+        </div>
+    </div>
+
+    <main class="gov-main">
+        <section class="gov-panel tg-settings-panel">
+            <div class="tg-panel-head">
+                <div class="tg-panel-brand">
+                    <span class="tg-brand-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06-.01.14-.02.22z"/>
+                        </svg>
+                    </span>
+                    <div>
+                        <h2 class="tg-panel-title">ការកំណត់ Bot</h2>
+                        <p class="tg-panel-sub">Token និង Chat ID សម្រាប់ផ្ញើសារ</p>
+                    </div>
+                </div>
+                <div class="tg-settings-status" id="tg-status" aria-live="polite">
+                    <span class="tg-status-dot" aria-hidden="true"></span>
+                    <span class="tg-status-text">—</span>
+                </div>
+            </div>
+
+            <form id="tg-settings-form" class="tg-settings-form" autocomplete="off">
+                <div class="form-field">
+                    <label for="tg-label">ឈ្មោះ / កំណត់ចំណាំ</label>
+                    <input type="text" id="tg-label" placeholder="ឧ. វត្តមាន / កិច្ចសន្យា">
+                </div>
+
+                <div class="form-field">
+                    <label for="tg-token">Bot Token</label>
+                    <div class="tg-input-wrap">
+                        <input type="password" id="tg-token" placeholder="123456:ABC-DEF..." spellcheck="false">
+                        <button type="button" class="tg-eye-btn" id="btn-toggle-token" aria-pressed="false">
+                            <svg class="icon-eye" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                            <svg class="icon-eye-off" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" hidden><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                            <span class="tg-eye-label">បង្ហាញ</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="form-field">
+                    <label for="tg-chat">Chat ID / Channel ID</label>
+                    <input type="text" id="tg-chat" placeholder="-100xxxxxxxxxx" spellcheck="false">
+                </div>
+
+                <label class="tg-enabled" for="tg-enabled">
+                    <span class="tg-enabled-copy">
+                        <span class="tg-enabled-title">បើកការផ្ញើ Telegram</span>
+                        <span class="tg-enabled-hint">បិទដើម្បីផ្អាកការផ្ញើសារទាំងអស់</span>
+                    </span>
+                    <span class="tg-switch">
+                        <input type="checkbox" id="tg-enabled" checked>
+                        <span class="tg-switch-track" aria-hidden="true"></span>
+                    </span>
+                </label>
+
+                <div class="tg-actions">
+                    <button type="submit" class="gov-btn gov-btn-primary" id="btn-save-tg">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                        រក្សាទុក
+                    </button>
+                    <button type="button" class="gov-btn tg-btn-test" id="btn-test-tg">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                        ផ្ញើសារសាកល្បង
+                    </button>
+                </div>
+            </form>
+
+            <footer class="tg-panel-foot">
+                <p class="tg-updated" id="tg-updated"></p>
+            </footer>
+        </section>
+    </main>
+
+    <footer class="gov-footer">
+        <span>© វត្តនិរោធរង្សី</span>
+    </footer>
+</div>
+
+<div id="toast" class="tg-toast" aria-live="polite"></div>
+<script src="/static/js/telegram_settings.js?v=3"></script>
+</body>
+</html>

@@ -316,7 +316,7 @@ async function showAttList() {
                 if (!isAbsent) {
                     const info = permissionsMap.get(m.id);
                     if (info && info.days_left >= 0)
-                        sub += info.days_left === 0 ? ' · ល្ងាចនេះ' : ` · សល់ ${info.days_left} ថ្ងៃ`;
+                        sub += info.days_left === 0 ? ' · ថ្ងៃនេះ' : ` · សល់ ${info.days_left} ថ្ងៃ`;
                     if (info?.reason) sub += ` · ${escapeHtml(info.reason)}`;
                 }
                 g += `<li class="att-list-row ${isAbsent ? 'att-row-absent' : 'att-row-perm'}" data-monk-id="${m.id}">
@@ -807,7 +807,7 @@ let activeMonkId = null;
 function permissionBadgeText(permInfo) {
     if (!permInfo || permInfo.days_left < 0) return 'ច្បាប់';
     if (permInfo.same_day && permInfo.shift) return `ច្បាប់ (${permInfo.shift})`;
-    if (permInfo.days_left === 0) return 'ច្បាប់ (ល្ងាចនេះ)';
+    if (permInfo.days_left === 0) return 'ច្បាប់ (ថ្ងៃនេះ)';
     return `ច្បាប់ (សល់${permInfo.days_left} ថ្ងៃ)`;
 }
 
@@ -817,8 +817,14 @@ function getSelectedPermShift() {
 }
 
 function setSelectedPermShift(shift) {
+    // អាសនៈ: ព្រឹក / ល្ងាច (not Sala Chan midday/both)
+    const allowed = ['ព្រឹក', 'ល្ងាច'];
+    let value = shift;
+    if (value === 'យប់' || value === 'ថ្ងៃត្រង់') value = 'ល្ងាច';
+    if (value === 'ទាំងពីរ') value = 'ព្រឹក';
+    if (!allowed.includes(value)) value = 'ល្ងាច';
     document.querySelectorAll('.perm-shift-btn').forEach(btn => {
-        btn.classList.toggle('is-active', btn.dataset.shift === shift);
+        btn.classList.toggle('is-active', btn.dataset.shift === value);
     });
 }
 
@@ -870,7 +876,7 @@ function openPermModal(monkId, monkName) {
     document.getElementById('perm-start-date').value = info?.start_date || today;
     document.getElementById('perm-end-date').value   = info?.end_date   || today;
     document.getElementById('perm-reason').value     = info?.reason     || '';
-    setSelectedPermShift(info?.shift === 'ព្រឹក' ? 'ព្រឹក' : 'ល្ងាច');
+    setSelectedPermShift(info?.shift || 'ល្ងាច');
     syncPermShiftVisibility();
     document.getElementById('permission-modal').style.display = 'flex';
     document.body.style.overflow = 'hidden';

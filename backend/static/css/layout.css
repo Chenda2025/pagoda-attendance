@@ -1269,25 +1269,29 @@ body {
 .perm-shift-btns {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 8px;
+    gap: 10px;
 }
 
 .perm-shift-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
-    min-height: 44px;
-    padding: 8px 12px;
+    gap: 8px;
+    min-height: 52px;
+    padding: 12px 14px;
     border: 1.5px solid #d8dee6;
-    border-radius: 10px;
+    border-radius: 12px;
     background: #fff;
     color: #4a5568;
     font-family: inherit;
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 600;
     cursor: pointer;
     transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
+}
+
+.perm-shift-btn svg {
+    flex-shrink: 0;
 }
 
 .perm-shift-btn:hover {

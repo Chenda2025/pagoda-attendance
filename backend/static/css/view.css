@@ -70,27 +70,42 @@ body {
 
 .gov-col {
     color: #f7f3e8;
-    font-size: 13px;
-    line-height: 1.55;
+    font-family: 'Battambang', 'Kantumruy Pro', sans-serif;
+    font-size: 13.5px;
+    line-height: 1.65;
+    letter-spacing: 0.01em;
 }
 
 .gov-col-left { text-align: left; }
 .gov-col-right { text-align: right; }
 .gov-col-center { display: flex; justify-content: center; }
 
+.gov-col p {
+    margin: 0;
+}
+
 .gov-pagoda {
     color: var(--gold-soft);
-    font-weight: 600;
-    margin-top: 2px;
+    font-family: 'Battambang', 'Kantumruy Pro', sans-serif;
+    font-weight: 700;
+    font-size: 14px;
+    margin-top: 4px;
 }
 
 .gov-kingdom {
     font-family: var(--display);
-    font-size: 15px;
+    font-size: 16px;
     color: var(--gold-soft);
 }
 
-.gov-motto { font-size: 12.5px; opacity: 0.9; }
+.gov-motto {
+    font-family: 'Battambang', 'Kantumruy Pro', sans-serif;
+    font-size: 13.5px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    opacity: 0.95;
+    margin-top: 4px;
+}
 
 .gov-seal {
     width: 64px;
