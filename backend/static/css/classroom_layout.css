@@ -484,6 +484,11 @@
     background: #f0fdf4;
 }
 
+.cl-mode-bar[data-mode="names"] {
+    border-color: #fcd34d;
+    background: #fffbeb;
+}
+
 .cl-mode-bar[data-mode="delete"] {
     border-color: #fecaca;
     background: #fef2f2;
@@ -500,6 +505,7 @@
 }
 
 .cl-mode-bar[data-mode="add"] .cl-mode-bar-label { color: #15803d; }
+.cl-mode-bar[data-mode="names"] .cl-mode-bar-label { color: #b45309; }
 .cl-mode-bar[data-mode="delete"] .cl-mode-bar-label { color: #b91c1c; }
 
 .cl-mode-bar-hint {
@@ -579,7 +585,7 @@
     align-items: center;
     flex-wrap: wrap;
     gap: 6px;
-    margin-left: 4px;
+    margin-left: 0;
     position: relative;
     flex-shrink: 0;
     z-index: 5;
@@ -602,9 +608,38 @@
     border-color: #bfdbfe;
 }
 
+.cl-row-actions[data-mode="names"] {
+    background: #fffbeb;
+    border-color: #fcd34d;
+}
+
 .cl-row-actions[data-mode="delete"] {
     background: #fef2f2;
     border-color: #fecaca;
+}
+
+.cl-names-row-hint {
+    font-size: 12px;
+    font-weight: 600;
+    color: #b45309;
+    padding: 0 8px;
+    white-space: nowrap;
+}
+
+/* Names-pick mode: emphasize clickable seats */
+.cl-canvas.cl-names-mode .cl-name:not(.disabled),
+.cl-canvas.cl-names-mode .cl-seat:not(.disabled) {
+    outline: 2px dashed #f59e0b;
+    outline-offset: 1px;
+    cursor: pointer;
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.12);
+}
+
+.cl-canvas.cl-names-mode .cl-name:not(.disabled):hover,
+.cl-canvas.cl-names-mode .cl-seat:not(.disabled):hover {
+    outline-style: solid;
+    outline-color: #d97706;
+    background: #fffbeb;
 }
 
 .cl-row-menu {

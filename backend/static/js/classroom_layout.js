@@ -40,7 +40,7 @@
     let draftRows = [];
     let pickerTarget = null; // { rowId, tableId, slot }
     let dirty = false;
-    let editMode = ''; // '' | 'add' | 'update' | 'delete'
+    let editMode = ''; // '' | 'add' | 'update' | 'names' | 'delete'
 
     const canvas = document.getElementById('layout-canvas');
     const canvasEmpty = document.getElementById('canvas-empty');
@@ -66,17 +66,26 @@
         add: {
             label: 'បន្ថែម',
             bar: 'របៀប៖ បន្ថែម',
-            hint: 'ប្រើប៊ូតុងលើជួរ — បន្ថែមជួរ ឬ បន្ថែមតុ (កំណត់ទីតាំងកន្លែង)',
+            hint: 'ប្រើប៊ូតុងខាងស្តាំជួរ — បន្ថែមជួរ ឬ បន្ថែមតុ (កំណត់ទីតាំងកន្លែង)',
+            where: 'ប៊ូតុងសកម្មភាពនៅខាងស្តាំជួរ →',
         },
         update: {
             label: 'កែប្រែ',
             bar: 'របៀប៖ កែប្រែ',
-            hint: 'កែជួរ/តុ · កំណត់ទីតាំង · ចុចឈ្មោះលើតុដើម្បីជ្រើសសង្ឃ',
+            hint: 'ប្រើប៊ូតុងខាងស្តាំជួរ — កែជួរ / កែតុ និងទីតាំងកន្លែង',
+            where: 'ប៊ូតុងសកម្មភាពនៅខាងស្តាំជួរ →',
+        },
+        names: {
+            label: 'ជ្រើស / ប្តូរឈ្មោះ',
+            bar: 'របៀប៖ ជ្រើស / ប្តូរឈ្មោះ',
+            hint: 'ចុចកន្លែងលើតុដើម្បីជ្រើស ឬ ប្តូរឈ្មោះសង្ឃ',
+            where: 'ចុចកន្លែងលើតុខាងក្រោម ↓',
         },
         delete: {
             label: 'លុប / សម្អាត',
             bar: 'របៀប៖ លុប / សម្អាត',
             hint: 'លុបជួរ ឬ តុ · សម្អាតឈ្មោះ (ទាំងអស់ / ជួរ / តុ)',
+            where: 'ប៊ូតុងសកម្មភាពនៅខាងស្តាំជួរ →',
         },
     };
 
@@ -86,13 +95,20 @@
         });
     }
 
+    function closeAllRowMenus() {
+        document.querySelectorAll('.cl-row-menu.open').forEach((el) => {
+            el.classList.remove('open');
+        });
+    }
+
     function setEditMode(mode) {
-        editMode = mode === 'add' || mode === 'update' || mode === 'delete' ? mode : '';
+        editMode = mode === 'add' || mode === 'update' || mode === 'names' || mode === 'delete' ? mode : '';
         const menu = document.getElementById('edit-mode-menu');
         const labelEl = document.getElementById('edit-mode-label');
         const bar = document.getElementById('cl-mode-bar');
         const barText = document.getElementById('cl-mode-bar-text');
         const barHint = document.getElementById('cl-mode-bar-hint');
+        const barWhere = document.getElementById('cl-mode-bar-where');
         if (labelEl) labelEl.textContent = editMode ? EDIT_MODE_META[editMode].label : 'កែប្រែ';
         if (menu) menu.classList.toggle('is-active', !!editMode);
         if (bar) {
@@ -101,17 +117,28 @@
         }
         if (barText) barText.textContent = editMode ? EDIT_MODE_META[editMode].bar : '';
         if (barHint) barHint.textContent = editMode ? EDIT_MODE_META[editMode].hint : '';
+        if (barWhere) {
+            barWhere.hidden = !editMode;
+            barWhere.textContent = editMode ? EDIT_MODE_META[editMode].where : '';
+        }
         document.querySelectorAll('#edit-mode-menu [data-edit-mode]').forEach((btn) => {
             btn.classList.toggle('is-active', (btn.getAttribute('data-edit-mode') || '') === editMode);
         });
+        if (canvas) canvas.classList.toggle('cl-names-mode', editMode === 'names');
         closeAllRowMenus();
         closeTopMenus();
         renderCanvas();
     }
 
     function renderRowActions(row) {
-        if (!editMode) {
-            return '<div class="cl-row-actions cl-row-actions-idle" title="ជ្រើស «កែប្រែ» ខាងលើដើម្បីគ្រប់គ្រង"></div>';
+        if (!editMode || editMode === 'names') {
+            if (editMode === 'names') {
+                return `
+                    <div class="cl-row-actions" data-mode="names">
+                        <span class="cl-names-row-hint">ចុចកន្លែងលើតុ</span>
+                    </div>`;
+            }
+            return '<div class="cl-row-actions cl-row-actions-idle" title="ជ្រើសរបៀបពីម៉ឺនុយ «កែប្រែ» ខាងលើ"></div>';
         }
         if (editMode === 'add') {
             return `
@@ -504,6 +531,7 @@
 
         if (canvasEmpty) canvasEmpty.hidden = true;
         canvas.hidden = false;
+        canvas.classList.toggle('cl-names-mode', editMode === 'names');
 
         canvas.innerHTML = rows.map((row) => {
             const tableCount = row.tables.length;
@@ -524,11 +552,11 @@
                     <header class="cl-row-head">
                         <span class="cl-row-priority">${toKhmer(row.priority)}</span>
                         <h3 class="cl-row-name">${escapeHtml(row.name)}</h3>
-                        ${renderRowActions(row)}
                         <div class="cl-row-meta-group">
                             <span class="cl-row-meta">${toKhmer(tableCount)} តុ</span>
                             <span class="cl-row-meta">${toKhmer(seatCount)} កន្លែង</span>
                         </div>
+                        ${renderRowActions(row)}
                     </header>
                     <div class="cl-tables-scroll">
                         <div class="cl-tables-row">${tablesHtml}</div>
@@ -543,8 +571,15 @@
     function bindCanvasEvents() {
         canvas.querySelectorAll('.cl-seat:not(.disabled), .cl-name:not(.disabled)').forEach((btn) => {
             btn.addEventListener('click', () => {
-                if (editMode && editMode !== 'update') {
-                    toast('បើករបៀប «កែប្រែ» ដើម្បីជ្រើសឈ្មោះ', false);
+                if (editMode && editMode !== 'names') {
+                    const tip = editMode === 'update'
+                        ? 'បើករបៀប «ជ្រើស / ប្តូរឈ្មោះ» ដើម្បីជ្រើសឈ្មោះ'
+                        : 'បើករបៀប «ជ្រើស / ប្តូរឈ្មោះ» ដើម្បីជ្រើសឈ្មោះ';
+                    toast(tip, false);
+                    return;
+                }
+                if (!editMode) {
+                    toast('បើករបៀប «ជ្រើស / ប្តូរឈ្មោះ» ពីម៉ឺនុយខាងលើ', false);
                     return;
                 }
                 pickerTarget = {
