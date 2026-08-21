@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>របាយការណ៍វត្តមាន — វត្តនិរោធរង្សី</title>
+    <title>{{ report_title|default('របាយការណ៍វត្តមាន') }} — វត្តនិរោធរង្សី</title>
     <link rel="icon" type="image/jpeg" href="/static/logo.jpg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,7 +14,7 @@
     <link rel="stylesheet" href="/static/css/report.css">
 </head>
 
-<body>
+<body data-report-scope="{{ report_scope|default('layout') }}">
     <div class="page-wrapper">
 
         <header class="gov-masthead no-print">
@@ -43,9 +43,9 @@
                 </svg>
                 ផ្ទាំងគ្រប់គ្រង
             </a>
-            <h1 class="page-title">របាយការណ៍វត្តមាន ១៥ ថ្ងៃ</h1>
+            <h1 class="page-title">{{ report_title|default('របាយការណ៍វត្តមាន ១៥ ថ្ងៃ') }}</h1>
             <div class="header-actions">
-                <a href="/layout" class="btn-back" style="margin:0">ប្លង់អាសនៈ</a>
+                <a href="{{ report_back_href|default('/layout') }}" class="btn-back" style="margin:0">{{ report_back_label|default('ប្លង់អាសនៈ') }}</a>
                 <!-- Export dropdown -->
                 <div class="rpt-export-dropdown" id="rpt-export-dropdown">
                     <button type="button" class="btn-rpt-export-trigger" id="btn-rpt-export-trigger">
@@ -402,6 +402,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="/static/js/export_preview.js?v=2"></script>
-    <script src="/static/js/report.js?v=6"></script>
+    <script src="/static/js/report.js?v=7"></script>
 </body>
 </html>

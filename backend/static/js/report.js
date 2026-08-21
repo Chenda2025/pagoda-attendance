@@ -5,6 +5,7 @@ const PERM_LIMIT   = 3;
 
 let allData     = [];
 let _reportType = 'daily';
+const REPORT_SCOPE = document.body?.dataset?.reportScope || 'layout';
 
 const PAGE_SIZE   = 20;
 let _pages        = { bhikkhu: 1, samanera: 1 };
@@ -196,6 +197,7 @@ function getFilters() {
         academic_year:   getRdd('f-acad'),
         name:            document.getElementById('f-name').value.trim() || '',
         violation:       getRdd('f-violation') || 'all',
+        scope:           REPORT_SCOPE === 'sala_chan' ? 'sala_chan' : '',
     };
 }
 
@@ -207,6 +209,7 @@ function buildQueryString(filters) {
     if (filters.education_level) p.set('education_level', filters.education_level);
     if (filters.academic_year)   p.set('academic_year',   filters.academic_year);
     if (filters.name)            p.set('name',            filters.name);
+    if (filters.scope)           p.set('scope',           filters.scope);
     return p.toString();
 }
 
@@ -289,28 +292,28 @@ async function loadReport() {
         const d = new Date(filters.date || todayISO());
 
         if (_reportType === 'daily') {
-            const res = await fetch(`/api/attendance/daily-report?date=${filters.date || todayISO()}`);
+            const res = await fetch(`/api/attendance/daily-report?${buildQueryString(filters)}`);
             json = await res.json();
             if (!json.success) throw new Error(json.message);
             allData = _applyClientFilters(_normalizeMonks(json.records, 'daily', json), filters);
             _updateBanner(json.date, json.date, 'ប្រចាំថ្ងៃ');
 
         } else if (_reportType === 'monthly') {
-            const res = await fetch(`/api/reports/monthly?year=${d.getFullYear()}&month=${d.getMonth() + 1}`);
+            const res = await fetch(`/api/reports/monthly?year=${d.getFullYear()}&month=${d.getMonth() + 1}&${buildQueryString(filters)}`);
             json = await res.json();
             if (!json.success) throw new Error(json.message);
             allData = _applyClientFilters(_normalizeMonks(json.monks, 'monthly', json), filters);
             _updateBanner(json.period_start, json.period_end, 'ប្រចាំខែ');
 
         } else if (_reportType === 'annual') {
-            const res = await fetch(`/api/reports/annual?year=${d.getFullYear()}`);
+            const res = await fetch(`/api/reports/annual?year=${d.getFullYear()}&${buildQueryString(filters)}`);
             json = await res.json();
             if (!json.success) throw new Error(json.message);
             allData = _applyClientFilters(_normalizeMonks(json.monks, 'annual', json), filters);
             _updateBanner(json.period_start, json.period_end, 'ប្រចាំឆ្នាំ');
 
         } else if (_reportType === 'triennial') {
-            const res = await fetch(`/api/reports/triennial?start_year=${d.getFullYear() - 2}`);
+            const res = await fetch(`/api/reports/triennial?start_year=${d.getFullYear() - 2}&${buildQueryString(filters)}`);
             json = await res.json();
             if (!json.success) throw new Error(json.message);
             allData = _applyClientFilters(_normalizeMonks(json.monks, 'triennial', json), filters);
@@ -609,6 +612,7 @@ async function exportReport(action, fmt = 'docx') {
         academic_year:   filters.academic_year,
         name:            filters.name,
     });
+    if (filters.scope) p.set('scope', filters.scope);
 
     if (type === 'annual') {
         p.set('year', d.getFullYear());

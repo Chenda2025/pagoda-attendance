@@ -1196,8 +1196,16 @@
     }
 
     /* ── Attendance (same API as ប្លង់អាសនៈ) ── */
+    function todayLocalIso() {
+        const d = new Date();
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+    }
+
     function getActiveDate() {
-        return new Date().toISOString().slice(0, 10);
+        return todayLocalIso();
     }
 
     function permissionBadgeText(permInfo) {
@@ -1216,10 +1224,18 @@
         const pop = document.getElementById('cl-att-popover');
         const nameEl = document.getElementById('cl-att-popover-name');
         const clearBtn = pop?.querySelector('[data-att="clear"]');
+        const permBtn = pop?.querySelector('[data-att="permission"]');
+        const lateBtn = pop?.querySelector('[data-att="late"]');
         if (!pop || !nameEl) return;
         activeAttMonkId = monkId;
         nameEl.textContent = monkName || '—';
         if (clearBtn) clearBtn.hidden = !attendanceMap.has(monkId);
+        [permBtn, lateBtn].forEach((btn) => {
+            if (!btn) return;
+            btn.disabled = false;
+            btn.classList.remove('is-disabled');
+            btn.title = '';
+        });
         const rect = anchorEl.getBoundingClientRect();
         const pw = 190;
         let left = rect.right + 6;
@@ -1229,9 +1245,29 @@
         pop.style.left = `${left}px`;
         pop.style.top = `${top}px`;
         pop.hidden = false;
-        // Keep open past the same click that opened it
         pop.dataset.justOpened = '1';
         setTimeout(() => { delete pop.dataset.justOpened; }, 0);
+
+        fetch(`/api/attendance/history/${monkId}?date=${getActiveDate()}`)
+            .then((res) => res.json())
+            .then((hist) => {
+                if (!hist.success || activeAttMonkId !== monkId) return;
+                const absN = Number(hist.absent_count || 0);
+                const permN = Number(hist.permission_count || 0);
+                nameEl.textContent = `${monkName || '—'} · អវត្តមាន ${toKhmer(absN)} / ច្បាប់ ${toKhmer(permN)}`;
+                if (hist.permission_count > 2) {
+                    [permBtn, lateBtn].forEach((btn) => {
+                        if (!btn) return;
+                        btn.disabled = true;
+                        btn.classList.add('is-disabled');
+                        btn.title = 'ច្បាប់លើស ២ — កត់អវត្តមានតែប៉ុណ្ណោះ';
+                    });
+                    toast('ច្បាប់លើស ២ ថ្ងៃ — សូមកត់អវត្តមាន', false);
+                } else if (hist.contract_step && hist.contract_label) {
+                    toast(`កិច្ចសន្យាទី${toKhmer(hist.contract_step)} ៖ ${hist.contract_label}`);
+                }
+            })
+            .catch(() => {});
     }
 
     async function setClassroomAttendance(monkId, status) {
@@ -1245,7 +1281,25 @@
             if (!json.success) throw new Error(json.message || 'បរាជ័យ');
             attendanceMap.set(monkId, status);
             renderCanvas();
-            toast(status === 'absent' ? 'បានកត់អវត្តមាន' : status === 'late' ? 'បានកត់យឺត' : 'បានកត់ច្បាប់');
+            if (status === 'absent') {
+                const n = Number(json.absent_count || 0);
+                const nKh = toKhmer(n);
+                if (json.alert_sent) {
+                    const step = json.contract_step
+                        ? ` · កិច្ចសន្យាទី${toKhmer(json.contract_step)} ${json.contract_label || ''}`
+                        : '';
+                    toast(`បានផ្ញើសារព្រមាន · អវត្តមាន ${nKh}${step}`);
+                } else if (json.alert_error) {
+                    toast(`សារព្រមានបរាជ័យ: ${json.alert_error}`, false);
+                } else {
+                    const hint = (n >= 1 && n % 2 === 1)
+                        ? ` · មួយថ្ងៃទៀត (២៤៦…) នឹងផ្ញើសារព្រមាន`
+                        : '';
+                    toast(`បានកត់អវត្តមាន · ក្នុងរយៈ១៥ថ្ងៃ៖ ${nKh}${hint}`);
+                }
+            } else {
+                toast(status === 'late' ? 'បានកត់យឺត' : 'បានកត់ច្បាប់');
+            }
         } catch (err) {
             toast(err.message || 'មានបញ្ហា', false);
         }
@@ -1333,6 +1387,26 @@
         }
     }
 
+    async function saveLayout(opts = {}) {
+        const silent = !!opts.silent;
+        try {
+            const res = await fetch('/api/classroom-layout', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ layout }),
+            });
+            const data = await res.json();
+            if (!data.success) throw new Error(data.message || 'failed');
+            markClean(data.updated_at);
+            if (!silent) toast('បានរក្សាទុក');
+            return true;
+        } catch (err) {
+            console.error(err);
+            if (!silent) toast('រក្សាទុកបរាជ័យ', false);
+            return false;
+        }
+    }
+
     /* ── Save / Load ── */
     async function loadAll() {
         try {
@@ -1354,23 +1428,6 @@
         } catch (err) {
             console.error(err);
             toast('មិនអាចផ្ទុកបាន', false);
-        }
-    }
-
-    async function saveLayout() {
-        try {
-            const res = await fetch('/api/classroom-layout', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ layout }),
-            });
-            const data = await res.json();
-            if (!data.success) throw new Error(data.message || 'failed');
-            markClean(data.updated_at);
-            toast('បានរក្សាទុក');
-        } catch (err) {
-            console.error(err);
-            toast('រក្សាទុកបរាជ័យ', false);
         }
     }
 
@@ -1457,7 +1514,10 @@
             hideAttPopover();
             if (!monkId) return;
             if (action === 'clear') await clearClassroomAttendance(monkId);
-            else if (action === 'permission') {
+            else             if (action === 'permission' || action === 'late') {
+                if (btn.disabled) return;
+            }
+            if (action === 'permission') {
                 const name = document.getElementById('cl-att-popover-name')?.textContent || '';
                 openClPermModal(monkId, name);
             } else if (action === 'absent' || action === 'late') {
@@ -1695,6 +1755,37 @@
     document.getElementById('btn-clear-seat').addEventListener('click', clearSeat);
     document.getElementById('picker-search').addEventListener('input', (e) => {
         renderPickerList(e.target.value);
+    });
+
+    document.getElementById('btn-cl-tg-report')?.addEventListener('click', async () => {
+        const btn = document.getElementById('btn-cl-tg-report');
+        if (!layout.rows?.length) {
+            toast('មិនមានប្លង់ដើម្បីផ្ញើ', false);
+            return;
+        }
+        const prevHtml = btn?.innerHTML;
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'កំពុងផ្ញើ...';
+        }
+        try {
+            const res = await fetch('/api/classroom-layout/send-telegram', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ date: getActiveDate() }),
+            });
+            const json = await res.json();
+            if (!json.success) throw new Error(json.message || 'ផ្ញើបរាជ័យ');
+            toast(json.message || 'បានផ្ញើរបាយការណ៍ទៅ Telegram');
+        } catch (err) {
+            toast(err.message || 'មានបញ្ហា', false);
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                if (prevHtml) btn.innerHTML = prevHtml;
+                else btn.textContent = 'ផ្ញើរបាយការណ៍';
+            }
+        }
     });
 
     window.addEventListener('beforeunload', (e) => {

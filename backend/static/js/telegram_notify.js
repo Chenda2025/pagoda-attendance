@@ -72,8 +72,14 @@ function reportActions(m) {
 }
 function violationLabel(m) {
     const parts = [];
-    if (m.over_absent) parts.push('អវត្តមាន');
-    if (m.over_perm) parts.push('ច្បាប់');
+    if (m.over_absent) {
+        if (m.contract_step && m.contract_label) {
+            parts.push(`អវត្តមាន · កិច្ចសន្យាទី${m.contract_step} (${m.contract_label})`);
+        } else {
+            parts.push('អវត្តមាន');
+        }
+    }
+    if (m.over_perm) parts.push('ច្បាប់ > ២');
     return parts.join(' + ') || '—';
 }
 

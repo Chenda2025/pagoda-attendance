@@ -8,7 +8,7 @@ from create_table import (create_monks_table, insert_monk, get_all_monks,
                           update_monk_living_status)
 from datetime import date as _date
 from sorting import sort_attendance_monks, ROLE_RANK
-from khmer_lunar import khmer_lunar_date
+from khmer_lunar import khmer_lunar_date, _khmer_num, _KHMER_DIGITS
 from auth_service import (
     get_user_by_username, get_user_by_id, list_users, create_user, update_user,
     delete_user, save_face_enrollment, touch_last_login, find_user_by_face,
@@ -77,14 +77,32 @@ LIVING_STATUSES = (
 _VALID_LIVING_STATUSES  = set(LIVING_STATUSES)
 _ACTIVE_LIVING_STATUS   = 'កំពុងស្នាក់នៅ'
 
-# Discipline / contract thresholds (bi-weekly report rules)
-DISC_ABSENT_MIN = 2   # absences  >= 2
-DISC_PERM_MIN   = 3   # permissions >= 3
+# Discipline / contract thresholds (15-day block)
+DISC_ABSENT_MIN = 2   # absences  >= 2 → contract
+DISC_PERM_MIN   = 3   # permissions > 2 (i.e. >= 3) → lock further permission
 
 
 def _contract_eligible(absent_count, perm_count):
     """True when monk exceeds absent or permission criteria (for contract / Telegram)."""
     return absent_count >= DISC_ABSENT_MIN or perm_count >= DISC_PERM_MIN
+
+
+def _absent_contract_step(absent_count):
+    """15-day absent → contract: 2=ណែនាំ, 4=ដកទូរស័ព្ទ, 6+=ឈប់ឲ្យនៅ."""
+    n = int(absent_count or 0)
+    if n >= 6:
+        return 3, 'ឈប់ឲ្យនៅ'
+    if n >= 4:
+        return 2, 'ដកទូរស័ព្ទ'
+    if n >= 2:
+        return 1, 'ណែនាំ'
+    return None, None
+
+
+def _should_send_absent_contract_alert(absent_count):
+    """Send សារព្រមាន only on even absent counts in the 15-day block: 2, 4, 6, 8, …"""
+    n = int(absent_count or 0)
+    return n >= 2 and n % 2 == 0
 
 # ============ RATE LIMITER (in-memory, per IP, 10 req/min) ============
 
@@ -773,20 +791,43 @@ def _log_telegram_notify(monk_id, fullname, notify_type, ref_date, absent_count=
         print(f'[telegram-notify-log] {e}')
 
 
+def _format_sala_chan_period_line(date_str):
+    """រយៈពេល៖ ១ - ១៥ ខែ ៨ ឆ្នាំ ២០២៦ (or ១៦ - ៣១)."""
+    try:
+        d = _date.fromisoformat(date_str)
+    except ValueError:
+        d = _date.today()
+    block_start, block_end = _get_block_dates(d.isoformat())
+    day_range = f'{_khmer_num(block_start.day)} - {_khmer_num(block_end.day)}'
+    return (
+        f'រយៈពេល៖ {day_range} '
+        f'ខែ {_khmer_num(block_start.month)} '
+        f'ឆ្នាំ {_khmer_num(block_start.year)}'
+    )
+
+
 def _build_absent_alert_message(fullname, kuti, kuti_head, kuti_deputy, absent_count,
-                                perm_count, date_str):
+                                perm_count, date_str, contract_no=None, contract_label=None,
+                                late_count=0):
+    try:
+        d_fmt = _to_khmer_digits(_date.fromisoformat(date_str).strftime('%d/%m/%Y'))
+    except Exception:
+        d_fmt = _to_khmer_digits(date_str)
+    period_line = _format_sala_chan_period_line(date_str)
     return (
         "🔔 សេចក្តីប្រគេនដំណឹង 🔔\n"
-        "កិច្ចវត្តថ្វាយបង្គំរាល់ល្ងាចវត្តនិរោធរង្សី\n"
+        f"{period_line}\n"
+        "កិច្ចវត្តសាលាឆាន់វត្តនិរោធរង្សី\n"
         "----- សារព្រមាន -----\n"
         f"ព្រះសង្ឃនាម ៖ {fullname}\n"
         f"កុដិ ៖ {(kuti or '').replace('_', ' ') or '............'}\n"
         f"មេកុដិ ៖ {kuti_head}\n"
         f"អនុកុដិ ៖ {kuti_deputy}\n"
         "- - - - - បញ្ហា - - - - - \n"
-        f"អវត្តមាន ៖ {absent_count}\n"
-        f"ច្បាប់ ៖ {perm_count}\n"
-        f"កាលបរិច្ឆេទ៖ {date_str}\n"
+        f"អវត្តមាន ៖ {_khmer_num(int(absent_count or 0))}\n"
+        f"ច្បាប់ ៖ {_khmer_num(int(perm_count or 0))}\n"
+        f"យឺត ៖ {_khmer_num(int(late_count or 0))}\n"
+        f"កាលបរិច្ឆេទ៖ {d_fmt}\n"
         "ដូចបានប្រគេនខាងលើនេះសូមមេកុដិនិងអនុកុដិសួរនាំជាបន្ទាន់ដល់សមាជិកកុដិរបស់ខ្លួន។"
     )
 
@@ -812,11 +853,23 @@ def _fetch_monk_alert_context(cursor, monk_id):
     return fullname, kuti, kuti_head, kuti_deputy
 
 
-def _send_absent_alert_telegram(monk_id, date_str, absent_count, perm_count, notify_type='absent_alert'):
+def _send_absent_alert_telegram(monk_id, date_str, absent_count, perm_count, notify_type='absent_alert',
+                                late_count=None):
     import requests as req
     conn = connect_db()
     cur = conn.cursor()
     ctx = _fetch_monk_alert_context(cur, monk_id)
+    if late_count is None:
+        try:
+            block_start, block_end = _get_block_dates(date_str)
+            cur.execute("""
+                SELECT COUNT(*) FROM attendance_tbl
+                WHERE monk_id = %s AND status = 'late'
+                  AND date >= %s AND date <= %s
+            """, (monk_id, block_start.isoformat(), block_end.isoformat()))
+            late_count = int((cur.fetchone() or [0])[0] or 0)
+        except Exception:
+            late_count = 0
     cur.close()
     conn.close()
     if not ctx:
@@ -824,16 +877,22 @@ def _send_absent_alert_telegram(monk_id, date_str, absent_count, perm_count, not
     fullname, kuti, kuti_head, kuti_deputy = ctx
     msg = _build_absent_alert_message(
         fullname, kuti, kuti_head, kuti_deputy, absent_count, perm_count, date_str,
+        late_count=late_count,
     )
     token, chat_id = _tg_bot_creds()
     if not token or not chat_id:
         return False, 'Telegram bot មិនទាន់កំណត់'
-    tg = _tg_send_message(token, chat_id, msg, req)
+    try:
+        tg = _tg_send_message(token, chat_id, msg, req)
+    except Exception as e:
+        print(f'[absent-alert] telegram request error: {e}')
+        return False, str(e)
     if not tg.get('ok'):
         return False, tg.get('description', 'Telegram error')
     _log_telegram_notify(
         monk_id, fullname, notify_type, date_str,
         absent_count=absent_count, perm_count=perm_count,
+        detail=f'late={late_count}',
     )
     return True, None
 
@@ -931,6 +990,7 @@ def _fetch_telegram_eligible_monks(block_start, block_end):
         contract = contract_map.get(r[0], {})
         over_absent = absent_count >= DISC_ABSENT_MIN
         over_perm = perm_count >= DISC_PERM_MIN
+        step_no, step_label = _absent_contract_step(absent_count) if over_absent else (None, None)
         monks.append({
             'id': r[0],
             'fullname': r[1],
@@ -941,6 +1001,8 @@ def _fetch_telegram_eligible_monks(block_start, block_end):
             'perm_count': perm_count,
             'over_absent': over_absent,
             'over_perm': over_perm,
+            'contract_step': step_no,
+            'contract_label': step_label,
             'sent': bool(sent),
             'last_sent': sent['last_sent'] if sent else None,
             'last_type': sent['last_type'] if sent else None,
@@ -954,9 +1016,14 @@ def _fetch_telegram_eligible_monks(block_start, block_end):
 def _contract_violation_label(m):
     parts = []
     if m.get('over_absent'):
-        parts.append('អវត្តមាន')
+        step = m.get('contract_step')
+        label = m.get('contract_label')
+        if step and label:
+            parts.append(f'អវត្តមាន · កិច្ចសន្យាទី{step} ({label})')
+        else:
+            parts.append('អវត្តមាន')
     if m.get('over_perm'):
-        parts.append('ច្បាប់')
+        parts.append('ច្បាប់ > ២')
     return ' + '.join(parts) or '—'
 
 
@@ -3232,6 +3299,145 @@ def save_classroom_layout():
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
+@main_bp.route('/api/classroom-layout/send-telegram', methods=['POST'])
+def send_classroom_layout_telegram():
+    """Send daily Sala Chan attendance text report (absent / permission / late) to Telegram."""
+    if not user_allowed(_session_user(), '/classroom-layout'):
+        abort(403)
+    TELEGRAM_TOKEN, TELEGRAM_CHAT_ID = _tg_bot_creds()
+    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
+        return jsonify({
+            'success': False,
+            'message': 'សូមកំណត់ Telegram Bot នៅទំព័រ «កំណត់ Telegram Bot»',
+        }), 400
+
+    try:
+        import json as _json
+        import requests as req
+
+        data = request.get_json(silent=True) or {}
+        date_str = (data.get('date') or '').strip() or _date.today().isoformat()
+        try:
+            report_day = _date.fromisoformat(date_str)
+        except ValueError:
+            return jsonify({'success': False, 'message': 'កាលបរិច្ឆេទមិនត្រឹមត្រូវ'}), 400
+
+        conn = connect_db()
+        cur = conn.cursor()
+        cur.execute("SELECT layout_data FROM classroom_layout WHERE id = 1")
+        row = cur.fetchone()
+        layout = row[0] if row else {'rows': []}
+        if isinstance(layout, str):
+            layout = _json.loads(layout)
+
+        seated_ids = set()
+        for r in (layout or {}).get('rows') or []:
+            for t in r.get('tables') or []:
+                for mid in (t.get('seats') or {}).values():
+                    if mid is None or mid == '':
+                        continue
+                    try:
+                        seated_ids.add(int(mid))
+                    except (TypeError, ValueError):
+                        pass
+
+        if not seated_ids:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'មិនមានសង្ឃលើប្លង់សាលាឆាន់'}), 400
+
+        cur.execute("""
+            SELECT m.fullname, m.monk_type, m.vassa_years, m.residence,
+                   a.status, p.reason, a.created_at
+            FROM attendance_tbl a
+            JOIN monk_tbl m ON m.id = a.monk_id
+            LEFT JOIN monk_permission p
+                   ON p.monk_id = a.monk_id
+                  AND a.date BETWEEN p.start_date AND p.end_date
+            WHERE a.date = %s
+              AND a.monk_id = ANY(%s)
+              AND a.status IN ('absent', 'permission', 'late')
+            ORDER BY m.monk_type, a.status, m.fullname
+        """, (date_str, list(seated_ids)))
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+
+        if not rows:
+            return jsonify({
+                'success': False,
+                'message': 'មិនមានអវត្តមាន / ច្បាប់ / យឺត សម្រាប់ថ្ងៃនេះ',
+            }), 400
+
+        absent_count = sum(1 for r in rows if r[4] == 'absent')
+        permission_count = sum(1 for r in rows if r[4] == 'permission')
+        late_count = sum(1 for r in rows if r[4] == 'late')
+
+        def fmt_late_time(ts):
+            if not ts:
+                return '—'
+            try:
+                return _to_khmer_digits(ts.strftime('%H:%M'))
+            except Exception:
+                return _to_khmer_digits(str(ts)[:5])
+
+        def fmt_group(monks):
+            lines = []
+            for i, (name, _, vassa, kuti, status, reason, created_at) in enumerate(monks, 1):
+                if status == 'absent':
+                    icon, label = '❌', 'អវត្តមាន'
+                elif status == 'late':
+                    icon, label = '⏰', f'យឺត , {fmt_late_time(created_at)}'
+                else:
+                    icon, label = '📋', 'ច្បាប់'
+                kuti_display = (kuti or '').replace('_', ' ') or '—'
+                vassa_txt = _to_khmer_digits(vassa) if vassa is not None else '—'
+                block = [
+                    f'{_khmer_num(i)}. ឈ្មោះ : {name} {icon}',
+                    f'   ▸ វស្សា: {vassa_txt} ឆ្នាំ',
+                    f'   ▸ កុដិ: {kuti_display}',
+                    f'   ▸ ស្ថានភាព: {label}',
+                ]
+                if status == 'permission':
+                    block.append(f'   ▸ មូលហេតុ: {(reason or "").strip() or "—"}')
+                lines.append('\n'.join(block))
+            return '\n\n'.join(lines)
+
+        bhikkhus = [r for r in rows if r[1] == 'ភិក្ខុ']
+        samaneras = [r for r in rows if r[1] == 'សាមណេរ']
+        d_fmt = _to_khmer_digits(report_day.strftime('%d/%m/%Y'))
+
+        parts = [
+            '🏛 វត្តនិរោធរង្សី',
+            f'📋 ព័ត៌មានសាលាឆាន់ប្រចាំថ្ងៃ — {d_fmt}',
+            '═' * 15,
+        ]
+        if bhikkhus:
+            parts += ['\n📿 ភិក្ខុ', '─' * 15, fmt_group(bhikkhus)]
+        if samaneras:
+            parts += ['\n🔰 សាមណេរ', '─' * 15, fmt_group(samaneras)]
+        parts += [
+            '\n' + '═' * 15,
+            f'📊 សរុបចំនួន : {_khmer_num(len(rows))} នាក់',
+            f'   ❌ អវត្តមាន : {_khmer_num(absent_count)} នាក់',
+            f'   📋 ច្បាប់    : {_khmer_num(permission_count)} នាក់',
+            f'   ⏰ យឺត      : {_khmer_num(late_count)} នាក់',
+        ]
+        message = '\n'.join(parts)
+
+        tg = _tg_send_message(TELEGRAM_TOKEN, TELEGRAM_CHAT_ID, message, req, timeout=30)
+        if not tg.get('ok'):
+            return jsonify({
+                'success': False,
+                'message': f"Telegram: {tg.get('description', 'error')}",
+            }), 500
+
+        _log_act('classroom_layout_telegram', 'classroom_layout', f'{len(rows)} — {date_str}')
+        return jsonify({'success': True, 'message': 'បានផ្ញើរបាយការណ៍ទៅ Telegram', 'total': len(rows)})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 @main_bp.route('/api/check', methods=['GET'])
 def check_system():
     """Check DB connection, record count, and existing triggers on monk_tbl"""
@@ -3360,10 +3566,30 @@ def set_attendance():
             return jsonify({'success': False, 'message': 'Invalid status'}), 400
         conn = connect_db()
         cursor = conn.cursor()
+        if status in ('permission', 'late'):
+            block_start, block_end = _get_block_dates(date_str)
+            cursor.execute("""
+                SELECT COUNT(*) FROM attendance_tbl
+                WHERE monk_id = %s AND status = 'permission'
+                  AND date >= %s AND date <= %s
+                  AND date <> %s
+            """, (monk_id, block_start.isoformat(), block_end.isoformat(), date_str))
+            if int((cursor.fetchone() or [0])[0] or 0) > 2:
+                cursor.close()
+                conn.close()
+                return jsonify({
+                    'success': False,
+                    'message': 'ច្បាប់លើស ២ ថ្ងៃក្នុងរយៈពេល ១៥ ថ្ងៃ — សូមកត់អវត្តមានតែប៉ុណ្ណោះ',
+                }), 400
         cursor.execute("""
             INSERT INTO attendance_tbl (monk_id, status, date)
             VALUES (%s, %s, %s)
-            ON CONFLICT (monk_id, date) DO UPDATE SET status = EXCLUDED.status;
+            ON CONFLICT (monk_id, date) DO UPDATE SET
+                status = EXCLUDED.status,
+                created_at = CASE
+                    WHEN EXCLUDED.status = 'late' THEN NOW()
+                    ELSE attendance_tbl.created_at
+                END;
         """, (monk_id, status, date_str))
         conn.commit()
 
@@ -3372,7 +3598,8 @@ def set_attendance():
             cursor.execute("""
                 SELECT 
                     SUM(CASE WHEN status = 'absent' THEN 1 ELSE 0 END),
-                    SUM(CASE WHEN status = 'permission' THEN 1 ELSE 0 END)
+                    SUM(CASE WHEN status = 'permission' THEN 1 ELSE 0 END),
+                    SUM(CASE WHEN status = 'late' THEN 1 ELSE 0 END)
                 FROM attendance_tbl
                 WHERE monk_id = %s
                   AND date >= %s
@@ -3381,20 +3608,42 @@ def set_attendance():
             row = cursor.fetchone()
             absent_count = int(row[0] or 0)
             perm_count = int(row[1] or 0)
+            late_count = int(row[2] or 0)
 
-            if absent_count in (3, 6):
-                import threading
-                def send_tg():
-                    try:
-                        _send_absent_alert_telegram(
-                            monk_id, date_str, absent_count, perm_count, 'absent_alert',
-                        )
-                    except Exception:
-                        pass
-                threading.Thread(target=send_tg, daemon=True).start()
-                    
+            # Auto Telegram សារព្រមាន: អវត្តមានលេខគូ ២, ៤, ៦, ៨… ក្នុងរយៈ ១៥ ថ្ងៃ
+            alert_sent = False
+            alert_error = None
+            if _should_send_absent_contract_alert(absent_count):
+                try:
+                    ok, err = _send_absent_alert_telegram(
+                        monk_id, date_str, absent_count, perm_count, 'absent_alert',
+                        late_count=late_count,
+                    )
+                    alert_sent = bool(ok)
+                    alert_error = None if ok else (err or 'Telegram failed')
+                    if ok:
+                        print(f'[absent-alert] sent monk={monk_id} absent={absent_count} date={date_str}')
+                    else:
+                        print(f'[absent-alert] FAIL monk={monk_id} absent={absent_count}: {alert_error}')
+                except Exception as e:
+                    alert_error = str(e)
+                    print(f'[absent-alert] EXCEPTION monk={monk_id}: {e}')
+                    import traceback
+                    traceback.print_exc()
+
         cursor.close(); conn.close()
-        return jsonify({'success': True})
+        payload = {'success': True}
+        if status == 'absent':
+            payload.update({
+                'absent_count': absent_count,
+                'permission_count': perm_count,
+                'late_count': late_count,
+                'alert_sent': alert_sent,
+                'alert_error': alert_error,
+                'contract_step': (_absent_contract_step(absent_count)[0]),
+                'contract_label': (_absent_contract_step(absent_count)[1]),
+            })
+        return jsonify(payload)
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 
@@ -3430,6 +3679,21 @@ def add_permission():
 
         conn = connect_db()
         cursor = conn.cursor()
+
+        block_start, block_end = _get_block_dates(start_date)
+        cursor.execute("""
+            SELECT COUNT(*) FROM attendance_tbl
+            WHERE monk_id = %s AND status = 'permission'
+              AND date >= %s AND date <= %s
+        """, (monk_id, block_start.isoformat(), block_end.isoformat()))
+        perm_count = int((cursor.fetchone() or [0])[0] or 0)
+        if perm_count > 2:
+            cursor.close()
+            conn.close()
+            return jsonify({
+                'success': False,
+                'message': 'ច្បាប់លើស ២ ថ្ងៃក្នុងរយៈពេល ១៥ ថ្ងៃ — សូមកត់អវត្តមាន',
+            }), 400
 
         # Sync SERIAL if it fell behind (fixes duplicate key on monk_permission_pkey)
         cursor.execute("""
@@ -3501,9 +3765,70 @@ def remove_attendance(monk_id):
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
+
 @main_bp.route('/report')
 def report():
-    return render_template('report.html')
+    return render_template(
+        'report.html',
+        report_scope='layout',
+        report_title='របាយការណ៍វត្តមាន ១៥ ថ្ងៃ',
+        report_back_href='/layout',
+        report_back_label='ប្លង់អាសនៈ',
+    )
+
+
+@main_bp.route('/report/sala-chan')
+def report_sala_chan():
+    return render_template(
+        'report.html',
+        report_scope='sala_chan',
+        report_title='របាយការណ៍សាលាឆាន់',
+        report_back_href='/classroom-layout',
+        report_back_label='សាលាឆាន់',
+    )
+
+
+def _classroom_seated_monk_ids():
+    """Monk IDs currently seated on the Sala Chan classroom layout."""
+    import json as _json
+    conn = None
+    try:
+        conn = connect_db()
+        cur = conn.cursor()
+        cur.execute("SELECT layout_data FROM classroom_layout WHERE id = 1")
+        row = cur.fetchone()
+        cur.close()
+        layout = row[0] if row else {'rows': []}
+        if isinstance(layout, str):
+            layout = _json.loads(layout)
+        seated_ids = set()
+        for r in (layout or {}).get('rows') or []:
+            for t in r.get('tables') or []:
+                for mid in (t.get('seats') or {}).values():
+                    if mid is None or mid == '':
+                        continue
+                    try:
+                        seated_ids.add(int(mid))
+                    except (TypeError, ValueError):
+                        pass
+        return seated_ids
+    except Exception as e:
+        print(f'[classroom-seated] {e}')
+        return set()
+    finally:
+        if conn:
+            conn.close()
+
+
+def _apply_report_scope(monks, args):
+    """Sala Chan report: only monks seated on classroom layout. Layout report: all."""
+    scope = str((args.get('scope') if args is not None else '') or '').strip()
+    if scope != 'sala_chan':
+        return monks
+    ids = _classroom_seated_monk_ids()
+    if not ids:
+        return []
+    return [m for m in monks if int(m.get('id') or 0) in ids]
 
 
 def _get_block_dates(date_str):
@@ -3588,7 +3913,7 @@ def _fetch_report_rows(args):
         'absent_dates': _format_date_list(r[10]), 'perm_dates': _format_date_list(r[11]),
     } for r in rows]
 
-    return monks, start_date, end_date
+    return _apply_report_scope(monks, args), start_date, end_date
 
 
 @main_bp.route('/api/attendance/report', methods=['GET'])
@@ -3922,10 +4247,16 @@ def attendance_history(monk_id):
         """, (monk_id, block_start.isoformat(), block_end.isoformat()))
         row = cursor.fetchone()
         cursor.close(); conn.close()
+        absent_count = int(row[0] or 0)
+        permission_count = int(row[1] or 0)
+        step_no, step_label = _absent_contract_step(absent_count)
         return jsonify({
             'success': True,
-            'absent_count':     int(row[0] or 0),
-            'permission_count': int(row[1] or 0)
+            'absent_count':     absent_count,
+            'permission_count': permission_count,
+            'perm_locked':      permission_count > 2,
+            'contract_step':    step_no,
+            'contract_label':   step_label,
         })
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
@@ -3973,6 +4304,11 @@ def attendance_full_history(monk_id):
         })
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
+
+
+def _to_khmer_digits(value):
+    """Convert ASCII digits in any value to Khmer numerals (០–៩)."""
+    return ''.join(_KHMER_DIGITS[int(c)] if c.isdigit() else c for c in str(value))
 
 
 def _tg_send_message(token, chat_id, text, req_lib, timeout=10):
@@ -5013,20 +5349,22 @@ def daily_report():
         """, (date_str,))
         rows = cur.fetchall()
         cur.close(); conn.close()
+        records = [{
+            'id':              r[0],
+            'fullname':        r[1],
+            'monk_type':       r[2],
+            'position':        r[3],
+            'vassa_years':     r[4],
+            'residence':       (r[5] or '').replace('_', ' '),
+            'education_level': r[6] or '',
+            'academic_year':   r[7] or '',
+            'status':          r[8],
+        } for r in rows]
+        records = _apply_report_scope(records, request.args)
         return jsonify({
             'success': True,
             'date': date_str,
-            'records': [{
-                'id':              r[0],
-                'fullname':        r[1],
-                'monk_type':       r[2],
-                'position':        r[3],
-                'vassa_years':     r[4],
-                'residence':       (r[5] or '').replace('_', ' '),
-                'education_level': r[6] or '',
-                'academic_year':   r[7] or '',
-                'status':          r[8],
-            } for r in rows]
+            'records': records,
         })
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
@@ -5110,7 +5448,7 @@ def report_biweekly():
             'success':      True,
             'period_start': period_start.isoformat(),
             'period_end':   period_end.isoformat(),
-            'monks':        _rows_to_monks(rows),
+            'monks':        _apply_report_scope(_rows_to_monks(rows), request.args),
         })
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
@@ -5127,7 +5465,7 @@ def report_monthly():
         year, month = int(year_str), int(month_str)
         month_start = _date(year, month, 1)
         month_end   = _date(year, month, calendar.monthrange(year, month)[1])
-        monks = _fetch_live_range(month_start, month_end)
+        monks = _apply_report_scope(_fetch_live_range(month_start, month_end), request.args)
         return jsonify({
             'success':      True,
             'year':         year,
@@ -5149,7 +5487,7 @@ def report_annual():
         year       = int(year_str)
         year_start = _date(year, 1, 1)
         year_end   = _date(year, 12, 31)
-        monks = _fetch_live_range(year_start, year_end)
+        monks = _apply_report_scope(_fetch_live_range(year_start, year_end), request.args)
         return jsonify({
             'success':      True,
             'year':         year,
@@ -5171,7 +5509,7 @@ def report_triennial():
         end_year     = start_year + 2
         period_start = _date(start_year, 1, 1)
         period_end   = _date(end_year, 12, 31)
-        monks = _fetch_live_range(period_start, period_end)
+        monks = _apply_report_scope(_fetch_live_range(period_start, period_end), request.args)
         return jsonify({
             'success':      True,
             'start_year':   start_year,
@@ -5215,6 +5553,7 @@ def _fetch_export_data(report_type, args):
             'status': r[8],
         } for r in rows]
         monks = sort_attendance_monks(monks)
+        monks = _apply_report_scope(monks, args)
         return monks, 'ប្រចាំថ្ងៃ', d_fmt, date_str, date_str
 
     elif report_type == 'biweekly':
@@ -5229,7 +5568,7 @@ def _fetch_export_data(report_type, args):
         month = int(args.get('month', d.month))
         ps = _date(year, month, 1)
         pe = _date(year, month, _cal.monthrange(year, month)[1])
-        monks = _norm_summary_monks(_fetch_live_range(ps, pe))
+        monks = _apply_report_scope(_norm_summary_monks(_fetch_live_range(ps, pe)), args)
         subtitle = f"{ps.strftime('%d/%m/%Y')} ដល់ {pe.strftime('%d/%m/%Y')}"
         return monks, 'ប្រចាំខែ', subtitle, ps.isoformat(), pe.isoformat()
 
@@ -5237,7 +5576,7 @@ def _fetch_export_data(report_type, args):
         date_str = args.get('date', _date.today().isoformat())
         year = int(args.get('year', _date.fromisoformat(date_str).year))
         ps = _date(year, 1, 1); pe = _date(year, 12, 31)
-        monks = _norm_summary_monks(_fetch_live_range(ps, pe))
+        monks = _apply_report_scope(_norm_summary_monks(_fetch_live_range(ps, pe)), args)
         subtitle = f"{ps.strftime('%d/%m/%Y')} ដល់ {pe.strftime('%d/%m/%Y')}"
         return monks, 'ប្រចាំឆ្នាំ', subtitle, ps.isoformat(), pe.isoformat()
 
@@ -5246,7 +5585,7 @@ def _fetch_export_data(report_type, args):
         d          = _date.fromisoformat(date_str)
         start_year = int(args.get('start_year', d.year - 2))
         ps = _date(start_year, 1, 1); pe = _date(start_year + 2, 12, 31)
-        monks = _norm_summary_monks(_fetch_live_range(ps, pe))
+        monks = _apply_report_scope(_norm_summary_monks(_fetch_live_range(ps, pe)), args)
         subtitle = f"{ps.strftime('%d/%m/%Y')} ដល់ {pe.strftime('%d/%m/%Y')}"
         return monks, 'ប្រចាំ ៣ ឆ្នាំ', subtitle, ps.isoformat(), pe.isoformat()
 

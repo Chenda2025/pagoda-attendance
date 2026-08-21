@@ -219,6 +219,8 @@ async function loadData() {
 
         const attJson = await attRes.json();
         if (attJson.success) {
+            attendanceMap.clear();
+            permissionsMap.clear();
             attJson.records.forEach(r => attendanceMap.set(r.monk_id, r.status));
             if (attJson.permissions_info) {
                 for (const [mid, info] of Object.entries(attJson.permissions_info)) {
@@ -655,6 +657,15 @@ async function setAttendance(monkId, status) {
         if (!json.success) throw new Error(json.message);
         attendanceMap.set(monkId, status);
         updateCellDisplay(monkId);
+        if (status === 'absent' && json.alert_sent) {
+            showToast(
+                `បានផ្ញើសារព្រមាន (អវត្តមាន ${json.absent_count}` +
+                (json.contract_label ? ` · ${json.contract_label}` : '') + ')',
+                'success'
+            );
+        } else if (status === 'absent' && json.alert_error) {
+            showToast('សារព្រមានបរាជ័យ: ' + json.alert_error, 'error');
+        }
     } catch (err) {
         showToast('មានបញ្ហា: ' + err.message, 'error');
     }
@@ -789,8 +800,10 @@ async function pollSeatOrder() {
     } catch { /* ignore network errors */ }
 }
 
+let activeMonkId = null;
+
 function scheduleNewDayReset() {
-    // Auto-clear absent/permission seat marks every 3 hours (UI map).
+    // Auto-clear absent/permission/late seat marks every 3 hours (UI map only).
     const CLEAR_EVERY_MS = 3 * 60 * 60 * 1000;
 
     setTimeout(() => {
@@ -801,8 +814,6 @@ function scheduleNewDayReset() {
         scheduleNewDayReset();
     }, CLEAR_EVERY_MS);
 }
-
-let activeMonkId = null;
 
 function permissionBadgeText(permInfo) {
     if (!permInfo || permInfo.days_left < 0) return 'ច្បាប់';
@@ -891,8 +902,7 @@ function initPopover() {
     const lateBtn   = popover.querySelector('.att-btn-late');
     const clearBtn  = popover.querySelector('.att-btn-clear');
 
-    const MAX_ABSENT = 2;
-    const MAX_PERM   = 2;
+    const PERM_MAX = 2; // disable permission when count > 2 in 15-day block
 
     function positionPopover(cell) {
         const rect = cell.getBoundingClientRect();
@@ -951,23 +961,25 @@ function initPopover() {
                 const hist = await res.json();
                 if (!hist.success) return;
 
-                const absentMaxed = hist.absent_count >= MAX_ABSENT;
-                const permMaxed   = hist.permission_count >= MAX_PERM;
-
-                if (permMaxed) {
-                    // Permission ceiling hit — lock Permission button completely
+                if (hist.permission_count > PERM_MAX) {
                     permBtn.disabled = true;
                     permBtn.style.opacity = '0.35';
-                    permBtn.title = 'ច្បាប់គ្រប់ចំនួន';
+                    permBtn.title = 'ច្បាប់លើស ២ — កត់អវត្តមានតែប៉ុណ្ណោះ';
+                    if (lateBtn) {
+                        lateBtn.disabled = true;
+                        lateBtn.style.opacity = '0.35';
+                        lateBtn.title = 'ច្បាប់លើស ២ — កត់អវត្តមានតែប៉ុណ្ណោះ';
+                    }
                     alert(
                         `⚠️ ${monkName}\n\n` +
-                        `ច្បាប់ ${MAX_PERM}\n`
+                        `ច្បាប់លើស ២ ថ្ងៃក្នុងរយៈពេល ១៥ ថ្ងៃ\n` +
+                        `សូមកត់អវត្តមានតែប៉ុណ្ណោះ`
                     );
-                } else if (absentMaxed) {
-                    // Absence ceiling hit but Permission still available — warn only, keep Permission enabled
+                } else if (hist.contract_step && hist.contract_label) {
                     alert(
                         `⚠️ ${monkName}\n\n` +
-                        `អវត្តមាន ${MAX_ABSENT}\n` 
+                        `អវត្តមាន ${hist.absent_count} ក្នុងរយៈពេល ១៥ ថ្ងៃ\n` +
+                        `កិច្ចសន្យាទី${hist.contract_step} ៖ ${hist.contract_label}`
                     );
                 }
             } catch { /* network error — allow normal interaction */ }

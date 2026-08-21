@@ -10,7 +10,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&family=Kantumruy+Pro:wght@400;500;600;700&family=Moul&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/gov-shell.css">
-    <link rel="stylesheet" href="/static/css/classroom_layout.css?v=42">
+    <link rel="stylesheet" href="/static/css/classroom_layout.css?v=51">
 </head>
 
 <body class="gov-page-body">
@@ -114,6 +114,24 @@
                     <div class="cl-panel-head-left">
                         <h2 class="panel-title">ប្លង់តុឆាន</h2>
                         <span class="cl-status-pill" id="save-hint" aria-live="polite">—</span>
+                    </div>
+                    <div class="cl-panel-head-actions">
+                        <a href="/report/sala-chan" class="gov-btn cl-btn-report" id="btn-cl-report" title="របាយការណ៍សាលាឆាន់">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                                <line x1="16" y1="13" x2="8" y2="13"></line>
+                                <line x1="16" y1="17" x2="8" y2="17"></line>
+                                <polyline points="10 9 9 9 8 9"></polyline>
+                            </svg>
+                            របាយការណ៌
+                        </a>
+                        <button type="button" class="gov-btn cl-btn-tg-report" id="btn-cl-tg-report" title="ផ្ញើរបាយការណ៍ទៅ Telegram">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06-.01.14-.02.22z"/>
+                            </svg>
+                            ផ្ញើរបាយការណ៍
+                        </button>
                     </div>
                 </div>
 
@@ -511,7 +529,7 @@
         </div>
     </div>
 
-    <script src="/static/js/classroom_layout.js?v=42"></script>
+    <script src="/static/js/classroom_layout.js?v=54"></script>
 </body>
 
 </html>
