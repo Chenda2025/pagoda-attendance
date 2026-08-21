@@ -3278,7 +3278,7 @@ def set_attendance():
         monk_id = data.get('monk_id')
         status  = data.get('status')
         date_str = data.get('date', _date.today().isoformat())
-        if status not in ('absent', 'permission'):
+        if status not in ('absent', 'permission', 'late'):
             return jsonify({'success': False, 'message': 'Invalid status'}), 400
         conn = connect_db()
         cursor = conn.cursor()
@@ -3964,12 +3964,17 @@ def submit_attendance():
 
         absent_count     = sum(1 for r in rows if r[5] == 'absent')
         permission_count = sum(1 for r in rows if r[5] == 'permission')
+        late_count       = sum(1 for r in rows if r[5] == 'late')
 
         def fmt_group(monks, show_position=True):
             lines = []
             for i, (name, _, position, vassa, kuti, status, reason) in enumerate(monks, 1):
-                icon  = '❌' if status == 'absent' else '📋'
-                label = 'អវត្តមាន' if status == 'absent' else 'ច្បាប់'
+                if status == 'absent':
+                    icon, label = '❌', 'អវត្តមាន'
+                elif status == 'late':
+                    icon, label = '⏰', 'យឺត'
+                else:
+                    icon, label = '📋', 'ច្បាប់'
                 kuti_display = (kuti or '').replace('_', ' ')
                 block = [
                     f'{i}. {icon} {name}',
@@ -4004,6 +4009,7 @@ def submit_attendance():
             f'📊 សរុបចំនួន : {len(rows)} នាក់',
             f'   ❌ អវត្តមាន : {absent_count} នាក់',
             f'   📋 ច្បាប់    : {permission_count} នាក់',
+            f'   ⏰ យឺត      : {late_count} នាក់',
         ]
         message = '\n'.join(parts)
 
@@ -4018,7 +4024,7 @@ def submit_attendance():
             SELECT a.monk_id, m.fullname, a.status
             FROM attendance_tbl a
             JOIN monk_tbl m ON m.id = a.monk_id
-            WHERE a.date = %s AND a.status IN ('absent', 'permission')
+            WHERE a.date = %s AND a.status IN ('absent', 'permission', 'late')
         """, (date_str,))
         for mid, fname, status in cur2.fetchall():
             _log_telegram_notify(

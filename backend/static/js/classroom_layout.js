@@ -40,7 +40,10 @@
     let draftRows = [];
     let pickerTarget = null; // { rowId, tableId, slot }
     let dirty = false;
-    let editMode = ''; // '' | 'add' | 'update' | 'names' | 'delete'
+    let editMode = ''; // '' | 'add' | 'update' | 'names' | 'attendance' | 'delete'
+    let attendanceMap = new Map(); // monk_id → 'absent' | 'permission' | 'late'
+    let permissionsMap = new Map(); // monk_id → { end_date, days_left, ... }
+    let activeAttMonkId = null;
 
     const canvas = document.getElementById('layout-canvas');
     const canvasEmpty = document.getElementById('canvas-empty');
@@ -81,6 +84,12 @@
             hint: 'ចុចកន្លែងលើតុដើម្បីជ្រើស ឬ ប្តូរឈ្មោះសង្ឃ',
             where: 'ចុចកន្លែងលើតុខាងក្រោម ↓',
         },
+        attendance: {
+            label: 'វត្តមាន',
+            bar: 'របៀប៖ វត្តមាន',
+            hint: 'ចុចឈ្មោះលើតុ — អវត្តមាន / ច្បាប់ / យឺត / លុបចោល',
+            where: 'ចុចឈ្មោះលើតុខាងក្រោម ↓',
+        },
         delete: {
             label: 'លុប / សម្អាត',
             bar: 'របៀប៖ លុប / សម្អាត',
@@ -102,7 +111,15 @@
     }
 
     function setEditMode(mode) {
-        editMode = mode === 'add' || mode === 'update' || mode === 'names' || mode === 'delete' ? mode : '';
+        editMode = mode === 'add' || mode === 'update' || mode === 'names' || mode === 'attendance' || mode === 'delete' ? mode : '';
+        applyEditModeChrome();
+        hideAttPopover();
+        closeAllRowMenus();
+        closeTopMenus();
+        renderCanvas();
+    }
+
+    function applyEditModeChrome() {
         const menu = document.getElementById('edit-mode-menu');
         const labelEl = document.getElementById('edit-mode-label');
         const bar = document.getElementById('cl-mode-bar');
@@ -124,18 +141,24 @@
         document.querySelectorAll('#edit-mode-menu [data-edit-mode]').forEach((btn) => {
             btn.classList.toggle('is-active', (btn.getAttribute('data-edit-mode') || '') === editMode);
         });
-        if (canvas) canvas.classList.toggle('cl-names-mode', editMode === 'names');
-        closeAllRowMenus();
-        closeTopMenus();
-        renderCanvas();
+        if (canvas) {
+            canvas.classList.toggle('cl-names-mode', editMode === 'names');
+            canvas.classList.toggle('cl-att-mode', editMode === 'attendance');
+        }
     }
 
     function renderRowActions(row) {
-        if (!editMode || editMode === 'names') {
+        if (!editMode || editMode === 'names' || editMode === 'attendance') {
             if (editMode === 'names') {
                 return `
                     <div class="cl-row-actions" data-mode="names">
                         <span class="cl-names-row-hint">ចុចកន្លែងលើតុ</span>
+                    </div>`;
+            }
+            if (editMode === 'attendance') {
+                return `
+                    <div class="cl-row-actions" data-mode="attendance">
+                        <span class="cl-names-row-hint">ចុចឈ្មោះលើតុ</span>
                     </div>`;
             }
             return '<div class="cl-row-actions cl-row-actions-idle" title="ជ្រើសរបៀបពីម៉ឺនុយ «កែប្រែ» ខាងលើ"></div>';
@@ -388,7 +411,18 @@
         ].filter(Boolean).join(' ');
         const tip = monk ? escapeHtml(monk.fullname) : (mid != null ? 'មិនរកឃើញ' : 'ជ្រើសឈ្មោះ');
         const aria = monk ? ` aria-label="${tip}"` : '';
-        return `<button type="button" class="${cls}" data-slot="${slot}" data-row="${row.id}" data-table="${table.id}" title="${tip}"${aria}>${escapeHtml(label)}</button>`;
+        const monkAttrs = monk
+            ? ` data-monk-id="${monk.id}" data-monk-name="${escapeHtml(monk.fullname)}"`
+            : '';
+        const att = monk ? attendanceMap.get(monk.id) : null;
+        const attCls = att === 'absent' ? ' cl-att-absent'
+            : att === 'permission' ? ' cl-att-permission'
+            : att === 'late' ? ' cl-att-late' : '';
+        let badge = '';
+        if (att === 'absent') badge = '<span class="cl-att-badge">អវត្តមាន</span>';
+        else if (att === 'late') badge = '<span class="cl-att-badge">យឺត</span>';
+        else if (att === 'permission') badge = `<span class="cl-att-badge">${escapeHtml(permissionBadgeText(permissionsMap.get(monk.id)))}</span>`;
+        return `<button type="button" class="${cls}${attCls}" data-slot="${slot}" data-row="${row.id}" data-table="${table.id}"${monkAttrs} title="${tip}"${aria}>${escapeHtml(label)}${badge}</button>`;
     }
 
     function renderSeatGroup(slots, table, row, activeSlots, orient, groupClass, groupKey) {
@@ -532,6 +566,7 @@
         if (canvasEmpty) canvasEmpty.hidden = true;
         canvas.hidden = false;
         canvas.classList.toggle('cl-names-mode', editMode === 'names');
+        canvas.classList.toggle('cl-att-mode', editMode === 'attendance');
 
         canvas.innerHTML = rows.map((row) => {
             const tableCount = row.tables.length;
@@ -570,24 +605,43 @@
 
     function bindCanvasEvents() {
         canvas.querySelectorAll('.cl-seat:not(.disabled), .cl-name:not(.disabled)').forEach((btn) => {
-            btn.addEventListener('click', () => {
-                if (editMode && editMode !== 'names') {
-                    const tip = editMode === 'update'
-                        ? 'បើករបៀប «ជ្រើស / ប្តូរឈ្មោះ» ដើម្បីជ្រើសឈ្មោះ'
-                        : 'បើករបៀប «ជ្រើស / ប្តូរឈ្មោះ» ដើម្បីជ្រើសឈ្មោះ';
-                    toast(tip, false);
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const monkId = btn.dataset.monkId ? parseInt(btn.dataset.monkId, 10) : null;
+                const monkName = btn.dataset.monkName || '';
+
+                /* Attendance popover — same as ប្លង់អាសនៈ when idle or in វត្តមាន */
+                if ((!editMode || editMode === 'attendance') && monkId) {
+                    if (!editMode) {
+                        editMode = 'attendance';
+                        applyEditModeChrome();
+                    }
+                    showAttPopover(btn, monkId, monkName);
                     return;
                 }
-                if (!editMode) {
-                    toast('បើករបៀប «ជ្រើស / ប្តូរឈ្មោះ» ពីម៉ឺនុយខាងលើ', false);
+                if (editMode === 'attendance' && !monkId) {
+                    toast('កន្លែងនេះមិនទាន់មានឈ្មោះ', false);
                     return;
                 }
-                pickerTarget = {
-                    rowId: btn.dataset.row,
-                    tableId: btn.dataset.table,
-                    slot: btn.dataset.slot,
-                };
-                openPicker();
+
+                /* Name pick / change */
+                if (editMode === 'names') {
+                    pickerTarget = {
+                        rowId: btn.dataset.row,
+                        tableId: btn.dataset.table,
+                        slot: btn.dataset.slot,
+                    };
+                    openPicker();
+                    return;
+                }
+
+                if (editMode) {
+                    toast('បើករបៀប «វត្តមាន» ឬ «ជ្រើស / ប្តូរឈ្មោះ» ពីម៉ឺនុយខាងលើ', false);
+                    return;
+                }
+
+                toast('បើករបៀប «ជ្រើស / ប្តូរឈ្មោះ» ដើម្បីដាក់ឈ្មោះ', false);
             });
         });
 
@@ -1163,6 +1217,130 @@
         toast(`បានរៀប ${toKhmer(pi)} ឈ្មោះ`);
     }
 
+    /* ── Attendance (same API as ប្លង់អាសនៈ) ── */
+    function getActiveDate() {
+        return new Date().toISOString().slice(0, 10);
+    }
+
+    function permissionBadgeText(permInfo) {
+        if (!permInfo || permInfo.days_left < 0) return 'ច្បាប់';
+        if (permInfo.same_day && permInfo.shift) return `ច្បាប់ (${permInfo.shift})`;
+        if (permInfo.days_left === 0) return 'ច្បាប់ (ល្ងាចនេះ)';
+        return `ច្បាប់ (សល់${permInfo.days_left} ថ្ងៃ)`;
+    }
+
+    function hideAttPopover() {
+        const pop = document.getElementById('cl-att-popover');
+        if (pop) pop.hidden = true;
+    }
+
+    function showAttPopover(anchorEl, monkId, monkName) {
+        const pop = document.getElementById('cl-att-popover');
+        const nameEl = document.getElementById('cl-att-popover-name');
+        const clearBtn = pop?.querySelector('[data-att="clear"]');
+        if (!pop || !nameEl) return;
+        activeAttMonkId = monkId;
+        nameEl.textContent = monkName || '—';
+        if (clearBtn) clearBtn.hidden = !attendanceMap.has(monkId);
+        const rect = anchorEl.getBoundingClientRect();
+        const pw = 190;
+        let left = rect.right + 6;
+        if (left + pw > window.innerWidth) left = Math.max(8, rect.left - pw - 6);
+        let top = rect.top;
+        if (top + 200 > window.innerHeight) top = Math.max(8, window.innerHeight - 210);
+        pop.style.left = `${left}px`;
+        pop.style.top = `${top}px`;
+        pop.hidden = false;
+        // Keep open past the same click that opened it
+        pop.dataset.justOpened = '1';
+        setTimeout(() => { delete pop.dataset.justOpened; }, 0);
+    }
+
+    async function setClassroomAttendance(monkId, status) {
+        try {
+            const res = await fetch('/api/attendance', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ monk_id: monkId, status, date: getActiveDate() }),
+            });
+            const json = await res.json();
+            if (!json.success) throw new Error(json.message || 'បរាជ័យ');
+            attendanceMap.set(monkId, status);
+            renderCanvas();
+            toast(status === 'absent' ? 'បានកត់អវត្តមាន' : status === 'late' ? 'បានកត់យឺត' : 'បានកត់ច្បាប់');
+        } catch (err) {
+            toast(err.message || 'មានបញ្ហា', false);
+        }
+    }
+
+    async function clearClassroomAttendance(monkId) {
+        try {
+            const res = await fetch(`/api/attendance/${monkId}?date=${getActiveDate()}`, { method: 'DELETE' });
+            const json = await res.json();
+            if (!json.success) throw new Error(json.message || 'បរាជ័យ');
+            attendanceMap.delete(monkId);
+            permissionsMap.delete(monkId);
+            renderCanvas();
+            toast('បានលុបចោល');
+        } catch (err) {
+            toast(err.message || 'មានបញ្ហា', false);
+        }
+    }
+
+    function getSelectedClPermShift() {
+        const active = document.querySelector('.cl-perm-shift-btn.is-active');
+        return active ? active.dataset.shift : 'ល្ងាច';
+    }
+
+    function syncClPermShiftVisibility() {
+        const group = document.getElementById('cl-perm-shift-group');
+        if (!group) return;
+        const start = document.getElementById('cl-perm-start')?.value;
+        const end = document.getElementById('cl-perm-end')?.value;
+        group.hidden = !(start && end && start === end);
+    }
+
+    function openClPermModal(monkId, monkName) {
+        activeAttMonkId = monkId;
+        const modal = document.getElementById('cl-perm-modal');
+        const nameEl = document.getElementById('cl-perm-monk-name');
+        const info = permissionsMap.get(monkId);
+        const today = getActiveDate();
+        if (nameEl) nameEl.textContent = monkName || '—';
+        document.getElementById('cl-perm-start').value = info?.start_date || today;
+        document.getElementById('cl-perm-end').value = info?.end_date || today;
+        document.getElementById('cl-perm-reason').value = info?.reason || '';
+        document.querySelectorAll('.cl-perm-shift-btn').forEach((btn) => {
+            btn.classList.toggle('is-active', btn.dataset.shift === (info?.shift === 'ព្រឹក' ? 'ព្រឹក' : 'ល្ងាច'));
+        });
+        syncClPermShiftVisibility();
+        if (modal) modal.hidden = false;
+    }
+
+    function closeClPermModal() {
+        const modal = document.getElementById('cl-perm-modal');
+        if (modal) modal.hidden = true;
+    }
+
+    async function loadAttendance() {
+        try {
+            const res = await fetch(`/api/attendance?date=${getActiveDate()}`);
+            const json = await res.json();
+            attendanceMap = new Map();
+            permissionsMap = new Map();
+            if (json.success) {
+                (json.records || []).forEach((r) => attendanceMap.set(r.monk_id, r.status));
+                if (json.permissions_info) {
+                    Object.entries(json.permissions_info).forEach(([mid, info]) => {
+                        permissionsMap.set(parseInt(mid, 10), info);
+                    });
+                }
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    }
+
     /* ── Save / Load ── */
     async function loadAll() {
         try {
@@ -1177,6 +1355,7 @@
             }
             if (!layout.rows) layout.rows = [];
             if (monksData.success) monks = monksData.monks || [];
+            await loadAttendance();
             markClean(layoutData.updated_at);
             updateStats();
             renderCanvas();
@@ -1273,7 +1452,85 @@
             if (el.dataset.close === 'table-edit') closeEditTable();
             if (el.dataset.close === 'table-delete') closeDeleteTable();
             if (el.dataset.close === 'table-clear') closeClearTable();
+            if (el.dataset.close === 'cl-perm') closeClPermModal();
         });
+    });
+
+    /* Attendance popover + permission */
+    document.getElementById('cl-att-popover')?.querySelectorAll('[data-att]').forEach((btn) => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const action = btn.getAttribute('data-att');
+            const monkId = activeAttMonkId;
+            hideAttPopover();
+            if (!monkId) return;
+            if (action === 'clear') await clearClassroomAttendance(monkId);
+            else if (action === 'permission') {
+                const name = document.getElementById('cl-att-popover-name')?.textContent || '';
+                openClPermModal(monkId, name);
+            } else if (action === 'absent' || action === 'late') {
+                await setClassroomAttendance(monkId, action);
+            }
+        });
+    });
+
+    document.addEventListener('click', (e) => {
+        const pop = document.getElementById('cl-att-popover');
+        if (!pop || pop.hidden || pop.dataset.justOpened) return;
+        if (e.target.closest && (
+            e.target.closest('#cl-att-popover')
+            || e.target.closest('.cl-name.filled')
+            || e.target.closest('.cl-seat.filled')
+        )) return;
+        hideAttPopover();
+    });
+
+    document.getElementById('cl-perm-start')?.addEventListener('change', syncClPermShiftVisibility);
+    document.getElementById('cl-perm-end')?.addEventListener('change', syncClPermShiftVisibility);
+    document.querySelectorAll('.cl-perm-shift-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.cl-perm-shift-btn').forEach((b) => b.classList.remove('is-active'));
+            btn.classList.add('is-active');
+        });
+    });
+
+    document.getElementById('cl-btn-save-perm')?.addEventListener('click', async () => {
+        const start = document.getElementById('cl-perm-start')?.value;
+        const end = document.getElementById('cl-perm-end')?.value;
+        const reason = (document.getElementById('cl-perm-reason')?.value || '').trim();
+        if (!start || !end) {
+            toast('សូមបញ្ចូលថ្ងៃចាប់ផ្តើម និងថ្ងៃបញ្ចប់', false);
+            return;
+        }
+        if (new Date(end) < new Date(start)) {
+            toast('ថ្ងៃបញ្ចប់មិនអាចមុនថ្ងៃចាប់ផ្តើមទេ', false);
+            return;
+        }
+        const btn = document.getElementById('cl-btn-save-perm');
+        if (btn) { btn.disabled = true; btn.textContent = 'កំពុងរក្សាទុក...'; }
+        try {
+            const res = await fetch('/api/permissions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    monk_id: activeAttMonkId,
+                    start_date: start,
+                    end_date: end,
+                    reason,
+                    shift: start === end ? getSelectedClPermShift() : null,
+                }),
+            });
+            const json = await res.json();
+            if (!json.success) throw new Error(json.message || 'បរាជ័យ');
+            toast('បានរក្សាទុកការសុំច្បាប់');
+            closeClPermModal();
+            await loadAttendance();
+            renderCanvas();
+        } catch (err) {
+            toast(err.message || 'មានបញ្ហា', false);
+        } finally {
+            if (btn) { btn.disabled = false; btn.textContent = 'រក្សាទុក'; }
+        }
     });
 
     function bindOrientSeat(orientId, seatsId, onChange) {

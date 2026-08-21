@@ -587,11 +587,14 @@ function renderGrid(containerId, monks, rows, cols, type, overflowCount = 0, eli
                     ? escapeHtml(monk.position)
                     : `វស្សា ${monk.vassa_years}`;
                 const att = attendanceMap.get(monk.id);
-                const attClass = att === 'absent' ? ' seat-absent' : att === 'permission' ? ' seat-permission' : '';
+                const attClass = att === 'absent' ? ' seat-absent'
+                    : att === 'permission' ? ' seat-permission'
+                    : att === 'late' ? ' seat-late' : '';
                 
                 let badgeText = '';
                 let permIcon = '';
                 if (att === 'absent') badgeText = 'អវត្តមាន';
+                else if (att === 'late') badgeText = 'យឺត';
                 else if (att === 'permission') {
                     const permInfo = permissionsMap.get(monk.id);
                     badgeText = permissionBadgeText(permInfo);
@@ -674,16 +677,21 @@ function updateCellDisplay(monkId) {
     const cell = document.querySelector(`[data-monk-id="${monkId}"]`);
     if (!cell) return;
     const status = attendanceMap.get(monkId);
-    cell.classList.remove('seat-absent', 'seat-permission');
+    cell.classList.remove('seat-absent', 'seat-permission', 'seat-late');
     const badge = cell.querySelector('.seat-status');
     if (badge) badge.remove();
     if (status) {
-        cell.classList.add(status === 'absent' ? 'seat-absent' : 'seat-permission');
+        const cls = status === 'absent' ? 'seat-absent'
+            : status === 'late' ? 'seat-late'
+            : 'seat-permission';
+        cell.classList.add(cls);
         const span = document.createElement('span');
         span.className = 'seat-status';
         
         if (status === 'absent') {
             span.textContent = 'អវត្តមាន';
+        } else if (status === 'late') {
+            span.textContent = 'យឺត';
         } else {
             span.textContent = permissionBadgeText(permissionsMap.get(monkId));
         }
@@ -874,6 +882,7 @@ function initPopover() {
     const nameEl    = popover.querySelector('.att-popover-name');
     const absentBtn = popover.querySelector('.att-btn-absent');
     const permBtn   = popover.querySelector('.att-btn-permission');
+    const lateBtn   = popover.querySelector('.att-btn-late');
     const clearBtn  = popover.querySelector('.att-btn-clear');
 
     const MAX_ABSENT = 2;
@@ -885,7 +894,7 @@ function initPopover() {
         let left = rect.right + 6;
         if (left + pw > window.innerWidth) left = rect.left - pw - 6;
         let top = rect.top;
-        if (top + 140 > window.innerHeight) top = window.innerHeight - 150;
+        if (top + 160 > window.innerHeight) top = window.innerHeight - 170;
         popover.style.left = left + 'px';
         popover.style.top  = top  + 'px';
     }
@@ -897,6 +906,11 @@ function initPopover() {
         permBtn.disabled = false;
         permBtn.style.opacity = '';
         permBtn.title = '';
+        if (lateBtn) {
+            lateBtn.disabled = false;
+            lateBtn.style.opacity = '';
+            lateBtn.title = '';
+        }
     }
 
     document.addEventListener('click', async e => {
@@ -959,6 +973,11 @@ function initPopover() {
     absentBtn.addEventListener('click', async () => {
         popover.style.display = 'none';
         await setAttendance(activeMonkId, 'absent');
+    });
+
+    lateBtn?.addEventListener('click', async () => {
+        popover.style.display = 'none';
+        await setAttendance(activeMonkId, 'late');
     });
 
     // Permission Modal Logic

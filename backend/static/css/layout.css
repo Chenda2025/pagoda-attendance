@@ -993,6 +993,10 @@ body {
 }
 .seat-absent     .seat-status { background: #fc8181; color: #fff; }
 .seat-permission .seat-status { background: #f6ad55; color: #fff; }
+.seat-late { background: #faf5ff !important; }
+.seat-late:hover { background: #e9d8fd !important; }
+.seat-late .seat-name { color: #6b46c1; }
+.seat-late .seat-status { background: #b794f4; color: #fff; }
 
 /* ============ ATTENDANCE POPOVER ============ */
 
@@ -1041,8 +1045,15 @@ body {
 .att-btn-absent:hover { background: #fc8181; color: #fff; }
 .att-btn-permission { background: #feebc8; color: #c05621; }
 .att-btn-permission:hover { background: #f6ad55; color: #fff; }
+.att-btn-late       { background: #e9d8fd; color: #6b46c1; }
+.att-btn-late:hover { background: #b794f4; color: #fff; }
 .att-btn-clear      { background: #edf2f7; color: #718096; }
 .att-btn-clear:hover { background: #e2e8f0; }
+
+.seat-late { background: #faf5ff !important; }
+.seat-late:hover { background: #e9d8fd !important; }
+.seat-late .seat-name { color: #6b46c1; }
+.seat-late .seat-status { background: #b794f4; color: #fff; }
 
 /* ============ TOAST ============ */
 
