@@ -36,6 +36,10 @@ async function loadData() {
         if (!json.success) throw new Error(json.message);
 
         allMonks = json.monks;
+        if (window.FormOptions) {
+            await FormOptions.load();
+            FormOptions.applyAll(document.getElementById('edit-form'));
+        }
         buildDropdownOptions();
         applyFilters();
 
@@ -49,15 +53,41 @@ async function loadData() {
 
 // ============ SEARCHABLE DROPDOWNS ============
 
+function normOption(value) {
+    return String(value || '').replace(/[_\s]+/g, '');
+}
+
+function valuesMatch(a, b) {
+    if (!a || !b) return false;
+    return a === b || normOption(a) === normOption(b);
+}
+
+function optionListForField(field) {
+    const items = (window.FormOptions && FormOptions.data && FormOptions.data[field]) || [];
+    const opts = items.map(o => ({
+        value: o.value,
+        label: o.label || String(o.value).replace(/_/g, ' '),
+    }));
+    const seen = new Set(opts.map(o => normOption(o.value)));
+    allMonks.forEach(m => {
+        const raw = String(m[field] || '').trim();
+        if (!raw || seen.has(normOption(raw))) return;
+        seen.add(normOption(raw));
+        opts.push({ value: raw, label: raw.replace(/_/g, ' ') });
+    });
+    return opts;
+}
+
 function buildDropdownOptions() {
     dropdownDefs.forEach(def => {
-        const vals = [...new Set(allMonks.map(m => String(m[def.field])))].filter(Boolean);
+        let opts;
         if (def.field === 'vassa_years') {
-            vals.sort((a, b) => Number(a) - Number(b));
+            opts = [...new Set(allMonks.map(m => String(m.vassa_years)))].filter(Boolean)
+                .sort((a, b) => Number(a) - Number(b));
         } else {
-            vals.sort((a, b) => a.localeCompare(b));
+            opts = optionListForField(def.field);
         }
-        initDropdown(def.id, def.field, def.allText, vals);
+        initDropdown(def.id, def.field, def.allText, opts);
     });
 }
 
@@ -84,7 +114,11 @@ function initDropdown(containerId, field, allText, options) {
             <ul class="sd-list">
                 <li class="sd-item sd-all selected" data-value="">${escapeHtml(allText)}</li>
                 ${sortItemsHtml}
-                ${options.map(v => `<li class="sd-item" data-value="${escapeHtml(v)}">${escapeHtml(v)}</li>`).join('')}
+                ${options.map(v => {
+                    const value = typeof v === 'object' ? v.value : v;
+                    const label = typeof v === 'object' ? (v.label || v.value) : v;
+                    return `<li class="sd-item" data-value="${escapeHtml(value)}">${escapeHtml(label)}</li>`;
+                }).join('')}
             </ul>
         </div>
     `;
@@ -120,8 +154,7 @@ function initDropdown(containerId, field, allText, options) {
             filters.sort_vassa = sortDir;
             filters[field] = '';
         } else {
-            const label = value || allText;
-            container.querySelector('.sd-current').textContent = label;
+            container.querySelector('.sd-current').textContent = value ? item.textContent.trim() : allText;
             container.querySelector('.sd-current').classList.toggle('has-value', !!value);
             if (field === 'vassa_years') filters.sort_vassa = '';
             filters[field] = value;
@@ -129,6 +162,32 @@ function initDropdown(containerId, field, allText, options) {
 
         applyFilters();
     });
+
+    restoreDropdownState(container, field, allText);
+}
+
+function restoreDropdownState(container, field, allText) {
+    const currentEl = container.querySelector('.sd-current');
+    if (field === 'vassa_years' && filters.sort_vassa) {
+        const sortItem = container.querySelector(`.sd-sort-item[data-sort="${filters.sort_vassa}"]`);
+        if (sortItem) {
+            container.querySelectorAll('.sd-item').forEach(i => i.classList.remove('selected'));
+            sortItem.classList.add('selected');
+            currentEl.textContent = sortItem.textContent.trim();
+            currentEl.classList.add('has-value');
+            return;
+        }
+    }
+    const current = filters[field];
+    if (!current) return;
+    const item = [...container.querySelectorAll('.sd-item[data-value]')].find(i => (
+        i.dataset.value && valuesMatch(i.dataset.value, current)
+    ));
+    if (!item || item.classList.contains('sd-all')) return;
+    container.querySelectorAll('.sd-item').forEach(i => i.classList.remove('selected'));
+    item.classList.add('selected');
+    currentEl.textContent = item.textContent.trim();
+    currentEl.classList.add('has-value');
 }
 
 function toggleDropdown(id) {
@@ -220,11 +279,11 @@ function applyFilters() {
         result = result.filter(m => m.fullname.toLowerCase().includes(q));
     }
     if (filters.vassa_years) result = result.filter(m => String(m.vassa_years) === filters.vassa_years);
-    if (filters.monk_type)   result = result.filter(m => m.monk_type === filters.monk_type);
-    if (filters.residence)   result = result.filter(m => m.residence === filters.residence);
-    if (filters.position)    result = result.filter(m => m.position === filters.position);
-    if (filters.education_level) result = result.filter(m => m.education_level === filters.education_level);
-    if (filters.academic_year)   result = result.filter(m => m.academic_year === filters.academic_year);
+    if (filters.monk_type)   result = result.filter(m => valuesMatch(m.monk_type, filters.monk_type));
+    if (filters.residence)   result = result.filter(m => valuesMatch(m.residence, filters.residence));
+    if (filters.position)    result = result.filter(m => valuesMatch(m.position, filters.position));
+    if (filters.education_level) result = result.filter(m => valuesMatch(m.education_level, filters.education_level));
+    if (filters.academic_year)   result = result.filter(m => valuesMatch(m.academic_year, filters.academic_year));
 
     if (filters.sort_vassa === 'asc') {
         result = [...result].sort((a, b) => a.vassa_years - b.vassa_years);
@@ -573,18 +632,36 @@ function resetFilters() {
 
 // ============ EDIT MODAL ============
 
-function openEditModal(id) {
+async function openEditModal(id) {
     const monk = allMonks.find(m => m.id === id);
     if (!monk) return;
 
     document.getElementById('edit-id').value = monk.id;
     document.getElementById('edit-fullname').value = monk.fullname;
     document.getElementById('edit-vassa').value = monk.vassa_years;
-    document.getElementById('edit-type').value = monk.monk_type;
-    document.getElementById('edit-residence').value = monk.residence;
-    document.getElementById('edit-position').value = monk.position;
-    document.getElementById('edit-education').value = monk.education_level;
-    document.getElementById('edit-year').value = monk.academic_year;
+
+    if (window.FormOptions) {
+        try {
+            await FormOptions.reload();
+            FormOptions.fillSelect(document.getElementById('edit-type'), 'monk_type', monk.monk_type);
+            FormOptions.fillSelect(document.getElementById('edit-residence'), 'residence', monk.residence);
+            FormOptions.fillSelect(document.getElementById('edit-position'), 'position', monk.position);
+            FormOptions.fillSelect(document.getElementById('edit-education'), 'education_level', monk.education_level);
+            FormOptions.fillSelect(document.getElementById('edit-year'), 'academic_year', monk.academic_year);
+        } catch (err) {
+            document.getElementById('edit-type').value = monk.monk_type;
+            document.getElementById('edit-residence').value = monk.residence;
+            document.getElementById('edit-position').value = monk.position;
+            document.getElementById('edit-education').value = monk.education_level;
+            document.getElementById('edit-year').value = monk.academic_year;
+        }
+    } else {
+        document.getElementById('edit-type').value = monk.monk_type;
+        document.getElementById('edit-residence').value = monk.residence;
+        document.getElementById('edit-position').value = monk.position;
+        document.getElementById('edit-education').value = monk.education_level;
+        document.getElementById('edit-year').value = monk.academic_year;
+    }
 
     // Clear any previous error styling
     document.querySelectorAll('.modal-input, .modal-select').forEach(el => el.classList.remove('error'));
@@ -611,7 +688,10 @@ async function handleEditSubmit(e) {
 
     // Validate
     let hasError = false;
-    [['edit-fullname', fullname], ['edit-vassa', vassa]].forEach(([elId, val]) => {
+    [['edit-fullname', fullname], ['edit-vassa', vassa],
+     ['edit-type', type], ['edit-residence', residence],
+     ['edit-position', position], ['edit-education', education],
+     ['edit-year', year]].forEach(([elId, val]) => {
         const el = document.getElementById(elId);
         if (!val) { el.classList.add('error'); hasError = true; }
         else el.classList.remove('error');

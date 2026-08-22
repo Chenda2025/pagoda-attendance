@@ -77,12 +77,40 @@ const _rddConfig = {
     },
 };
 
-function initRptDropdowns() {
+const _rddFormFields = {
+    'f-monk-type': 'monk_type',
+    'f-kuti': 'residence',
+    'f-edu': 'education_level',
+    'f-acad': 'academic_year',
+};
+
+function optsFromForm(fieldKey, fallback) {
+    const items = (window.FormOptions && FormOptions.data && FormOptions.data[fieldKey]) || [];
+    if (!items.length) return fallback;
+    return items.map(o => [o.value, o.label || String(o.value).replace(/_/g, ' ')]);
+}
+
+function normOpt(value) {
+    return String(value || '').replace(/[_\s]+/g, '');
+}
+
+function valuesMatch(a, b) {
+    if (!a || !b) return false;
+    return a === b || normOpt(a) === normOpt(b);
+}
+
+async function initRptDropdowns() {
+    if (window.FormOptions) {
+        try { await FormOptions.load(); } catch (_) { /* keep hardcoded fallback */ }
+    }
+
     Object.entries(_rddConfig).forEach(([id, cfg]) => {
         const el = document.getElementById(id);
         if (!el) return;
 
         _rddState[id] = '';
+        const fieldKey = _rddFormFields[id];
+        const opts = fieldKey ? optsFromForm(fieldKey, cfg.opts) : cfg.opts;
 
         el.innerHTML = `
             <div class="rpt-trigger">
@@ -96,7 +124,7 @@ function initRptDropdowns() {
                 <input class="rpt-search" type="text" placeholder="ស្វែងរក...">
                 <ul class="rpt-list">
                     <li class="rpt-item rpt-all selected" data-value="">${escHtml(cfg.allText)}</li>
-                    ${cfg.opts.map(([v, l]) =>
+                    ${opts.map(([v, l]) =>
                         `<li class="rpt-item" data-value="${escHtml(v)}">${escHtml(l)}</li>`
                     ).join('')}
                 </ul>
@@ -219,10 +247,10 @@ function buildQueryString(filters) {
 
 function _applyClientFilters(monks, filters) {
     return monks.filter(m => {
-        if (filters.monk_type       && m.monk_type       !== filters.monk_type)                              return false;
-        if (filters.kuti            && m.residence        !== filters.kuti.replace(/_/g, ' '))               return false;
-        if (filters.education_level && m.education_level  !== filters.education_level)                       return false;
-        if (filters.academic_year   && m.academic_year    !== filters.academic_year)                         return false;
+        if (filters.monk_type       && !valuesMatch(m.monk_type, filters.monk_type))                         return false;
+        if (filters.kuti            && !valuesMatch(m.residence, filters.kuti))                              return false;
+        if (filters.education_level && !valuesMatch(m.education_level, filters.education_level))             return false;
+        if (filters.academic_year   && !valuesMatch(m.academic_year, filters.academic_year))                 return false;
         if (filters.name            && !m.fullname.toLowerCase().includes(filters.name.toLowerCase()))       return false;
         return true;
     });
@@ -979,12 +1007,12 @@ function showToast(msg, type = 'success') {
 
 // ============ INIT ============
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     const datePicker = document.getElementById('f-date');
     datePicker.value = todayISO();
     datePicker.max   = todayISO();
 
-    initRptDropdowns();
+    await initRptDropdowns();
     loadReport();
 
     document.getElementById('btn-generate').addEventListener('click', loadReport);

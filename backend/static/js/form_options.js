@@ -3,11 +3,11 @@
 /** Shared dynamic dropdown options for monk entry forms. */
 window.FormOptions = (function () {
     const SELECT_FIELDS = {
-        monk_type: { name: 'type', placeholder: '-- ជ្រើសរើស --', ids: ['monk-type'] },
-        residence: { name: 'home', placeholder: '-- ជ្រើសរើសកុដិ --' },
-        position: { name: 'position', placeholder: '-- ជ្រើសរើសតួនាទី --', ids: ['monk-position'] },
-        education_level: { name: 'education_level', placeholder: '-- ជ្រើសរើស --', ids: ['monk-education'] },
-        academic_year: { name: 'academic_level', placeholder: '-- ជ្រើសរើសឆ្នាំ --', ids: ['monk-academic'] },
+        monk_type: { name: 'type', placeholder: '-- ជ្រើសរើស --', ids: ['monk-type', 'edit-type'] },
+        residence: { name: 'home', placeholder: '-- ជ្រើសរើសកុដិ --', ids: ['edit-residence'] },
+        position: { name: 'position', placeholder: '-- ជ្រើសរើសតួនាទី --', ids: ['monk-position', 'edit-position'] },
+        education_level: { name: 'education_level', placeholder: '-- ជ្រើសរើស --', ids: ['monk-education', 'edit-education'] },
+        academic_year: { name: 'academic_level', placeholder: '-- ជ្រើសរើសឆ្នាំ --', ids: ['monk-academic', 'edit-year'] },
     };
 
     const FIELD_ORDER = [
@@ -72,14 +72,27 @@ window.FormOptions = (function () {
         return `<option value="">${esc(cfg.placeholder)}</option>${items}`;
     }
 
+    function resolveValue(fieldKey, current) {
+        if (current == null || current === '') return '';
+        const items = optionsFor(fieldKey);
+        if (items.some((o) => o.value === current)) return current;
+        const byLabel = items.find((o) => o.label === current);
+        if (byLabel) return byLabel.value;
+        const norm = (s) => String(s).replace(/\s+/g, '_');
+        const target = norm(current);
+        const byNorm = items.find((o) => norm(o.value) === target || norm(o.label) === target);
+        return byNorm ? byNorm.value : current;
+    }
+
     function fillSelect(select, fieldKey, keepValue) {
         if (!select) return;
-        const current = keepValue != null && keepValue !== '' ? keepValue : select.value;
+        const raw = keepValue != null && keepValue !== '' ? keepValue : select.value;
+        const current = resolveValue(fieldKey, raw);
         select.innerHTML = optionsHtml(fieldKey);
         if (current && ![...select.options].some((o) => o.value === current)) {
             const extra = document.createElement('option');
             extra.value = current;
-            extra.textContent = current;
+            extra.textContent = current.replace(/_/g, ' ');
             select.appendChild(extra);
         }
         if (current) select.value = current;
@@ -88,12 +101,15 @@ window.FormOptions = (function () {
     function applyAll(root) {
         const scope = root || document;
         Object.entries(SELECT_FIELDS).forEach(([fieldKey, cfg]) => {
-            scope.querySelectorAll(`select[name="${cfg.name}"]`).forEach((sel) => {
+            const seen = new Set();
+            const add = (sel) => {
+                if (!sel || seen.has(sel)) return;
+                seen.add(sel);
                 fillSelect(sel, fieldKey);
-            });
-            (cfg.ids || []).forEach((id) => {
-                fillSelect(scope.getElementById ? scope.getElementById(id) : document.getElementById(id), fieldKey);
-            });
+            };
+            scope.querySelectorAll(`select[name="${cfg.name}"]`).forEach(add);
+            scope.querySelectorAll(`select[data-option-field="${fieldKey}"]`).forEach(add);
+            (cfg.ids || []).forEach((id) => add(document.getElementById(id)));
         });
     }
 
