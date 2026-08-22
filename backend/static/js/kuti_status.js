@@ -325,13 +325,25 @@ function _kutiPreviewOpts(formatLabel) {
 
 async function exportImage() {
     const html = await _fetchKutiExportHtml();
+    const pages = await ExportPreview.renderHtmlToA4Pages(html, { selector: '.page' });
+    const base = _kutiExportFilename('png').replace(/\.png$/i, '');
     await ExportPreview.open({
-        ..._kutiPreviewOpts('រូបភាព PNG'),
-        preview: { type: 'html', html },
+        ..._kutiPreviewOpts(ExportPreview.a4PngFormatLabel(pages)),
+        preview: { type: 'canvases', canvases: pages },
         onDownload: async () => {
-            const canvas = await _renderKutiHtmlToCanvas(html);
-            const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
-            ExportPreview.downloadBlob(blob, _kutiExportFilename('png'));
+            await ExportPreview.downloadA4PngPages(pages, base);
+        },
+        onTelegram: async () => {
+            for (let i = 0; i < pages.length; i++) {
+                const blob = await new Promise(r => pages[i].toBlob(r, 'image/png'));
+                const form = new FormData();
+                const pageNote = pages.length > 1 ? ` — ទំព័រ ${i + 1}/${pages.length}` : '';
+                form.append('image', blob, pages.length === 1 ? `${base}.png` : `${base}_p${i + 1}.png`);
+                form.append('caption', `បញ្ជីព្រះសង្ឃ — ${currentLabel || ''}${pageNote}`);
+                const res = await fetch('/api/reports/submit-image', { method: 'POST', body: form });
+                const json = await res.json();
+                if (!json.success) throw new Error(json.message || 'Telegram error');
+            }
         },
     });
 }

@@ -10,8 +10,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&family=Kantumruy+Pro:wght@300;400;500;600;700&family=Moul&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/gov-shell.css">
-    <link rel="stylesheet" href="/static/css/export_preview.css?v=3">
-    <link rel="stylesheet" href="/static/css/report.css">
+    <link rel="stylesheet" href="/static/css/export_preview.css?v=7">
+    <link rel="stylesheet" href="/static/css/report.css?v=2">
 </head>
 
 <body data-report-scope="{{ report_scope|default('layout') }}">
@@ -43,7 +43,7 @@
                 </svg>
                 ផ្ទាំងគ្រប់គ្រង
             </a>
-            <h1 class="page-title">{{ report_title|default('របាយការណ៍វត្តមាន ១៥ ថ្ងៃ') }}</h1>
+            <h1 class="page-title">{{ report_title|default('របាយការណ៍អាសនៈ') }}</h1>
             <div class="header-actions">
                 <a href="{{ report_back_href|default('/layout') }}" class="btn-back" style="margin:0">{{ report_back_label|default('ប្លង់អាសនៈ') }}</a>
                 <!-- Export dropdown -->
@@ -401,7 +401,7 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="/static/js/export_preview.js?v=2"></script>
-    <script src="/static/js/report.js?v=7"></script>
+    <script src="/static/js/export_preview.js?v=8"></script>
+    <script src="/static/js/report.js?v=13"></script>
 </body>
 </html>

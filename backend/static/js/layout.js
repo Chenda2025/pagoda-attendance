@@ -186,6 +186,10 @@ async function handleMoveClick(type, cell) {
     }
 
     if (state.selectedPos === null) {
+        if (!cell.classList.contains('seat-filled')) {
+            showToast('សូមជ្រើសឈ្មោះសិន រួចចុចកន្លែងទទេ', 'error');
+            return;
+        }
         state.selectedPos = pos;
         cell.classList.add('seat-move-selected');
     } else if (state.selectedPos === pos) {
@@ -209,7 +213,7 @@ async function loadData() {
         const today = getActiveDate();
         const [monkRes, attRes, orderRes] = await Promise.all([
             fetch('/api/monks?residing=1'),
-            fetch(`/api/attendance?date=${today}`),
+            fetch(`/api/attendance?date=${today}&source=layout`),
             fetch('/api/seat-order')
         ]);
 
@@ -651,7 +655,7 @@ async function setAttendance(monkId, status) {
         const res = await fetch('/api/attendance', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ monk_id: monkId, status, date: today })
+            body: JSON.stringify({ monk_id: monkId, status, date: today, source: 'layout' })
         });
         const json = await res.json();
         if (!json.success) throw new Error(json.message);
@@ -674,7 +678,7 @@ async function setAttendance(monkId, status) {
 async function clearAttendance(monkId) {
     const today = getActiveDate();
     try {
-        const res = await fetch(`/api/attendance/${monkId}?date=${today}`, { method: 'DELETE' });
+        const res = await fetch(`/api/attendance/${monkId}?date=${today}&source=layout`, { method: 'DELETE' });
         const json = await res.json();
         if (!json.success) throw new Error(json.message);
         attendanceMap.delete(monkId);
@@ -1049,6 +1053,7 @@ function initPopover() {
                     end_date: end,
                     reason: reason,
                     shift: start === end ? getSelectedPermShift() : null,
+                    source: 'layout',
                 })
             });
             const json = await res.json();

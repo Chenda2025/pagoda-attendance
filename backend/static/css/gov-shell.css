@@ -25,16 +25,26 @@
         radial-gradient(ellipse 60% 40% at 100% 0%, rgba(22, 63, 115, 0.18), transparent 45%),
         linear-gradient(180deg, #e8eef6 0%, var(--ivory) 40%, #e6ebe4 100%);
     min-height: 100vh;
+    min-height: 100dvh;
+    overflow-x: hidden;
+    -webkit-text-size-adjust: 100%;
 }
 
 .gov-shell {
     max-width: 1280px;
     margin: 0 auto;
     padding: 16px 20px 28px;
+    padding-top: max(16px, env(safe-area-inset-top));
+    padding-right: max(20px, env(safe-area-inset-right));
+    padding-bottom: max(28px, env(safe-area-inset-bottom));
+    padding-left: max(20px, env(safe-area-inset-left));
     display: flex;
     flex-direction: column;
     gap: 14px;
     min-height: 100vh;
+    min-height: 100dvh;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .gov-shell-wide {
@@ -241,27 +251,57 @@
         grid-template-columns: 1fr;
         text-align: center;
         gap: 10px;
+        padding: 12px 14px;
     }
     .gov-col-left, .gov-col-right { text-align: center; }
     .gov-seal { width: 56px; height: 56px; }
     .gov-page-title { font-size: 17px; }
-    .gov-shell { padding: 12px; gap: 12px; }
+    .gov-shell {
+        padding: 12px;
+        padding-top: max(12px, env(safe-area-inset-top));
+        padding-right: max(12px, env(safe-area-inset-right));
+        padding-bottom: max(16px, env(safe-area-inset-bottom));
+        padding-left: max(12px, env(safe-area-inset-left));
+        gap: 12px;
+    }
     .gov-topbar {
         flex-direction: column;
         align-items: stretch;
         padding: 12px 14px;
         gap: 10px;
     }
-    .gov-topbar-left { width: 100%; }
+    .gov-topbar-left {
+        width: 100%;
+        flex-wrap: wrap;
+    }
     .gov-topbar-actions {
         width: 100%;
         justify-content: flex-start;
+        flex-wrap: wrap;
     }
-    .gov-btn { min-height: 40px; }
+    .gov-btn {
+        min-height: 44px;
+        touch-action: manipulation;
+    }
 }
 
 @media (max-width: 480px) {
-    .gov-shell { padding: 10px; }
+    .gov-shell {
+        padding: 8px;
+        padding-top: max(8px, env(safe-area-inset-top));
+        padding-right: max(8px, env(safe-area-inset-right));
+        padding-bottom: max(12px, env(safe-area-inset-bottom));
+        padding-left: max(8px, env(safe-area-inset-left));
+        gap: 8px;
+    }
     .gov-page-sub { font-size: 12px; }
-    .gov-topbar-actions .gov-btn { flex: 1; justify-content: center; }
+    .gov-topbar-actions .gov-btn { flex: 1 1 calc(50% - 6px); justify-content: center; }
+    .gov-col p { font-size: 11px; }
+    .gov-pagoda { font-size: 13px; }
+    .gov-seal { width: 48px; height: 48px; }
+}
+
+@media (max-height: 500px) and (orientation: landscape) {
+    .gov-masthead { display: none; }
+    .gov-shell { gap: 8px; min-height: auto; }
 }

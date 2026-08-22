@@ -43,14 +43,46 @@ def create_monks_table():
                 monk_id  INTEGER NOT NULL REFERENCES monk_tbl(id) ON DELETE CASCADE,
                 status   VARCHAR(20) NOT NULL CHECK (status IN ('absent', 'permission', 'late')),
                 date     DATE NOT NULL DEFAULT CURRENT_DATE,
+                source   VARCHAR(20) NOT NULL DEFAULT 'layout'
+                         CHECK (source IN ('layout', 'sala_chan')),
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE (monk_id, date)
+                UNIQUE (monk_id, date, source)
             );
         """)
-        
+
         cursor.execute("""
             ALTER TABLE attendance_tbl DROP CONSTRAINT IF EXISTS attendance_tbl_status_check;
             ALTER TABLE attendance_tbl ADD CONSTRAINT attendance_tbl_status_check CHECK (status IN ('absent', 'permission', 'late'));
+        """)
+        cursor.execute("""
+            ALTER TABLE attendance_tbl ADD COLUMN IF NOT EXISTS source VARCHAR(20) NOT NULL DEFAULT 'layout';
+        """)
+        cursor.execute("""
+            ALTER TABLE attendance_tbl DROP CONSTRAINT IF EXISTS attendance_tbl_monk_id_date_key;
+        """)
+        cursor.execute("""
+            DO $$ BEGIN
+              IF NOT EXISTS (
+                SELECT 1 FROM pg_constraint WHERE conname = 'attendance_tbl_monk_id_date_source_key'
+              ) THEN
+                ALTER TABLE attendance_tbl
+                  ADD CONSTRAINT attendance_tbl_monk_id_date_source_key UNIQUE (monk_id, date, source);
+              END IF;
+            END $$;
+        """)
+        cursor.execute("""
+            DO $$ BEGIN
+              IF NOT EXISTS (
+                SELECT 1 FROM pg_constraint WHERE conname = 'attendance_tbl_source_check'
+              ) THEN
+                ALTER TABLE attendance_tbl
+                  ADD CONSTRAINT attendance_tbl_source_check
+                  CHECK (source IN ('layout', 'sala_chan'));
+              END IF;
+            END $$;
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_attendance_source_date ON attendance_tbl(source, date);
         """)
 
         index_queries = [

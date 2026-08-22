@@ -963,6 +963,8 @@ body {
 
 /* Cells in move-mode: pointer cursor */
 .move-mode-active .seat-filled { cursor: pointer; }
+.move-mode-active .seat-empty:not(.seat-reserved) { cursor: pointer; }
+.move-mode-active .seat-empty:not(.seat-reserved):hover { background: #ebf4ff; }
 
 /* First selected cell */
 .seat-move-selected {
@@ -1694,7 +1696,6 @@ body {
     transition: color .15s;
 }
 .att-name-btn:hover { color: #0c2d5a; text-decoration-color: #0c2d5a; }
-
 
 .header-logo { display: none; }
 .search-bar {

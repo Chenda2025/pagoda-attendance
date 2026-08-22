@@ -475,6 +475,8 @@ def user_home(user_or_role, permissions=None):
         return '/'
     if 'layout' in perms:
         return '/layout'
+    if 'classroom_layout' in perms:
+        return '/classroom-layout'
     if 'report' in perms:
         return '/report'
     if 'view' in perms:

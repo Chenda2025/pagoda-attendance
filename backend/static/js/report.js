@@ -67,11 +67,12 @@ const _rddConfig = {
         ]
     },
     'f-violation': {
-        allText: 'ទាំងអស់',
+        allText: 'មានបញ្ហា (អវត្តមាន/ច្បាប់/យឺត)',
         opts: [
             ['violations', 'លើសដែនតែប៉ុណ្ណោះ'],
-            ['absent',     'លើសអវត្តមាន'],
-            ['permission', 'លើសច្បាប់'],
+            ['absent',     'មានអវត្តមាន'],
+            ['permission', 'មានច្បាប់'],
+            ['late',       'មានយឺត'],
         ]
     },
 };
@@ -197,7 +198,7 @@ function getFilters() {
         academic_year:   getRdd('f-acad'),
         name:            document.getElementById('f-name').value.trim() || '',
         violation:       getRdd('f-violation') || 'all',
-        scope:           REPORT_SCOPE === 'sala_chan' ? 'sala_chan' : '',
+        scope:           REPORT_SCOPE === 'sala_chan' ? 'sala_chan' : 'layout',
     };
 }
 
@@ -210,6 +211,7 @@ function buildQueryString(filters) {
     if (filters.academic_year)   p.set('academic_year',   filters.academic_year);
     if (filters.name)            p.set('name',            filters.name);
     if (filters.scope)           p.set('scope',           filters.scope);
+    else                         p.set('scope',           'layout');
     return p.toString();
 }
 
@@ -238,8 +240,10 @@ function _normalizeMonks(monks, type, json) {
             ...m,
             absent_count:     m.status === 'absent'     ? 1 : 0,
             permission_count: m.status === 'permission' ? 1 : 0,
+            late_count:       m.status === 'late'       ? 1 : 0,
             absent_dates:     m.status === 'absent'     ? fmtDate(json.date) : '',
             perm_dates:       m.status === 'permission' ? fmtDate(json.date) : '',
+            late_dates:       m.status === 'late'       ? fmtDate(json.date) : '',
         }));
     }
     if (type === 'biweekly') {
@@ -260,7 +264,7 @@ const _THEAD = {
     biweekly:
         '<th>#</th><th>ឈ្មោះ</th><th>តួនាទី</th><th>វស្សា</th>' +
         '<th>ស្នាក់នៅ</th><th>ការសិក្សា</th>' +
-        '<th>❌ អវត្តមាន</th><th>📋 ច្បាប់</th><th>ថ្ងៃ</th><th>ស្ថានភាព</th><th class="col-actions-r">សកម្មភាព</th>',
+        '<th>❌ អវត្តមាន</th><th>📋 ច្បាប់</th><th>⏰ យឺត</th><th>ថ្ងៃ</th><th>ស្ថានភាព</th><th class="col-actions-r">សកម្មភាព</th>',
     daily:
         '<th>#</th><th>ឈ្មោះ</th><th>ប្រភេទ</th><th>តួនាទី</th><th>វស្សា</th>' +
         '<th>ស្នាក់នៅ</th><th>ស្ថានភាព</th>',
@@ -323,7 +327,7 @@ async function loadReport() {
             const res = await fetch(`/api/attendance/report?${buildQueryString(filters)}`);
             json = await res.json();
             if (!json.success) throw new Error(json.message);
-            allData = json.monks;
+            allData = json.monks.filter(hasAttendanceIssue);
             _updateBanner(json.start_date, json.end_date, '១៥ ថ្ងៃ');
         }
 
@@ -377,10 +381,13 @@ function goPage(section, page) {
 }
 
 function applyViolationFilter(monks, filter) {
-    if (filter === 'violations') return monks.filter(m => isAbsViol(m) || isPrmViol(m));
-    if (filter === 'absent')     return monks.filter(m => isAbsViol(m));
-    if (filter === 'permission') return monks.filter(m => isPrmViol(m));
-    return monks;
+    // Always hide monks with no absent / permission / late
+    const withIssues = monks.filter(hasAttendanceIssue);
+    if (filter === 'violations') return withIssues.filter(m => isAbsViol(m) || isPrmViol(m));
+    if (filter === 'absent')     return withIssues.filter(m => (m.absent_count || 0) > 0);
+    if (filter === 'permission') return withIssues.filter(m => (m.permission_count || 0) > 0);
+    if (filter === 'late')       return withIssues.filter(m => (m.late_count || 0) > 0);
+    return withIssues;
 }
 
 function renderSection(tbodyId, countId, paginId, monks, section) {
@@ -394,7 +401,7 @@ function renderSection(tbodyId, countId, paginId, monks, section) {
 
     const tbody = document.getElementById(tbodyId);
     if (!monks.length) {
-        tbody.innerHTML = `<tr><td colspan="11" class="empty-row">មិនមានទិន្នន័យ</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="12" class="empty-row">មិនមានទិន្នន័យ</td></tr>`;
         document.getElementById(paginId).innerHTML = '';
         return;
     }
@@ -413,9 +420,11 @@ function renderSection(tbodyId, countId, paginId, monks, section) {
         const name = `<td><div class="monk-name">${escHtml(m.fullname)}</div></td>`;
 
         if (_reportType === 'daily') {
-            const statusBadge = m.absent_count
+            const statusBadge = m.status === 'absent' || m.absent_count
                 ? `<span class="badge badge-danger">❌ អវត្តមាន</span>`
-                : `<span class="badge badge-warning">📋 ច្បាប់</span>`;
+                : m.status === 'late' || m.late_count
+                    ? `<span class="badge badge-info">⏰ យឺត</span>`
+                    : `<span class="badge badge-warning">📋 ច្បាប់</span>`;
             return `<tr class="${rowCls}">
                 ${num}${name}
                 <td class="col-center">${escHtml(m.monk_type)}</td>
@@ -446,7 +455,9 @@ function renderSection(tbodyId, countId, paginId, monks, section) {
         const dateParts = [];
         if (m.absent_dates) dateParts.push(`<span class="date-absent">❌ ${escHtml(m.absent_dates)}</span>`);
         if (m.perm_dates)   dateParts.push(`<span class="date-perm">📋 ${escHtml(m.perm_dates)}</span>`);
+        if (m.late_dates)   dateParts.push(`<span class="date-late">⏰ ${escHtml(m.late_dates)}</span>`);
         const datesHtml = dateParts.length ? dateParts.join('<br>') : '—';
+        const lateN = m.late_count || 0;
 
         return `
             <tr class="${rowCls}">
@@ -457,6 +468,7 @@ function renderSection(tbodyId, countId, paginId, monks, section) {
                 <td class="col-edu">${escHtml(edu)}</td>
                 <td class="col-center col-absent">${m.absent_count     || '—'}</td>
                 <td class="col-center col-perm"  >${m.permission_count || '—'}</td>
+                <td class="col-center col-late"  >${lateN || '—'}</td>
                 <td class="col-dates">${datesHtml}</td>
                 <td>${badge}</td>
                 <td class="col-actions-r">
@@ -522,16 +534,25 @@ function renderSummary(monks) {
 
 // ============ EXPORT ============
 
-const _PDF_PAGE_W_PX = 794; // A4 portrait @ ~96dpi (210mm)
+const _PDF_PAGE_W_PX = 794;  // A4 portrait @ ~96dpi (210mm)
+const _PDF_PAGE_H_PX = 1123; // A4 portrait @ ~96dpi (297mm)
+
+function _exportOrientation(html) {
+    if (window.ExportPreview && ExportPreview.detectA4Orientation) {
+        return ExportPreview.detectA4Orientation(html);
+    }
+    return /size:\s*A4\s+landscape/i.test(html || '') ? 'landscape' : 'portrait';
+}
 
 // Renders a standalone export HTML document (as returned by /api/reports/export?fmt=html)
-// off-screen at A4-portrait width and returns the rasterized canvas.
+// off-screen at A4 width (portrait or landscape) and returns the rasterized canvas.
 async function _renderExportHtmlToCanvas(html) {
-    // Strip the server's auto-print script; we render this ourselves and don't want a print dialog.
     html = html.replace(/<script>[\s\S]*?window\.print\(\)[\s\S]*?<\/script>/i, '');
+    const orient = _exportOrientation(html);
+    const pageW = orient === 'landscape' ? _PDF_PAGE_H_PX : _PDF_PAGE_W_PX;
 
     const iframe = document.createElement('iframe');
-    iframe.style.cssText = `position:fixed; top:-99999px; left:-99999px; width:${_PDF_PAGE_W_PX}px; border:0;`;
+    iframe.style.cssText = `position:fixed; top:-99999px; left:-99999px; width:${pageW}px; border:0;`;
     document.body.appendChild(iframe);
 
     try {
@@ -542,43 +563,57 @@ async function _renderExportHtmlToCanvas(html) {
 
         const doc = iframe.contentDocument;
         iframe.style.height = doc.body.scrollHeight + 'px';
-        await new Promise(r => setTimeout(r, 200)); // let fonts/layout settle
+        await new Promise(r => setTimeout(r, 200));
 
         return await html2canvas(doc.body, {
             scale: 2,
             useCORS: true,
             backgroundColor: '#ffffff',
-            windowWidth: _PDF_PAGE_W_PX
+            windowWidth: pageW
         });
     } finally {
         document.body.removeChild(iframe);
     }
 }
 
-// Renders the export HTML and saves it as a downloadable A4-portrait PDF file.
-async function _downloadHtmlAsPdf(html, filename) {
-    const canvas = await _renderExportHtmlToCanvas(html);
+async function _renderExportHtmlToA4Pages(html) {
+    if (window.ExportPreview && ExportPreview.renderHtmlToA4Pages) {
+        return ExportPreview.renderHtmlToA4Pages(html);
+    }
+    const full = await _renderExportHtmlToCanvas(html);
+    return ExportPreview.sliceCanvasToA4Pages(full, _exportOrientation(html));
+}
 
+async function _downloadA4PngPages(pages, baseName) {
+    return ExportPreview.downloadA4PngPages(pages, baseName);
+}
+
+async function _sendA4PagesToTelegram(pages, captionBase) {
+    for (let i = 0; i < pages.length; i++) {
+        const blob = await new Promise(r => pages[i].toBlob(r, 'image/png'));
+        const form = new FormData();
+        const pageNote = pages.length > 1 ? ` — ទំព័រ ${i + 1}/${pages.length}` : '';
+        form.append('image', blob, pages.length === 1 ? 'report.png' : `report_p${i + 1}.png`);
+        form.append('caption', `${captionBase}${pageNote}`);
+        const res = await fetch('/api/reports/submit-image', { method: 'POST', body: form });
+        const json = await res.json();
+        if (!json.success) throw new Error(json.message || 'Telegram error');
+    }
+}
+
+// Renders the export HTML and saves it as a downloadable A4 PDF (portrait or landscape).
+async function _downloadHtmlAsPdf(html, filename) {
+    const pages = await _renderExportHtmlToA4Pages(html);
+    const orient = _exportOrientation(html);
     const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const pdf = new jsPDF({ orientation: orient, unit: 'mm', format: 'a4' });
     const pageW = pdf.internal.pageSize.getWidth();
     const pageH = pdf.internal.pageSize.getHeight();
-    const imgW  = pageW;
-    const imgH  = (canvas.height * imgW) / canvas.width;
-    const imgData = canvas.toDataURL('image/jpeg', 0.95);
 
-    let heightLeft = imgH;
-    let position   = 0;
-    pdf.addImage(imgData, 'JPEG', 0, position, imgW, imgH);
-    heightLeft -= pageH;
-
-    while (heightLeft > 0) {
-        position -= pageH;
-        pdf.addPage();
-        pdf.addImage(imgData, 'JPEG', 0, position, imgW, imgH);
-        heightLeft -= pageH;
-    }
-
+    pages.forEach((canvas, i) => {
+        if (i > 0) pdf.addPage();
+        pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, pageW, pageH);
+    });
     pdf.save(filename);
 }
 
@@ -632,28 +667,28 @@ async function exportReport(action, fmt = 'docx') {
             if (!res0.ok) { const j = await res0.json(); throw new Error(j.message); }
             const html = await res0.text();
 
-            const canvas = await _renderExportHtmlToCanvas(html);
-            const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
-            const form = new FormData();
-            form.append('image', blob, 'report.png');
-
-            const res = await fetch('/api/reports/submit-image', { method: 'POST', body: form });
-            const json = await res.json();
-            if (!json.success) throw new Error(json.message);
+            const pages = await _renderExportHtmlToA4Pages(html);
+            await _sendA4PagesToTelegram(pages, 'ប្រគេនរបាយការណ៍វត្តមាន (រូបភាព A4)');
             showToast('បានបញ្ជូនរូបភាពទៅ Telegram ជោគជ័យ!', 'success');
         } else if (isPdf) {
             p.set('fmt', 'html');
             const res = await fetch(`/api/reports/export?${p}`);
             if (!res.ok) { const j = await res.json(); throw new Error(j.message); }
             const html = await res.text();
+            const pages = await _renderExportHtmlToA4Pages(html);
+            const orient = _exportOrientation(html);
             await ExportPreview.open({
                 title: 'របាយការណ៍',
                 subtitle: `${type} · ${date}`,
-                formatLabel: 'PDF',
-                preview: { type: 'html', html },
+                formatLabel: orient === 'landscape' ? 'PDF · A4 ផ្តេក' : 'PDF · A4 បញ្ឈរ',
+                preview: { type: 'canvases', canvases: pages },
                 onDownload: async () => {
                     await _downloadHtmlAsPdf(html, `report_${type}_${date}.pdf`);
                     showToast('ឯកសារ PDF បានដំណើរការ!', 'success');
+                },
+                onTelegram: async () => {
+                    await _sendA4PagesToTelegram(pages, `ប្រគេនរបាយការណ៍វត្តមាន (${type}) — ${date}`);
+                    showToast('បានបញ្ជូនរូបភាពទៅ Telegram ជោគជ័យ!', 'success');
                 },
             });
         } else if (isImg) {
@@ -661,16 +696,22 @@ async function exportReport(action, fmt = 'docx') {
             const res = await fetch(`/api/reports/export?${p}`);
             if (!res.ok) { const j = await res.json(); throw new Error(j.message); }
             const html = await res.text();
-            const canvas = await _renderExportHtmlToCanvas(html);
+            const pages = await _renderExportHtmlToA4Pages(html);
+            const pageLabel = ExportPreview.a4PngFormatLabel(pages);
             await ExportPreview.open({
                 title: 'របាយការណ៍',
                 subtitle: `${type} · ${date}`,
-                formatLabel: 'រូបភាព PNG',
-                preview: { type: 'canvas', canvas },
+                formatLabel: pageLabel,
+                preview: { type: 'canvases', canvases: pages },
                 onDownload: async () => {
-                    const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
-                    ExportPreview.downloadBlob(blob, `report_${type}_${date}.png`);
-                    showToast('រូបភាពបានដំណើរការ!', 'success');
+                    await _downloadA4PngPages(pages, `report_${type}_${date}`);
+                    showToast(pages.length > 1
+                        ? `រូបភាព A4 ${pages.length} ទំព័របានដំណើរការ!`
+                        : 'រូបភាពបានដំណើរការ!', 'success');
+                },
+                onTelegram: async () => {
+                    await _sendA4PagesToTelegram(pages, `ប្រគេនរបាយការណ៍វត្តមាន (${type}) — ${date}`);
+                    showToast('បានបញ្ជូនរូបភាពទៅ Telegram ជោគជ័យ!', 'success');
                 },
             });
         } else {
@@ -678,11 +719,12 @@ async function exportReport(action, fmt = 'docx') {
             const resHtml = await fetch(`/api/reports/export?${p}`);
             if (!resHtml.ok) { const j = await resHtml.json(); throw new Error(j.message); }
             const html = await resHtml.text();
+            const pages = await _renderExportHtmlToA4Pages(html);
             await ExportPreview.open({
                 title: 'របាយការណ៍',
                 subtitle: `${type} · ${date}`,
                 formatLabel: isExcel ? 'Excel (.xlsx)' : 'Word (.docx)',
-                preview: { type: 'html', html },
+                preview: { type: 'canvases', canvases: pages },
                 onDownload: async () => {
                     p.set('fmt', fmt);
                     const res = await fetch(`/api/reports/export?${p}`);
@@ -690,6 +732,11 @@ async function exportReport(action, fmt = 'docx') {
                     const blob = await res.blob();
                     ExportPreview.downloadBlob(blob, `report_${type}_${date}.${isExcel ? 'xlsx' : 'docx'}`);
                     showToast(isExcel ? 'ឯកសារ Excel បានដំណើរការ!' : 'ឯកសារ Word បានដំណើរការ!', 'success');
+                },
+                onTelegram: async () => {
+                    const pages = await _renderExportHtmlToA4Pages(html);
+                    await _sendA4PagesToTelegram(pages, `ប្រគេនរបាយការណ៍វត្តមាន (${type}) — ${date}`);
+                    showToast('បានបញ្ជូនរូបភាពទៅ Telegram ជោគជ័យ!', 'success');
                 },
             });
         }
@@ -893,6 +940,14 @@ async function executeDelete() {
 
 // ============ UTILITIES ============
 
+function hasAttendanceIssue(m) {
+    return (m.absent_count || 0) > 0
+        || (m.permission_count || 0) > 0
+        || (m.late_count || 0) > 0
+        || m.status === 'absent'
+        || m.status === 'permission'
+        || m.status === 'late';
+}
 function isAbsViol(m) { return m.absent_count     >= ABSENT_LIMIT; }
 function isPrmViol(m) { return m.permission_count >= PERM_LIMIT;   }
 

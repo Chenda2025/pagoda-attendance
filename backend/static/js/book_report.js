@@ -647,25 +647,11 @@ async function _doExport(btn, type, fmt, action) {
       const res  = await fetch(url);
       if (!res.ok) { const j = await res.json(); throw new Error(j.message); }
       const html = await res.text();
-      const iframe = document.createElement('iframe');
-      iframe.style.cssText = 'position:fixed; top:-99999px; left:-99999px; width:794px; border:0;';
-      document.body.appendChild(iframe);
-      try {
-        await new Promise((resolve) => { iframe.onload = resolve; iframe.srcdoc = html; });
-        const doc = iframe.contentDocument;
-        iframe.style.height = doc.body.scrollHeight + 'px';
-        await new Promise(r => setTimeout(r, 200));
-        const canvas = await html2canvas(doc.body, { scale: 2, useCORS: true, backgroundColor: '#ffffff', windowWidth: 794 });
-        const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = `report_${type}.png`;
-        a.click();
-        URL.revokeObjectURL(a.href);
-        toast(`✓ រូបភាពបានដំណើរការ!`);
-      } finally {
-        document.body.removeChild(iframe);
-      }
+      const pages = await ExportPreview.renderHtmlToA4Pages(html);
+      await ExportPreview.downloadA4PngPages(pages, `report_${type}`);
+      toast(pages.length > 1
+        ? `✓ រូបភាព A4 ${pages.length} ទំព័របានដំណើរការ!`
+        : `✓ រូបភាពបានដំណើរការ!`);
       return;
     }
 

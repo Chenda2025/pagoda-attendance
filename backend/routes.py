@@ -21,9 +21,79 @@ from auth_service import (
 
 # ============ MINISTRY DOCUMENT HEADER (shared by docx/html/excel exports) ============
 
-_HDR_LEFT_LINES  = ['មន្ទីរធម្មការ និងសាសនា រាជធានី', 'ភ្នំពេញ', 'សាលា ពុ.អ.វិ.ស.ព្រ.ន.វ.និ']
+_HDR_LEFT_LINES  = [
+    'មន្ទីរធម្មការ និងសាសនា រាជធានីភ្នំពេញ',
+    'សាលាអនុគណខណ្ឌច្បារអំពៅ',
+    'វត្តនិរោធរង្សី',
+]
 _HDR_RIGHT_LINES = ['ព្រះរាជាណាចក្រកម្ពុជា', 'ជាតិ សាសនា ព្រះមហាក្សត្រ']
-_HDR_MAIN_TITLE  = 'ស្ថិតព្រះសង្ឃក្នុងវត្តនិរោធរង្សី'
+_HDR_MAIN_TITLE  = 'ស្ថិតិព្រះសង្ឃក្នុងវត្តនិរោធរង្សី'
+
+def _logo_file_path():
+    from pathlib import Path as _P
+    return _P(__file__).resolve().parent / 'static' / 'logo.jpg'
+
+
+def _logo_data_uri():
+    try:
+        import base64
+        path = _logo_file_path()
+        if path.is_file():
+            return 'data:image/jpeg;base64,' + base64.b64encode(path.read_bytes()).decode('ascii')
+    except Exception:
+        pass
+    return '/static/logo.jpg'
+
+
+def _gov_masthead_css():
+    return (
+        ".gov-masthead{background:linear-gradient(180deg,#071e3d 0%,#0c2d5a 100%);"
+        "border:1px solid rgba(201,162,39,.45);border-radius:10px;overflow:hidden;"
+        "margin-bottom:12px;position:relative}"
+        ".gov-masthead::after{content:'';position:absolute;left:0;right:0;bottom:0;"
+        "height:3px;background:linear-gradient(90deg,transparent,#c9a227,transparent)}"
+        ".gov-masthead-inner{display:grid;grid-template-columns:1fr auto 1fr;"
+        "align-items:center;gap:12px;padding:12px 16px}"
+        ".gov-col{color:#f7f3e8;font-family:'Battambang','Kantumruy Pro',sans-serif;"
+        "font-size:11px;line-height:1.55}"
+        ".gov-col p{margin:0}"
+        ".gov-col-left{text-align:left}"
+        ".gov-col-right{text-align:right}"
+        ".gov-col-center{display:flex;justify-content:center}"
+        ".gov-pagoda{color:#e8d48b;font-weight:700;font-size:12px;margin-top:3px}"
+        ".gov-kingdom{font-family:'Moul','Battambang',serif;font-size:13px;color:#e8d48b}"
+        ".gov-motto{font-weight:700;font-size:11px;letter-spacing:.04em;margin-top:3px;opacity:.95}"
+        ".gov-seal{width:52px;height:52px;object-fit:cover;border-radius:50%;"
+        "border:2.5px solid #c9a227;background:#fff;"
+        "box-shadow:0 0 0 3px rgba(201,162,39,.2)}"
+        ".mh-title{text-align:center;font-family:'Moul','Battambang',serif;font-weight:400;"
+        "font-size:15px;color:#0c2d5a;margin:8px 0 2px}"
+        ".mh-sub{text-align:center;font-family:'Battambang',serif;font-size:12px;"
+        "color:#718096;margin:0 0 12px}"
+    )
+
+
+def _gov_masthead_html(title=None, subtitle=None):
+    import html as _h
+    title = title if title is not None else _HDR_MAIN_TITLE
+    extra = f'<div class="mh-sub">{_h.escape(subtitle)}</div>' if subtitle else ''
+    return (
+        '<div class="gov-masthead"><div class="gov-masthead-inner">'
+        f'<div class="gov-col gov-col-left">'
+        f'<p>{_h.escape(_HDR_LEFT_LINES[0])}</p>'
+        f'<p>{_h.escape(_HDR_LEFT_LINES[1])}</p>'
+        f'<p class="gov-pagoda">{_h.escape(_HDR_LEFT_LINES[2])}</p></div>'
+        f'<div class="gov-col gov-col-center">'
+        f'<img class="gov-seal" src="{_logo_data_uri()}" alt="">'
+        f'</div>'
+        f'<div class="gov-col gov-col-right">'
+        f'<p class="gov-kingdom">{_h.escape(_HDR_RIGHT_LINES[0])}</p>'
+        f'<p class="gov-motto">{_h.escape(_HDR_RIGHT_LINES[1])}</p></div>'
+        '</div></div>'
+        f'<div class="mh-title">{_h.escape(title)}</div>'
+        f'{extra}'
+    )
+
 
 main_bp = Blueprint('main_bp', __name__)
 
@@ -923,8 +993,19 @@ def _get_telegram_period_dates(date_str, period='15d'):
     return _get_block_dates(date_str)
 
 
-def _fetch_telegram_eligible_monks(block_start, block_end):
+def _telegram_source_from_request():
+    raw = None
+    if request.method in ('POST', 'PUT', 'PATCH'):
+        data = request.get_json(silent=True) or {}
+        raw = data.get('source') or data.get('scope')
+    if raw is None:
+        raw = request.args.get('source') or request.args.get('scope')
+    return _norm_attendance_source(raw)
+
+
+def _fetch_telegram_eligible_monks(block_start, block_end, source='layout'):
     """All contract-eligible monks in block with telegram + contract status."""
+    source = _norm_attendance_source(source)
     conn = connect_db()
     cur = conn.cursor()
     cur.execute("""
@@ -933,11 +1014,11 @@ def _fetch_telegram_eligible_monks(block_start, block_end):
                COUNT(CASE WHEN a.status = 'permission' THEN 1 END) AS perm_count
         FROM monk_tbl m
         LEFT JOIN attendance_tbl a
-            ON a.monk_id = m.id AND a.date >= %s AND a.date <= %s
+            ON a.monk_id = m.id AND a.date >= %s AND a.date <= %s AND a.source = %s
         WHERE COALESCE(m.living_status, %s) = %s
         GROUP BY m.id, m.fullname, m.monk_type, m.residence, m.position
         ORDER BY absent_count DESC, perm_count DESC, m.fullname
-    """, (block_start.isoformat(), block_end.isoformat(),
+    """, (block_start.isoformat(), block_end.isoformat(), source,
           _ACTIVE_LIVING_STATUS, _ACTIVE_LIVING_STATUS))
     rows = cur.fetchall()
 
@@ -984,12 +1065,13 @@ def _fetch_telegram_eligible_monks(block_start, block_end):
     for r in rows:
         absent_count = int(r[5] or 0)
         perm_count = int(r[6] or 0)
-        if not _contract_eligible(absent_count, perm_count):
-            continue
+        if absent_count <= 2:
+            if source == 'sala_chan' or perm_count < DISC_PERM_MIN:
+                continue
         sent = sent_map.get(r[0])
         contract = contract_map.get(r[0], {})
-        over_absent = absent_count >= DISC_ABSENT_MIN
-        over_perm = perm_count >= DISC_PERM_MIN
+        over_absent = absent_count > 2
+        over_perm = False if source == 'sala_chan' else perm_count >= DISC_PERM_MIN
         step_no, step_label = _absent_contract_step(absent_count) if over_absent else (None, None)
         monks.append({
             'id': r[0],
@@ -1181,9 +1263,10 @@ def api_telegram_notify_list():
         date_str = (request.args.get('date') or '').strip() or _date.today().isoformat()
         filt = (request.args.get('filter') or 'eligible').strip()
         period = _telegram_period_from_request()
+        source = _telegram_source_from_request()
         block_start, block_end = _get_telegram_period_dates(date_str, period)
 
-        all_monks = _fetch_telegram_eligible_monks(block_start, block_end)
+        all_monks = _fetch_telegram_eligible_monks(block_start, block_end, source)
         done_monks = [m for m in all_monks if m['contract_status'] == 'done']
         monks = [m for m in all_monks if m['contract_status'] != 'done']
 
@@ -1198,7 +1281,11 @@ def api_telegram_notify_list():
             'period': period,
             'block_start': block_start.isoformat(),
             'block_end': block_end.isoformat(),
-            'thresholds': {'absent_min': DISC_ABSENT_MIN, 'perm_min': DISC_PERM_MIN},
+            'source': source,
+            'thresholds': {
+                'absent_min': 3,
+                'perm_min': 0 if source == 'sala_chan' else DISC_PERM_MIN,
+            },
             'monks': monks,
             'total': len(monks),
             'sent_count': sum(1 for m in monks if m['sent']),
@@ -1216,13 +1303,15 @@ def api_telegram_notify_contract_done():
     try:
         date_str = (request.args.get('date') or '').strip() or _date.today().isoformat()
         period = _telegram_period_from_request()
+        source = _telegram_source_from_request()
         block_start, block_end = _get_telegram_period_dates(date_str, period)
-        all_monks = _fetch_telegram_eligible_monks(block_start, block_end)
+        all_monks = _fetch_telegram_eligible_monks(block_start, block_end, source)
         done = [m for m in all_monks if m['contract_status'] == 'done']
         return jsonify({
             'success': True,
             'date': date_str,
             'period': period,
+            'source': source,
             'block_start': block_start.isoformat(),
             'block_end': block_end.isoformat(),
             'monks': done,
@@ -1242,8 +1331,9 @@ def api_telegram_contract_report_export():
         date_str = (request.args.get('date') or '').strip() or _date.today().isoformat()
         fmt = (request.args.get('fmt') or 'html').strip().lower()
         period = _telegram_period_from_request()
+        source = _telegram_source_from_request()
         block_start, block_end = _get_telegram_period_dates(date_str, period)
-        all_monks = _fetch_telegram_eligible_monks(block_start, block_end)
+        all_monks = _fetch_telegram_eligible_monks(block_start, block_end, source)
         done = [m for m in all_monks if m['contract_status'] == 'done']
 
         if fmt == 'html':
@@ -1494,6 +1584,7 @@ def api_telegram_notify_send():
             return jsonify({'success': False, 'message': 'សូមជ្រើសរើសឈ្មោះ'}), 400
 
         period = _telegram_period_from_request()
+        source = _telegram_source_from_request()
         block_start, block_end = _get_telegram_period_dates(date_str, period)
         sent, failed = 0, []
 
@@ -1508,12 +1599,15 @@ def api_telegram_notify_send():
                 SELECT COUNT(CASE WHEN status = 'absent' THEN 1 END),
                        COUNT(CASE WHEN status = 'permission' THEN 1 END)
                 FROM attendance_tbl
-                WHERE monk_id = %s AND date >= %s AND date <= %s
-            """, (monk_id, block_start.isoformat(), block_end.isoformat()))
+                WHERE monk_id = %s AND date >= %s AND date <= %s AND source = %s
+            """, (monk_id, block_start.isoformat(), block_end.isoformat(), source))
             row = cur.fetchone()
             absent_count = int(row[0] or 0)
             perm_count = int(row[1] or 0)
-            if not _contract_eligible(absent_count, perm_count):
+            eligible = absent_count > 2 or (
+                source != 'sala_chan' and perm_count >= DISC_PERM_MIN
+            )
+            if not eligible:
                 cur.execute("SELECT fullname FROM monk_tbl WHERE id = %s", (monk_id,))
                 name_row = cur.fetchone()
                 failed.append({
@@ -3239,7 +3333,11 @@ def layout():
 
 @main_bp.route('/classroom-layout')
 def classroom_layout_page():
-    return render_template('classroom_layout.html', username=session.get('username', ''))
+    return render_template(
+        'classroom_layout.html',
+        username=session.get('username', ''),
+        role=session.get('role', ''),
+    )
 
 
 @main_bp.route('/api/classroom-layout', methods=['GET'])
@@ -3269,7 +3367,7 @@ def get_classroom_layout():
 
 @main_bp.route('/api/classroom-layout', methods=['POST'])
 def save_classroom_layout():
-    if not user_allowed(_session_user(), '/classroom-layout'):
+    if session.get('role') != 'admin':
         abort(403)
     import json as _json
     data = request.get_json(silent=True) or {}
@@ -3355,6 +3453,7 @@ def send_classroom_layout_telegram():
                    ON p.monk_id = a.monk_id
                   AND a.date BETWEEN p.start_date AND p.end_date
             WHERE a.date = %s
+              AND a.source = 'sala_chan'
               AND a.monk_id = ANY(%s)
               AND a.status IN ('absent', 'permission', 'late')
             ORDER BY m.monk_type, a.status, m.fullname
@@ -3524,9 +3623,13 @@ def setup_trigger():
 def get_attendance():
     try:
         date_str = request.args.get('date', _date.today().isoformat())
+        source = _source_from_request(args=request.args)
         conn = connect_db()
         cursor = conn.cursor()
-        cursor.execute("SELECT monk_id, status FROM attendance_tbl WHERE date = %s;", (date_str,))
+        cursor.execute(
+            "SELECT monk_id, status FROM attendance_tbl WHERE date = %s AND source = %s;",
+            (date_str, source),
+        )
         records = [{'monk_id': r[0], 'status': r[1]} for r in cursor.fetchall()]
         
         cursor.execute("""
@@ -3550,7 +3653,7 @@ def get_attendance():
                 }
                 
         cursor.close(); conn.close()
-        return jsonify({'success': True, 'records': records, 'permissions_info': perms})
+        return jsonify({'success': True, 'records': records, 'permissions_info': perms, 'source': source})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 
@@ -3562,6 +3665,7 @@ def set_attendance():
         monk_id = data.get('monk_id')
         status  = data.get('status')
         date_str = data.get('date', _date.today().isoformat())
+        source = _source_from_request(data=data)
         if status not in ('absent', 'permission', 'late'):
             return jsonify({'success': False, 'message': 'Invalid status'}), 400
         conn = connect_db()
@@ -3573,7 +3677,8 @@ def set_attendance():
                 WHERE monk_id = %s AND status = 'permission'
                   AND date >= %s AND date <= %s
                   AND date <> %s
-            """, (monk_id, block_start.isoformat(), block_end.isoformat(), date_str))
+                  AND source = %s
+            """, (monk_id, block_start.isoformat(), block_end.isoformat(), date_str, source))
             if int((cursor.fetchone() or [0])[0] or 0) > 2:
                 cursor.close()
                 conn.close()
@@ -3582,15 +3687,15 @@ def set_attendance():
                     'message': 'ច្បាប់លើស ២ ថ្ងៃក្នុងរយៈពេល ១៥ ថ្ងៃ — សូមកត់អវត្តមានតែប៉ុណ្ណោះ',
                 }), 400
         cursor.execute("""
-            INSERT INTO attendance_tbl (monk_id, status, date)
-            VALUES (%s, %s, %s)
-            ON CONFLICT (monk_id, date) DO UPDATE SET
+            INSERT INTO attendance_tbl (monk_id, status, date, source)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (monk_id, date, source) DO UPDATE SET
                 status = EXCLUDED.status,
                 created_at = CASE
                     WHEN EXCLUDED.status = 'late' THEN NOW()
                     ELSE attendance_tbl.created_at
                 END;
-        """, (monk_id, status, date_str))
+        """, (monk_id, status, date_str, source))
         conn.commit()
 
         if status == 'absent':
@@ -3603,8 +3708,9 @@ def set_attendance():
                 FROM attendance_tbl
                 WHERE monk_id = %s
                   AND date >= %s
-                  AND date <= %s;
-            """, (monk_id, block_start.isoformat(), block_end.isoformat()))
+                  AND date <= %s
+                  AND source = %s;
+            """, (monk_id, block_start.isoformat(), block_end.isoformat(), source))
             row = cursor.fetchone()
             absent_count = int(row[0] or 0)
             perm_count = int(row[1] or 0)
@@ -3648,6 +3754,81 @@ def set_attendance():
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
+@main_bp.route('/api/permissions', methods=['GET'])
+def list_active_permissions():
+    """Names whose permission is still valid in the current 15-day block."""
+    try:
+        date_str = request.args.get('date', _date.today().isoformat())
+        source = _source_from_request(args=request.args)
+        target = _date.fromisoformat(date_str)
+        block_start, block_end = _get_block_dates(date_str)
+        conn = connect_db()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT m.id, m.fullname, m.monk_type, m.position,
+                   MIN(a.date) AS first_day,
+                   MAX(a.date) AS last_day,
+                   p.start_date, p.end_date, p.reason, p.shift
+            FROM monk_tbl m
+            LEFT JOIN monk_permission p
+                   ON p.monk_id = m.id
+                  AND p.start_date <= %s
+                  AND p.end_date >= %s
+            LEFT JOIN attendance_tbl a
+                   ON a.monk_id = m.id
+                  AND a.source = %s
+                  AND a.status = 'permission'
+                  AND a.date >= %s AND a.date <= %s
+            WHERE p.monk_id IS NOT NULL
+               OR a.monk_id IS NOT NULL
+            GROUP BY m.id, m.fullname, m.monk_type, m.position,
+                     p.start_date, p.end_date, p.reason, p.shift
+            HAVING (p.end_date IS NOT NULL AND p.end_date >= %s)
+                OR MAX(a.date) >= %s
+        """, (
+            block_end.isoformat(),
+            target.isoformat(),
+            source,
+            block_start.isoformat(),
+            block_end.isoformat(),
+            target.isoformat(),
+            target.isoformat(),
+        ))
+        rows = []
+        for r in cursor.fetchall():
+            monk_id, fullname, monk_type, position, first_day, last_day, start_date, end_date, reason, shift = r
+            end = end_date or last_day
+            start = start_date or first_day
+            if not end or end < target:
+                continue
+            if end < block_start or (start and start > block_end):
+                continue
+            days_left = (end - target).days
+            rows.append({
+                'id': monk_id,
+                'fullname': fullname,
+                'monk_type': monk_type or '',
+                'position': position or '',
+                'start_date': (start_date or first_day).isoformat() if (start_date or first_day) else '',
+                'end_date': end.isoformat() if end else '',
+                'days_left': days_left,
+                'reason': reason or '',
+                'shift': shift or '',
+            })
+        rows.sort(key=lambda r: (-(r.get('days_left') or 0), r.get('fullname') or ''))
+        cursor.close()
+        conn.close()
+        return jsonify({
+            'success': True,
+            'records': rows,
+            'source': source,
+            'period_start': block_start.isoformat(),
+            'period_end': block_end.isoformat(),
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 @main_bp.route('/api/permissions', methods=['POST'])
 def add_permission():
     try:
@@ -3657,6 +3838,7 @@ def add_permission():
         end_date = data.get('end_date')
         reason = data.get('reason', '')
         shift = str(data.get('shift') or '').strip()
+        source = _source_from_request(data=data)
 
         if not monk_id or not start_date or not end_date:
             return jsonify({'success': False, 'message': 'Missing required fields'}), 400
@@ -3685,7 +3867,8 @@ def add_permission():
             SELECT COUNT(*) FROM attendance_tbl
             WHERE monk_id = %s AND status = 'permission'
               AND date >= %s AND date <= %s
-        """, (monk_id, block_start.isoformat(), block_end.isoformat()))
+              AND source = %s
+        """, (monk_id, block_start.isoformat(), block_end.isoformat(), source))
         perm_count = int((cursor.fetchone() or [0])[0] or 0)
         if perm_count > 2:
             cursor.close()
@@ -3715,10 +3898,10 @@ def add_permission():
         current_date = s_date
         while current_date <= e_date:
             cursor.execute("""
-                INSERT INTO attendance_tbl (monk_id, status, date)
-                VALUES (%s, 'permission', %s)
-                ON CONFLICT (monk_id, date) DO UPDATE SET status = EXCLUDED.status;
-            """, (monk_id, current_date.isoformat()))
+                INSERT INTO attendance_tbl (monk_id, status, date, source)
+                VALUES (%s, 'permission', %s, %s)
+                ON CONFLICT (monk_id, date, source) DO UPDATE SET status = EXCLUDED.status;
+            """, (monk_id, current_date.isoformat(), source))
             current_date += timedelta(days=1)
 
         conn.commit()
@@ -3756,9 +3939,13 @@ def get_monk_attendance(monk_id):
 def remove_attendance(monk_id):
     try:
         date_str = request.args.get('date', _date.today().isoformat())
+        source = _source_from_request(args=request.args)
         conn = connect_db()
         cursor = conn.cursor()
-        cursor.execute("DELETE FROM attendance_tbl WHERE monk_id = %s AND date = %s;", (monk_id, date_str))
+        cursor.execute(
+            "DELETE FROM attendance_tbl WHERE monk_id = %s AND date = %s AND source = %s;",
+            (monk_id, date_str, source),
+        )
         conn.commit(); cursor.close(); conn.close()
         return jsonify({'success': True})
     except Exception as e:
@@ -3771,7 +3958,7 @@ def report():
     return render_template(
         'report.html',
         report_scope='layout',
-        report_title='របាយការណ៍វត្តមាន ១៥ ថ្ងៃ',
+        report_title='របាយការណ៍អាសនៈ',
         report_back_href='/layout',
         report_back_label='ប្លង់អាសនៈ',
     )
@@ -3820,15 +4007,69 @@ def _classroom_seated_monk_ids():
             conn.close()
 
 
+def _layout_seated_monk_ids():
+    """Monk IDs currently seated on the អាសនៈ (seat_order) layout."""
+    import json as _json
+    conn = None
+    try:
+        conn = connect_db()
+        cur = conn.cursor()
+        cur.execute("SELECT type, monk_ids FROM seat_order WHERE type IN ('bhikkhu', 'samanera')")
+        rows = cur.fetchall()
+        cur.close()
+        seated_ids = set()
+        for row in rows:
+            ids = row[1]
+            if isinstance(ids, str):
+                ids = _json.loads(ids)
+            if not isinstance(ids, list):
+                continue
+            for mid in ids:
+                if mid is None or mid == '':
+                    continue
+                try:
+                    seated_ids.add(int(mid))
+                except (TypeError, ValueError):
+                    pass
+        return seated_ids
+    except Exception as e:
+        print(f'[layout-seated] {e}')
+        return set()
+    finally:
+        if conn:
+            conn.close()
+
+
 def _apply_report_scope(monks, args):
-    """Sala Chan report: only monks seated on classroom layout. Layout report: all."""
-    scope = str((args.get('scope') if args is not None else '') or '').strip()
-    if scope != 'sala_chan':
-        return monks
-    ids = _classroom_seated_monk_ids()
+    """Keep layout and sala-chan reports separate by seated monks on each layout.
+    scope=layout (default) → only អាសនៈ seat_order monks
+    scope=sala_chan → only សាលាឆាន់ classroom seats
+    """
+    scope = str((args.get('scope') if args is not None else '') or '').strip() or 'layout'
+    if scope == 'sala_chan':
+        ids = _classroom_seated_monk_ids()
+    else:
+        ids = _layout_seated_monk_ids()
     if not ids:
         return []
     return [m for m in monks if int(m.get('id') or 0) in ids]
+
+
+def _norm_attendance_source(raw):
+    """Normalize attendance source: layout (អាសនៈ) or sala_chan (សាលាឆាន់)."""
+    s = str(raw or '').strip().lower()
+    if s in ('sala_chan', 'sala-chan', 'classroom', 'classroom_layout'):
+        return 'sala_chan'
+    return 'layout'
+
+
+def _source_from_request(args=None, data=None):
+    raw = None
+    if data is not None:
+        raw = data.get('source') or data.get('scope')
+    if raw is None and args is not None:
+        raw = args.get('source') or args.get('scope')
+    return _norm_attendance_source(raw)
 
 
 def _get_block_dates(date_str):
@@ -3879,25 +4120,33 @@ def _fetch_report_rows(args):
 
     where_sql = ('WHERE ' + ' AND '.join(where_parts)) if where_parts else ''
 
+    source = _source_from_request(args=args)
+
     sql = f"""
         SELECT m.id, m.fullname, m.monk_type, m.position, m.vassa_years,
                m.residence, m.education_level, m.academic_year,
                COUNT(CASE WHEN a.status = 'absent'     THEN 1 END) AS absent_count,
                COUNT(CASE WHEN a.status = 'permission' THEN 1 END) AS perm_count,
+               COUNT(CASE WHEN a.status = 'late'       THEN 1 END) AS late_count,
                ARRAY_AGG(a.date ORDER BY a.date) FILTER (WHERE a.status = 'absent')     AS absent_dates,
-               ARRAY_AGG(a.date ORDER BY a.date) FILTER (WHERE a.status = 'permission') AS perm_dates
+               ARRAY_AGG(a.date ORDER BY a.date) FILTER (WHERE a.status = 'permission') AS perm_dates,
+               ARRAY_AGG(a.date ORDER BY a.date) FILTER (WHERE a.status = 'late')       AS late_dates
         FROM monk_tbl m
         LEFT JOIN attendance_tbl a
-            ON a.monk_id = m.id AND a.date >= %s AND a.date <= %s
+            ON a.monk_id = m.id AND a.date >= %s AND a.date <= %s AND a.source = %s
         {where_sql}
         GROUP BY m.id, m.fullname, m.monk_type, m.position, m.vassa_years,
                  m.residence, m.education_level, m.academic_year
+        HAVING COUNT(CASE WHEN a.status = 'absent'     THEN 1 END) > 0
+            OR COUNT(CASE WHEN a.status = 'permission' THEN 1 END) > 0
+            OR COUNT(CASE WHEN a.status = 'late'       THEN 1 END) > 0
         ORDER BY m.monk_type,
                  COUNT(CASE WHEN a.status = 'absent'     THEN 1 END) DESC,
                  COUNT(CASE WHEN a.status = 'permission' THEN 1 END) DESC,
+                 COUNT(CASE WHEN a.status = 'late'       THEN 1 END) DESC,
                  m.fullname;
     """
-    params = [start_date.isoformat(), end_date.isoformat()] + where_params
+    params = [start_date.isoformat(), end_date.isoformat(), source] + where_params
 
     conn = connect_db()
     cur  = conn.cursor()
@@ -3910,7 +4159,9 @@ def _fetch_report_rows(args):
         'vassa_years': r[4], 'residence': (r[5] or '').replace('_', ' '),
         'education_level': r[6] or '', 'academic_year': r[7] or '',
         'absent_count': int(r[8] or 0), 'permission_count': int(r[9] or 0),
-        'absent_dates': _format_date_list(r[10]), 'perm_dates': _format_date_list(r[11]),
+        'late_count': int(r[10] or 0),
+        'absent_dates': _format_date_list(r[11]), 'perm_dates': _format_date_list(r[12]),
+        'late_dates': _format_date_list(r[13]),
     } for r in rows]
 
     return _apply_report_scope(monks, args), start_date, end_date
@@ -3974,7 +4225,7 @@ def _build_report_html(monks, start_date, end_date, filters_applied, ABSENT_LIMI
             f'{_html.escape(title)} ({len(section_monks)} នាក់)</h2>'
             f'<table><thead><tr>'
             f'<th>#</th><th>ឈ្មោះ</th><th>តួនាទី</th><th>វស្សា</th>'
-            f'<th>ស្នាក់នៅ</th><th>ការសិក្សា</th><th>❌</th><th>📋</th><th>ថ្ងៃ</th><th>ស្ថានភាព</th>'
+            f'<th>ស្នាក់នៅ</th><th>ការសិក្សា</th><th>❌</th><th>📋</th><th>⏰</th><th>ថ្ងៃ</th><th>ស្ថានភាព</th>'
             f'</tr></thead><tbody>{rows}</tbody></table>'
         )
 
@@ -4018,16 +4269,10 @@ def _build_report_html(monks, start_date, end_date, filters_applied, ABSENT_LIMI
         '.dates{font-size:8.5px;line-height:1.7;}'
         '@page{size:A4 portrait;margin:12mm 10mm;}'
         '@media print { @page { size: A4 portrait; margin: 12mm; } }'
-        '</style></head><body>'
-        '<h1>វត្តនិរោធរង្សី — របាយការណ៍វត្តមាន</h1>'
-        f'<p class="sub">ចន្លោះ: {date_range} (១៥ ថ្ងៃ)</p>'
-        f'{filter_line}'
-        '<div class="summary">'
-        f'<span class="s-total">ព្រះសង្ឃ: {len(monks)} នាក់</span>'
-        f'<span class="s-absent">❌ លើសអវត្តមាន: {absent_viol} នាក់</span>'
-        f'<span class="s-perm">📋 លើសច្បាប់: {perm_viol} នាក់</span>'
-        f'<span class="s-clean">✓ ប្រក្រតី: {clean} នាក់</span>'
-        '</div>'
+        + _gov_masthead_css()
+        + '</style></head><body>'
+        + _gov_masthead_html(subtitle=f'ចន្លោះ: {date_range} (១៥ ថ្ងៃ)')
+        + filter_line
         + section_html(bhikkhus,  'ផ្នែកទី ១ — ភិក្ខុ',   '#8a6100', '#f0c040')
         + section_html(samaneras, 'ផ្នែកទី ២ — សាមណេរ', '#1b5e20', '#66bb6a')
         + '</body></html>'
@@ -4053,7 +4298,6 @@ def export_attendance_report_pdf():
                 filters_applied.append(f"{label}: {v}")
 
         html_str  = _build_report_html(monks, start_date, end_date, filters_applied, ABSENT_LIMIT, PERM_LIMIT)
-        html_str += '<script>window.onload = function() { setTimeout(function(){ window.print(); }, 500); }</script>'
         return html_str
 
     except ImportError:
@@ -4708,6 +4952,8 @@ def export_monks():
             css = (
                 "@import url('https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&family=Moul&display=swap');"
                 "*, *::before, *::after{box-sizing:border-box;margin:0;padding:0}"
+                + _gov_masthead_css() +
+                ""
                 "body{font-family:'Battambang','Khmer MN','Khmer Sangam MN',sans-serif;"
                 "color:#1a202c;font-size:9px;background:#fff}"
 
@@ -4766,24 +5012,7 @@ def export_monks():
 @media print {{ @page {{ size: A4 portrait; margin: 12mm; }} }}
 </style></head><body>
 
-<div class="header">
-    <div class="hdr-top">
-        <div>
-            <div class="hdr-name">វត្តនិរោធរង្សី</div>
-            <div class="hdr-sub">Pagoda Niroth Rangsay — បញ្ជីព្រះសង្ឃ</div>
-        </div>
-        <div class="hdr-date">
-            ថ្ងៃទី {_html.escape(today)}<br>
-            ស្ថានភាព​ ​បច្ចុប្បន្ន
-        </div>
-    </div>
-    <hr class="hdr-divider">
-    <div class="hdr-stats">
-        <div class="hdr-stat"><strong>{len(monks)}</strong>ព្រះសង្ឃ​សរុប</div>
-        <div class="hdr-stat"><strong>{len(bhikkhus)}</strong>ភិក្ខុ</div>
-        <div class="hdr-stat"><strong>{len(samaneras)}</strong>សាមណេរ</div>
-    </div>
-</div>
+{_gov_masthead_html(title='បញ្ជីព្រះសង្ឃ — វត្តនិរោធរង្សី', subtitle=f'ថ្ងៃទី {_html.escape(today)}')}
 
 {filter_html}
 
@@ -4951,6 +5180,7 @@ def _build_layout_export_html(bhikkhu_grid, samanera_grid, br, bc, sr, sc):
         "@import url('https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&family=Moul&display=swap');"
         "*, *::before, *::after{box-sizing:border-box;margin:0;padding:0}"
         "body{font-family:'Battambang','Khmer MN',sans-serif;color:#1a202c;font-size:8.5px;background:#fff}"
+        + _gov_masthead_css() +
         ".header{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);"
         "color:#fff;padding:10px 14px 9px;border-radius:7px;margin-bottom:10px}"
         ".hdr-row{display:flex;justify-content:space-between;align-items:center}"
@@ -4982,21 +5212,7 @@ def _build_layout_export_html(bhikkhu_grid, samanera_grid, br, bc, sr, sc):
 @media print {{ @page {{ size: A4 portrait; margin: 12mm; }} }}
 </style></head><body>
 
-<div class="header">
-  <div class="hdr-row">
-    <div>
-      <div class="hdr-title">ប្លង់អាសនៈព្រះសង្ឃ — វត្តនិរោធរង្សី</div>
-      <div class="hdr-sub">Pagoda Niroth Rangsay — Seating Layout</div>
-    </div>
-    <div class="hdr-right">ថ្ងៃទី {today}<br>ស្ថានភាពបច្ចុប្បន្ន</div>
-  </div>
-  <hr class="hdr-divider">
-  <div class="hdr-stats">
-    <div class="hdr-stat"><strong>{bhikkhu_count}</strong>ភិក្ខុ</div>
-    <div class="hdr-stat"><strong>{samanera_count}</strong>សាមណេរ</div>
-    <div class="hdr-stat"><strong>{bhikkhu_count + samanera_count}</strong>ព្រះសង្ឃសរុប</div>
-  </div>
-</div>
+{_gov_masthead_html(title='ប្លង់អាសនៈព្រះសង្ឃ — វត្តនិរោធរង្សី', subtitle=f'ថ្ងៃទី {today}')}
 
 <div class="sec sec-b">ផ្នែកទី ១ — ភិក្ខុ
   <span class="sec-sub">{bhikkhu_count} នាក់ &nbsp;|&nbsp; ក្រឡា {br}×{bc}={br * bc}</span>
@@ -5243,8 +5459,9 @@ def _do_compile_period(conn, cur, period_start):
     return len(rows), period_end
 
 
-def _fetch_live_range(start_date, end_date):
+def _fetch_live_range(start_date, end_date, source='layout'):
     """Aggregate directly from attendance_tbl for any date range — no compiled summaries needed."""
+    source = _norm_attendance_source(source)
     sql = """
         SELECT m.id, m.fullname, m.monk_type, m.position, m.vassa_years,
                m.residence, m.education_level, m.academic_year,
@@ -5252,7 +5469,7 @@ def _fetch_live_range(start_date, end_date):
                COALESCE(SUM(CASE WHEN a.status = 'permission' THEN 1 ELSE 0 END), 0)
         FROM monk_tbl m
         LEFT JOIN attendance_tbl a
-            ON a.monk_id = m.id AND a.date >= %s AND a.date <= %s
+            ON a.monk_id = m.id AND a.date >= %s AND a.date <= %s AND a.source = %s
         GROUP BY m.id, m.fullname, m.monk_type, m.position,
                  m.vassa_years, m.residence, m.education_level, m.academic_year
         HAVING COALESCE(SUM(CASE WHEN a.status = 'absent'     THEN 1 ELSE 0 END), 0) >= %s
@@ -5263,7 +5480,7 @@ def _fetch_live_range(start_date, end_date):
     """
     conn = connect_db()
     cur  = conn.cursor()
-    cur.execute(sql, (start_date.isoformat(), end_date.isoformat(),
+    cur.execute(sql, (start_date.isoformat(), end_date.isoformat(), source,
                       DISC_ABSENT_MIN, DISC_PERM_MIN))
     rows = cur.fetchall()
     cur.close(); conn.close()
@@ -5336,6 +5553,7 @@ def book_report_page():
 def daily_report():
     """Return today's (or given date's) attendance records — no disciplinary filter."""
     date_str = request.args.get('date', _date.today().isoformat())
+    source = _source_from_request(args=request.args)
     try:
         conn = connect_db()
         cur  = conn.cursor()
@@ -5344,9 +5562,9 @@ def daily_report():
                    m.residence, m.education_level, m.academic_year, a.status
             FROM attendance_tbl a
             JOIN monk_tbl m ON m.id = a.monk_id
-            WHERE a.date = %s
+            WHERE a.date = %s AND a.source = %s
             ORDER BY m.monk_type, a.status, m.fullname
-        """, (date_str,))
+        """, (date_str, source))
         rows = cur.fetchall()
         cur.close(); conn.close()
         records = [{
@@ -5364,6 +5582,7 @@ def daily_report():
         return jsonify({
             'success': True,
             'date': date_str,
+            'source': source,
             'records': records,
         })
     except Exception as e:
@@ -5465,7 +5684,7 @@ def report_monthly():
         year, month = int(year_str), int(month_str)
         month_start = _date(year, month, 1)
         month_end   = _date(year, month, calendar.monthrange(year, month)[1])
-        monks = _apply_report_scope(_fetch_live_range(month_start, month_end), request.args)
+        monks = _apply_report_scope(_fetch_live_range(month_start, month_end, _source_from_request(args=request.args)), request.args)
         return jsonify({
             'success':      True,
             'year':         year,
@@ -5487,7 +5706,7 @@ def report_annual():
         year       = int(year_str)
         year_start = _date(year, 1, 1)
         year_end   = _date(year, 12, 31)
-        monks = _apply_report_scope(_fetch_live_range(year_start, year_end), request.args)
+        monks = _apply_report_scope(_fetch_live_range(year_start, year_end, _source_from_request(args=request.args)), request.args)
         return jsonify({
             'success':      True,
             'year':         year,
@@ -5509,7 +5728,7 @@ def report_triennial():
         end_year     = start_year + 2
         period_start = _date(start_year, 1, 1)
         period_end   = _date(end_year, 12, 31)
-        monks = _apply_report_scope(_fetch_live_range(period_start, period_end), request.args)
+        monks = _apply_report_scope(_fetch_live_range(period_start, period_end, _source_from_request(args=request.args)), request.args)
         return jsonify({
             'success':      True,
             'start_year':   start_year,
@@ -5532,14 +5751,15 @@ def _fetch_export_data(report_type, args):
     if report_type == 'daily':
         date_str = args.get('date', _date.today().isoformat())
         conn = connect_db(); cur = conn.cursor()
+        source = _source_from_request(args=args)
         cur.execute("""
             SELECT m.id, m.fullname, m.monk_type, m.position, m.vassa_years,
                    m.residence, m.education_level, m.academic_year, a.status
             FROM attendance_tbl a
             JOIN monk_tbl m ON m.id = a.monk_id
-            WHERE a.date = %s
+            WHERE a.date = %s AND a.source = %s
             ORDER BY m.fullname
-        """, (date_str,))
+        """, (date_str, source))
         rows = cur.fetchall(); cur.close(); conn.close()
         d_fmt = _date.fromisoformat(date_str).strftime('%d/%m/%Y')
         monks = [{
@@ -5568,7 +5788,7 @@ def _fetch_export_data(report_type, args):
         month = int(args.get('month', d.month))
         ps = _date(year, month, 1)
         pe = _date(year, month, _cal.monthrange(year, month)[1])
-        monks = _apply_report_scope(_norm_summary_monks(_fetch_live_range(ps, pe)), args)
+        monks = _apply_report_scope(_norm_summary_monks(_fetch_live_range(ps, pe, _source_from_request(args=args))), args)
         subtitle = f"{ps.strftime('%d/%m/%Y')} ដល់ {pe.strftime('%d/%m/%Y')}"
         return monks, 'ប្រចាំខែ', subtitle, ps.isoformat(), pe.isoformat()
 
@@ -5576,7 +5796,7 @@ def _fetch_export_data(report_type, args):
         date_str = args.get('date', _date.today().isoformat())
         year = int(args.get('year', _date.fromisoformat(date_str).year))
         ps = _date(year, 1, 1); pe = _date(year, 12, 31)
-        monks = _apply_report_scope(_norm_summary_monks(_fetch_live_range(ps, pe)), args)
+        monks = _apply_report_scope(_norm_summary_monks(_fetch_live_range(ps, pe, _source_from_request(args=args))), args)
         subtitle = f"{ps.strftime('%d/%m/%Y')} ដល់ {pe.strftime('%d/%m/%Y')}"
         return monks, 'ប្រចាំឆ្នាំ', subtitle, ps.isoformat(), pe.isoformat()
 
@@ -5585,7 +5805,7 @@ def _fetch_export_data(report_type, args):
         d          = _date.fromisoformat(date_str)
         start_year = int(args.get('start_year', d.year - 2))
         ps = _date(start_year, 1, 1); pe = _date(start_year + 2, 12, 31)
-        monks = _apply_report_scope(_norm_summary_monks(_fetch_live_range(ps, pe)), args)
+        monks = _apply_report_scope(_norm_summary_monks(_fetch_live_range(ps, pe, _source_from_request(args=args))), args)
         subtitle = f"{ps.strftime('%d/%m/%Y')} ដល់ {pe.strftime('%d/%m/%Y')}"
         return monks, 'ប្រចាំ ៣ ឆ្នាំ', subtitle, ps.isoformat(), pe.isoformat()
 
@@ -5627,26 +5847,40 @@ def _add_ministry_header_docx(doc, lunar_str):
             borders.append(el)
         tbl_pr.append(borders)
 
-    def line(cell, text, *, bold=False, color=None, size=10, first=False):
+    def line(cell, text, *, bold=False, color=None, size=10, first=False, align='left'):
         p = cell.paragraphs[0] if first else cell.add_paragraph()
-        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p.alignment = (
+            WD_ALIGN_PARAGRAPH.RIGHT if align == 'right'
+            else WD_ALIGN_PARAGRAPH.CENTER if align == 'center'
+            else WD_ALIGN_PARAGRAPH.LEFT
+        )
         run = p.add_run(text)
         run.bold = bold
         run.font.size = Pt(size)
-        if color: run.font.color.rgb = RGBColor(*color)
+        if color:
+            run.font.color.rgb = RGBColor(*color)
 
-    hdr_tbl = doc.add_table(rows=1, cols=2)
+    hdr_tbl = doc.add_table(rows=1, cols=3)
     hdr_tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
     no_border(hdr_tbl)
-    left, right = hdr_tbl.rows[0].cells
-    left.width = right.width = Cm(8.5)
+    left, mid, right = hdr_tbl.rows[0].cells
+    left.width = right.width = Cm(7.4)
+    mid.width = Cm(2.4)
 
-    line(left, '[ និមិត្តសញ្ញាក្រសួង ]', color=(0x2B, 0x6C, 0xB0), size=9, first=True)
-    for txt in _HDR_LEFT_LINES:
-        line(left, txt, color=(0x2B, 0x6C, 0xB0), size=10)
+    navy = (0x0C, 0x2D, 0x5A)
+    gold = (0x8A, 0x6D, 0x1A)
+    line(left, _HDR_LEFT_LINES[0], color=navy, size=10, first=True, align='left')
+    line(left, _HDR_LEFT_LINES[1], color=navy, size=10, align='left')
+    line(left, _HDR_LEFT_LINES[2], bold=True, color=gold, size=11, align='left')
 
-    line(right, _HDR_RIGHT_LINES[0], bold=True, size=12, first=True)
-    line(right, _HDR_RIGHT_LINES[1], bold=True, size=11)
+    mid.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+    logo = _logo_file_path()
+    if logo.is_file():
+        run = mid.paragraphs[0].add_run()
+        run.add_picture(str(logo), width=Cm(1.8))
+
+    line(right, _HDR_RIGHT_LINES[0], bold=True, color=gold, size=12, first=True, align='right')
+    line(right, _HDR_RIGHT_LINES[1], bold=True, color=navy, size=10, align='right')
 
     doc.add_paragraph()
     t = doc.add_paragraph()
@@ -5684,8 +5918,8 @@ def _make_export_docx(monks, type_label, subtitle, report_type):
         headers = ['#', 'ឈ្មោះ', 'ប្រភេទ', 'តួនាទី', 'វស្សា', 'ស្នាក់នៅ', 'ស្ថានភាព']
         widths  = [0.5, 3.0, 1.5, 2.5, 1.0, 2.0, 2.0]
     elif report_type == 'biweekly':
-        headers = ['#', 'ឈ្មោះ', 'តួនាទី', 'វស្សា', 'ស្នាក់នៅ', 'ការសិក្សា', '❌', '📋', 'ថ្ងៃ', 'ស្ថានភាព']
-        widths  = [0.5, 3.0, 2.5, 1.0, 2.0, 1.6, 0.7, 0.7, 2.8, 1.8]
+        headers = ['#', 'ឈ្មោះ', 'តួនាទី', 'វស្សា', 'ស្នាក់នៅ', 'ការសិក្សា', '❌', '📋', '⏰', 'ថ្ងៃ', 'ស្ថានភាព']
+        widths  = [0.5, 3.2, 2.4, 1.0, 1.8, 1.6, 0.7, 0.7, 0.7, 2.6, 1.8]
     else:
         headers = ['#', 'ឈ្មោះ', 'ប្រភេទ', 'តួនាទី', 'វស្សា', '❌', '📋', 'ចន្លោះ', 'ស្ថានភាព']
         widths  = [0.5, 3.0, 1.5, 2.5, 1.0, 0.7, 0.7, 3.5, 1.8]
@@ -5716,14 +5950,16 @@ def _make_export_docx(monks, type_label, subtitle, report_type):
             elif report_type == 'biweekly':
                 edu    = f"{m['education_level']} {m['academic_year']}".strip()
                 dp     = []
-                if m['absent_dates']: dp.append(f"❌ {m['absent_dates']}")
-                if m['perm_dates']:   dp.append(f"📋 {m['perm_dates']}")
+                if m.get('absent_dates'): dp.append(f"❌ {m['absent_dates']}")
+                if m.get('perm_dates'):   dp.append(f"📋 {m['perm_dates']}")
+                if m.get('late_dates'):   dp.append(f"⏰ {m['late_dates']}")
                 vals    = [str(idx), m['fullname'], m['position'], f"{m['vassa_years']} ឆ្នាំ",
                            m['residence'], edu,
                            str(m['absent_count'])     if m['absent_count']     else '—',
                            str(m['permission_count']) if m['permission_count'] else '—',
+                           str(m.get('late_count') or '') if m.get('late_count') else '—',
                            '\n'.join(dp) if dp else '—', status_text]
-                centers = {0, 3, 6, 7}; abs_col, perm_col = 6, 7
+                centers = {0, 3, 6, 7, 8}; abs_col, perm_col = 6, 7
             else:
                 vals    = [str(idx), m['fullname'], m['monk_type'], m['position'],
                            f"{m['vassa_years']} ឆ្នាំ",
@@ -5743,11 +5979,16 @@ def _make_export_docx(monks, type_label, subtitle, report_type):
                 if pr and j == perm_col: run.font.color.rgb = RGBColor(0xC0, 0x56, 0x21)
 
     from docx.enum.section import WD_ORIENT
+    from docx.shared import Mm
 
     doc = Document()
     sec = doc.sections[0]
     sec.left_margin = sec.right_margin = Cm(1.5)
     sec.top_margin  = sec.bottom_margin = Cm(1.5)
+    if _export_page_orientation(report_type) == 'landscape':
+        sec.orientation = WD_ORIENT.LANDSCAPE
+        sec.page_width = Mm(297)
+        sec.page_height = Mm(210)
 
     _add_ministry_header_docx(doc, khmer_lunar_date(_d.today()))
 
@@ -5783,15 +6024,29 @@ def _make_export_docx(monks, type_label, subtitle, report_type):
 
 # ---- Unified export: build HTML for PDF --------------------------
 
+def _export_col_count(report_type):
+    if report_type == 'daily':
+        return 7
+    if report_type == 'biweekly':
+        return 11
+    return 9
+
+
+def _export_page_orientation(report_type):
+    """Wide tables (15-day) use A4 landscape; fewer columns stay portrait."""
+    return 'landscape' if _export_col_count(report_type) >= 10 else 'portrait'
+
+
 def _make_export_html(monks, type_label, subtitle, report_type):
     import html as _h
+    page_orient = _export_page_orientation(report_type)
 
     if report_type == 'daily':
         thead = ('<th>#</th><th>ឈ្មោះ</th><th>ប្រភេទ</th><th>តួនាទី</th>'
                  '<th>វស្សា</th><th>ស្នាក់នៅ</th><th>ស្ថានភាព</th>')
     elif report_type == 'biweekly':
         thead = ('<th>#</th><th>ឈ្មោះ</th><th>តួនាទី</th><th>វស្សា</th><th>ស្នាក់នៅ</th>'
-                 '<th>ការសិក្សា</th><th>❌</th><th>📋</th><th>ថ្ងៃ</th><th>ស្ថានភាព</th>')
+                 '<th>ការសិក្សា</th><th>❌</th><th>📋</th><th>⏰</th><th>ថ្ងៃ</th><th>ស្ថានភាព</th>')
     else:
         thead = ('<th>#</th><th>ឈ្មោះ</th><th>ប្រភេទ</th><th>តួនាទី</th>'
                  '<th>វស្សា</th><th>❌</th><th>📋</th><th>ចន្លោះ</th><th>ស្ថានភាព</th>')
@@ -5820,10 +6075,12 @@ def _make_export_html(monks, type_label, subtitle, report_type):
         elif report_type == 'biweekly':
             ac  = 'color:#c53030;font-weight:bold' if ab else 'color:#718096'
             pc  = 'color:#c05621;font-weight:bold' if pr else 'color:#718096'
+            lc  = 'color:#2b6cb0;font-weight:bold' if (m.get('late_count') or 0) else 'color:#718096'
             edu = _h.escape(f"{m['education_level']} {m['academic_year']}".strip())
             dp  = []
-            if m['absent_dates']: dp.append(f'<span style="color:#c53030">❌ {_h.escape(m["absent_dates"])}</span>')
-            if m['perm_dates']:   dp.append(f'<span style="color:#c05621">📋 {_h.escape(m["perm_dates"])}</span>')
+            if m.get('absent_dates'): dp.append(f'<span style="color:#c53030">❌ {_h.escape(m["absent_dates"])}</span>')
+            if m.get('perm_dates'):   dp.append(f'<span style="color:#c05621">📋 {_h.escape(m["perm_dates"])}</span>')
+            if m.get('late_dates'):   dp.append(f'<span style="color:#2b6cb0">⏰ {_h.escape(m["late_dates"])}</span>')
             dc  = '<br>'.join(dp) if dp else '—'
             return (f'<tr style="background:{bg}">{n}{nm}'
                     f'<td>{_h.escape(m["position"])}</td>'
@@ -5831,6 +6088,7 @@ def _make_export_html(monks, type_label, subtitle, report_type):
                     f'<td>{_h.escape(m["residence"])}</td><td>{edu}</td>'
                     f'<td class="num" style="{ac}">{m["absent_count"] or "—"}</td>'
                     f'<td class="num" style="{pc}">{m["permission_count"] or "—"}</td>'
+                    f'<td class="num" style="{lc}">{m.get("late_count") or "—"}</td>'
                     f'<td class="dates">{dc}</td><td>{badge}</td></tr>')
 
         else:
@@ -5859,37 +6117,12 @@ def _make_export_html(monks, type_label, subtitle, report_type):
 
     bhikkhus  = [m for m in monks if m['monk_type'] == 'ភិក្ខុ']
     samaneras = [m for m in monks if m['monk_type'] == 'សាមណេរ']
-    av = sum(1 for m in monks if m['absent_count']     >= DISC_ABSENT_MIN)
-    pv = sum(1 for m in monks if m['permission_count'] >= DISC_PERM_MIN)
-    cl = len(monks) - av - pv
 
     css = (
         "@import url('https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&family=Moul&display=swap');"
         "*, *::before, *::after{box-sizing:border-box;margin:0;padding:0}"
         "body{font-family:'Battambang','Khmer MN','Khmer Sangam MN',sans-serif;"
         "color:#1a202c;font-size:17px;background:#fff}"
-
-        # Header
-        ".header{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);"
-        "color:#fff;padding:16px 18px 14px;border-radius:7px;margin-bottom:14px}"
-        ".hdr-top{display:flex;justify-content:space-between;align-items:flex-start}"
-        ".hdr-title{font-family:'Moul','Battambang',serif;font-size:16px;font-weight:400;letter-spacing:.3px}"
-        ".hdr-sub{font-family:'Battambang',serif;font-size:14px;opacity:.85;margin-top:4px}"
-        ".hdr-right{text-align:right;font-size:15px;opacity:.85}"
-        ".hdr-divider{border:none;border-top:1px solid rgba(255,255,255,.3);margin:10px 0 8px}"
-        ".hdr-stats{display:flex;gap:20px}"
-        ".hdr-stat{font-size:15px;opacity:.9}"
-        ".hdr-stat strong{font-size:23px;display:block;font-weight:700}"
-
-        # Chips
-        ".chips{display:flex;gap:8px;margin-bottom:13px}"
-        ".chip{flex:1;padding:7px 9px;border-radius:6px;text-align:center}"
-        ".chip-lbl{font-size:13px;display:block;margin-bottom:2px}"
-        ".chip-val{font-size:24px;font-weight:700;display:block}"
-        ".c-total{background:#edf2f7}.c-total .chip-lbl{color:#718096}.c-total .chip-val{color:#2d3748}"
-        ".c-abs{background:#fed7d7}.c-abs .chip-lbl{color:#c53030}.c-abs .chip-val{color:#c53030}"
-        ".c-perm{background:#feebc8}.c-perm .chip-lbl{color:#c05621}.c-perm .chip-val{color:#c05621}"
-        ".c-ok{background:#c6f6d5}.c-ok .chip-lbl{color:#276749}.c-ok .chip-val{color:#276749}"
 
         # Section
         ".sec{padding:6px 12px;font-size:18px;font-weight:700;border-radius:4px;margin:14px 0 5px}"
@@ -5917,68 +6150,23 @@ def _make_export_html(monks, type_label, subtitle, report_type):
         # Footer
         ".footer{position:running(footer);display:flex;justify-content:space-between;"
         "font-size:12px;color:#a0aec0;border-top:1px solid #e2e8f0;padding-top:5px}"
-        "@page{size:A4 portrait;margin:12mm 10mm 17mm;"
+        f"@page{{size:A4 {page_orient};margin:10mm 10mm 14mm;"
         "@bottom-center{content:element(footer)}}"
 
-        # Ministry document header
-        ".mh{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px}"
-        ".mh-left{display:flex;flex-direction:column;align-items:center;"
-        "color:#2b6cb0;font-size:13px;line-height:1.5;flex:1}"
-        ".mh-logo{width:44px;height:44px;border:1px dashed #2b6cb0;border-radius:4px;"
-        "display:flex;align-items:center;justify-content:center;font-size:7px;"
-        "margin-bottom:4px;text-align:center;color:#2b6cb0}"
-        ".mh-right{text-align:center;font-weight:700;font-size:15px;line-height:1.6;flex:1}"
-        ".mh-title{text-align:center;font-family:'Moul','Battambang',serif;font-weight:400;font-size:16px;margin-top:4px}"
-        ".mh-sub{text-align:center;font-family:'Battambang',serif;font-size:14px;color:#718096;margin:2px 0 12px}"
+        + _gov_masthead_css()
     )
 
     lunar_str = khmer_lunar_date(_date.today())
-    ministry_header = f'''
-<div class="mh">
-  <div class="mh-left">
-    <div class="mh-logo">[ និមិត្តសញ្ញា<br>ក្រសួង ]</div>
-    <div>{_h.escape(_HDR_LEFT_LINES[0])}</div>
-    <div>{_h.escape(_HDR_LEFT_LINES[1])}</div>
-    <div>{_h.escape(_HDR_LEFT_LINES[2])}</div>
-  </div>
-  <div class="mh-right">
-    <div>{_h.escape(_HDR_RIGHT_LINES[0])}</div>
-    <div>{_h.escape(_HDR_RIGHT_LINES[1])}</div>
-  </div>
-</div>
-<div class="mh-title">{_h.escape(_HDR_MAIN_TITLE)}</div>
-<div class="mh-sub">កាលបរិច្ឆេទ ជាចន្ទគតិ: {_h.escape(lunar_str)}</div>'''
+    ministry_header = _gov_masthead_html(
+        subtitle=f'កាលបរិច្ឆេទ ជាចន្ទគតិ: {lunar_str}',
+    )
 
     return f'''<!DOCTYPE html>
-<html lang="km"><head><meta charset="UTF-8"><style>{css}
-@media print {{ @page {{ size: A4 portrait; margin: 12mm; }} }}
+<html lang="km" data-orientation="{page_orient}"><head><meta charset="UTF-8"><style>{css}
+@media print {{ @page {{ size: A4 {page_orient}; margin: 10mm; }} }}
 </style></head><body>
 
 {ministry_header}
-
-<div class="header">
-  <div class="hdr-top">
-    <div>
-      <div class="hdr-title">វត្តនិរោធរង្សី — របាយការណ៍វត្តមាន</div>
-      <div class="hdr-sub">Pagoda Niroth Rangsay &nbsp;|&nbsp; {_h.escape(type_label)}</div>
-    </div>
-    <div class="hdr-right">ចន្លោះ: {_h.escape(subtitle)}</div>
-  </div>
-  <hr class="hdr-divider">
-  <div class="hdr-stats">
-    <div class="hdr-stat"><strong>{len(monks)}</strong>ព្រះសង្ឃ​សរុប</div>
-    <div class="hdr-stat"><strong>{av}</strong>លើស​អវត្តមាន</div>
-    <div class="hdr-stat"><strong>{pv}</strong>លើស​ច្បាប់</div>
-    <div class="hdr-stat"><strong>{cl}</strong>ប្រក្រតី</div>
-  </div>
-</div>
-
-<div class="chips">
-  <div class="chip c-total"><span class="chip-lbl">ព្រះសង្ឃ</span><span class="chip-val">{len(monks)}</span></div>
-  <div class="chip c-abs"><span class="chip-lbl">❌ លើស​អវត្តមាន</span><span class="chip-val">{av}</span></div>
-  <div class="chip c-perm"><span class="chip-lbl">📋 លើស​ច្បាប់</span><span class="chip-val">{pv}</span></div>
-  <div class="chip c-ok"><span class="chip-lbl">✓ ប្រក្រតី</span><span class="chip-val">{cl}</span></div>
-</div>
 
 {section_html(bhikkhus,  'ផ្នែកទី ១ — ភិក្ខុ',   'sec-b', '#f0c040')}
 {section_html(samaneras, 'ផ្នែកទី ២ — សាមណេរ', 'sec-s', '#66bb6a')}
@@ -6022,26 +6210,36 @@ def _make_export_excel(monks, type_label, subtitle, report_type):
     gray  = Font(color='718096', size=10)
     center = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
-    def merged(row, c1, c2, text, font, height=16):
+    left_align = Alignment(horizontal='left', vertical='center', wrap_text=True)
+    right_align = Alignment(horizontal='right', vertical='center', wrap_text=True)
+    navy_f = Font(color='0C2D5A', size=10)
+    gold_f = Font(bold=True, color='8A6D1A', size=11)
+
+    navy_fill = PatternFill(start_color='0C2D5A', end_color='0C2D5A', fill_type='solid')
+    gold_on_navy = Font(bold=True, color='E8D48B', size=11)
+    white_on_navy = Font(color='F7F3E8', size=10)
+
+    def merged(row, c1, c2, text, font, height=16, align=None, fill=None):
         ws.merge_cells(start_row=row, start_column=c1, end_row=row, end_column=c2)
         cell = ws.cell(row=row, column=c1, value=text)
         cell.font = font
-        cell.alignment = center
+        cell.alignment = align or center
+        if fill:
+            cell.fill = fill
         ws.row_dimensions[row].height = height
 
-    merged(1, 1, half,     '[ និមិត្តសញ្ញាក្រសួង ]', blue)
-    merged(1, half + 1, n, _HDR_RIGHT_LINES[0], bold)
-    merged(2, 1, half,     _HDR_LEFT_LINES[0], blue)
-    merged(2, half + 1, n, _HDR_RIGHT_LINES[1], bold)
-    merged(3, 1, half,     _HDR_LEFT_LINES[1], blue)
-    merged(4, 1, half,     _HDR_LEFT_LINES[2], blue)
-    merged(5, 1, n, '', Font())
-    merged(6, 1, n, _HDR_MAIN_TITLE, bold_big, height=24)
-    merged(7, 1, n, f"កាលបរិច្ឆេទ ជាចន្ទគតិ: {khmer_lunar_date(_d.today())}", gray)
-    merged(8, 1, n, f"របាយការណ៍វត្តមាន ({type_label})  |  ចន្លោះ: {subtitle}", Font(bold=True, size=10))
-    merged(9, 1, n, '', Font())
+    merged(1, 1, half,     _HDR_LEFT_LINES[0], white_on_navy, align=left_align, fill=navy_fill)
+    merged(1, half + 1, n, _HDR_RIGHT_LINES[0], gold_on_navy, align=right_align, fill=navy_fill)
+    merged(2, 1, half,     _HDR_LEFT_LINES[1], white_on_navy, align=left_align, fill=navy_fill)
+    merged(2, half + 1, n, _HDR_RIGHT_LINES[1], white_on_navy, align=right_align, fill=navy_fill)
+    merged(3, 1, n,        _HDR_LEFT_LINES[2], gold_on_navy, align=left_align, fill=navy_fill)
+    merged(4, 1, n, '', Font())
+    merged(5, 1, n, _HDR_MAIN_TITLE, bold_big, height=24)
+    merged(6, 1, n, f"កាលបរិច្ឆេទ ជាចន្ទគតិ: {khmer_lunar_date(_d.today())}", gray)
+    merged(7, 1, n, f"របាយការណ៍វត្តមាន ({type_label})  |  ចន្លោះ: {subtitle}", Font(bold=True, size=10))
+    merged(8, 1, n, '', Font())
 
-    hdr_row = 10
+    hdr_row = 9
     hfill = PatternFill(start_color='4A5568', end_color='4A5568', fill_type='solid')
     hfont = Font(bold=True, color='FFFFFF', size=10)
     thin  = Side(border_style='thin', color='D1D5DB')
@@ -6139,11 +6337,20 @@ def _apply_report_filters(monks, args):
         if education_level and m.get('education_level') != education_level:            return False
         if academic_year   and m.get('academic_year')   != academic_year:              return False
         if name            and name not in (m.get('fullname') or '').lower():          return False
-        if violation == 'violations' and not (m['absent_count'] >= DISC_ABSENT_MIN or m['permission_count'] >= DISC_PERM_MIN):
+        abs_n = int(m.get('absent_count') or 0)
+        perm_n = int(m.get('permission_count') or 0)
+        late_n = int(m.get('late_count') or 0)
+        status = m.get('status')
+        has_issue = abs_n > 0 or perm_n > 0 or late_n > 0 or status in ('absent', 'permission', 'late')
+        if not has_issue:
             return False
-        if violation == 'absent'     and not (m['absent_count']     >= DISC_ABSENT_MIN):
+        if violation == 'violations' and not (abs_n >= DISC_ABSENT_MIN or perm_n >= DISC_PERM_MIN):
             return False
-        if violation == 'permission' and not (m['permission_count'] >= DISC_PERM_MIN):
+        if violation == 'absent'     and abs_n <= 0:
+            return False
+        if violation == 'permission' and perm_n <= 0:
+            return False
+        if violation == 'late'       and late_n <= 0 and status != 'late':
             return False
         return True
 
@@ -6156,7 +6363,7 @@ def unified_export():
     try:
         import io, requests as req
 
-        report_type = request.args.get('type',   'daily')
+        report_type = request.args.get('type',   'biweekly')
         fmt         = request.args.get('fmt',    'docx')
         action      = request.args.get('action', 'download')
 
@@ -6172,7 +6379,6 @@ def unified_export():
 
         if fmt == 'pdf' or fmt == 'html':
             html = _make_export_html(monks, type_label, subtitle, report_type)
-            html += '<script>window.onload = function() { setTimeout(function(){ window.print(); }, 500); }</script>'
             return html
         elif fmt == 'excel':
             buf      = _make_export_excel(monks, type_label, subtitle, report_type)

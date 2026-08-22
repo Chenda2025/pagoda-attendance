@@ -472,17 +472,36 @@ async function exportImage() {
         const res = await fetch(`/api/monks/export?${_exportParams('html')}`);
         if (!res.ok) { const j = await res.json(); throw new Error(j.message); }
         const html = await res.text();
-        const canvas = await _renderMonksHtmlToCanvas(html);
+        const pages = await ExportPreview.renderHtmlToA4Pages(html);
 
         await ExportPreview.open({
             title: 'បញ្ជីព្រះសង្ឃ',
             subtitle: `ថ្ងៃ ${day}`,
-            formatLabel: 'រូបភាព PNG',
-            preview: { type: 'canvas', canvas },
+            formatLabel: ExportPreview.a4PngFormatLabel(pages),
+            preview: { type: 'canvases', canvases: pages },
             onDownload: async () => {
-                const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
-                ExportPreview.downloadBlob(blob, `monks_${day}.png`);
-                showToast('រូបភាពបានដំណើរការ!', 'success');
+                await ExportPreview.downloadA4PngPages(pages, `monks_${day}`);
+                showToast(pages.length > 1
+                    ? `រូបភាព A4 ${pages.length} ទំព័របានដំណើរការ!`
+                    : 'រូបភាពបានដំណើរការ!', 'success');
+            },
+            onTelegram: async () => {
+                const total = _viewFiltered.length;
+                const bCount = _viewFiltered.filter(m => m.monk_type === 'ភិក្ខុ').length;
+                const sCount = total - bCount;
+                const today  = formatDate(new Date().toISOString());
+                const captionBase = `📋 បញ្ជីព្រះសង្ឃ — ${today}\n📊 សរុប ${total} នាក់  |  ភិក្ខុ ${bCount}  |  សាមណេរ ${sCount}`;
+                for (let i = 0; i < pages.length; i++) {
+                    const blob = await new Promise(r => pages[i].toBlob(r, 'image/png'));
+                    const pageNote = pages.length > 1 ? `\nទំព័រ ${i + 1}/${pages.length}` : '';
+                    const form = new FormData();
+                    form.append('image', blob, pages.length === 1 ? 'monks.png' : `monks_p${i + 1}.png`);
+                    form.append('caption', captionBase + pageNote);
+                    const tgRes = await fetch('/api/reports/submit-image', { method: 'POST', body: form });
+                    const json = await tgRes.json();
+                    if (!json.success) throw new Error(json.message);
+                }
+                showToast(`បានបញ្ជូន ${total} នាក់ ទៅ Telegram ជោគជ័យ!`, 'success');
             },
         });
     } catch (err) {
@@ -504,22 +523,24 @@ async function sendToTelegram() {
         if (!res.ok) { const j = await res.json(); throw new Error(j.message); }
         const html = await res.text();
 
-        const canvas = await _renderMonksHtmlToCanvas(html);
-        const blob   = await new Promise(r => canvas.toBlob(r, 'image/png'));
-
+        const pages = await ExportPreview.renderHtmlToA4Pages(html);
         const total = _viewFiltered.length;
         const bCount = _viewFiltered.filter(m => m.monk_type === 'ភិក្ខុ').length;
         const sCount = total - bCount;
         const today  = formatDate(new Date().toISOString());
-        const caption = `📋 បញ្ជីព្រះសង្ឃ — ${today}\n📊 សរុប ${total} នាក់  |  ភិក្ខុ ${bCount}  |  សាមណេរ ${sCount}`;
+        const captionBase = `📋 បញ្ជីព្រះសង្ឃ — ${today}\n📊 សរុប ${total} នាក់  |  ភិក្ខុ ${bCount}  |  សាមណេរ ${sCount}`;
 
-        const form = new FormData();
-        form.append('image', blob, 'monks.png');
-        form.append('caption', caption);
+        for (let i = 0; i < pages.length; i++) {
+            const blob = await new Promise(r => pages[i].toBlob(r, 'image/png'));
+            const pageNote = pages.length > 1 ? `\nទំព័រ ${i + 1}/${pages.length}` : '';
+            const form = new FormData();
+            form.append('image', blob, pages.length === 1 ? 'monks.png' : `monks_p${i + 1}.png`);
+            form.append('caption', captionBase + pageNote);
 
-        const tgRes  = await fetch('/api/reports/submit-image', { method: 'POST', body: form });
-        const json = await tgRes.json();
-        if (!json.success) throw new Error(json.message);
+            const tgRes  = await fetch('/api/reports/submit-image', { method: 'POST', body: form });
+            const json = await tgRes.json();
+            if (!json.success) throw new Error(json.message);
+        }
         showToast(`បានបញ្ជូន ${total} នាក់ ទៅ Telegram ជោគជ័យ!`, 'success');
     } catch (err) {
         showToast('មានបញ្ហា: ' + err.message, 'error');

@@ -3,17 +3,17 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>ប្លងសាលាឆាន់ — វត្តនិរោធរង្សី</title>
     <link rel="icon" type="image/jpeg" href="/static/logo.jpg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&family=Kantumruy+Pro:wght@400;500;600;700&family=Moul&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/gov-shell.css">
-    <link rel="stylesheet" href="/static/css/classroom_layout.css?v=51">
+    <link rel="stylesheet" href="/static/css/gov-shell.css?v=2">
+    <link rel="stylesheet" href="/static/css/classroom_layout.css?v=59">
 </head>
 
-<body class="gov-page-body">
+<body class="gov-page-body{% if role != 'admin' %} cl-use-only{% endif %}">
     <div class="gov-shell gov-shell-wide classroom-layout-page">
 
         <header class="gov-masthead">
@@ -50,6 +50,7 @@
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
                     ណែនាំ
                 </button>
+                {% if role == 'admin' %}
                 <details class="cl-top-menu" id="edit-mode-menu">
                     <summary class="gov-btn cl-edit-mode-summary" id="btn-edit-mode" title="កែប្រែប្លង់">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
@@ -57,12 +58,52 @@
                         <svg class="cl-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
                     </summary>
                     <div class="cl-top-dropdown" role="menu">
-                        <button type="button" data-edit-mode="add">បន្ថែម</button>
-                        <button type="button" data-edit-mode="update">កែប្រែ</button>
-                        <button type="button" data-edit-mode="names">ជ្រើស / ប្តូរឈ្មោះ</button>
-                        <button type="button" data-edit-mode="delete">លុប / សម្អាត</button>
+                        <button type="button" role="menuitem" data-edit-mode="add">
+                            <span class="cl-dd-ico cl-dd-ico-add" aria-hidden="true">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            </span>
+                            <span class="cl-dd-copy">
+                                <strong>បន្ថែម</strong>
+                                <small>ជួរ និងតុថ្មី</small>
+                            </span>
+                        </button>
+                        <button type="button" role="menuitem" data-edit-mode="update">
+                            <span class="cl-dd-ico cl-dd-ico-edit" aria-hidden="true">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                            </span>
+                            <span class="cl-dd-copy">
+                                <strong>កែប្រែ</strong>
+                                <small>ឈ្មោះ និងទីតាំង</small>
+                            </span>
+                        </button>
+                        <button type="button" role="menuitem" data-edit-mode="names">
+                            <span class="cl-dd-ico cl-dd-ico-names" aria-hidden="true">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                            </span>
+                            <span class="cl-dd-copy">
+                                <strong>ជ្រើស / ប្តូរឈ្មោះ</strong>
+                                <small>ដាក់ឈ្មោះលើតុ</small>
+                            </span>
+                        </button>
+                        <button type="button" role="menuitem" data-edit-mode="delete">
+                            <span class="cl-dd-ico cl-dd-ico-del" aria-hidden="true">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                            </span>
+                            <span class="cl-dd-copy">
+                                <strong>លុប / សម្អាត</strong>
+                                <small>ជួរ តុ ឬឈ្មោះ</small>
+                            </span>
+                        </button>
                         <div class="cl-top-dd-sep"></div>
-                        <button type="button" data-edit-mode="">បិទកែប្រែ</button>
+                        <button type="button" role="menuitem" class="cl-dd-off" data-edit-mode="">
+                            <span class="cl-dd-ico cl-dd-ico-off" aria-hidden="true">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
+                            </span>
+                            <span class="cl-dd-copy">
+                                <strong>បិទកែប្រែ</strong>
+                                <small>ត្រឡប់ទៅមើលវត្តមាន</small>
+                            </span>
+                        </button>
                     </div>
                 </details>
                 <div class="cl-action-group" role="group" aria-label="សកម្មភាព">
@@ -72,7 +113,7 @@
                     </button>
                     <button type="button" class="gov-btn" id="btn-auto-fill">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M7 12h10"/><path d="M10 18h4"/></svg>
-                        រៀបតាមអក្សរ
+                        រៀបតាមវស្សា
                     </button>
                 </div>
                 <button type="button" class="gov-btn gov-btn-success cl-save-btn" id="btn-save">
@@ -80,6 +121,7 @@
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
                     រក្សាទុក
                 </button>
+                {% endif %}
             </div>
         </div>
 
@@ -116,6 +158,13 @@
                         <span class="cl-status-pill" id="save-hint" aria-live="polite">—</span>
                     </div>
                     <div class="cl-panel-head-actions">
+                        <button type="button" class="gov-btn cl-btn-perm-list" id="btn-cl-perm-list" title="មើលបញ្ជីឈ្មោះដែលច្បាប់មិនផុតក្នុងរយៈពេល ១៥ ថ្ងៃ">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M9 11l3 3L22 4"/>
+                                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                            </svg>
+                            មើលច្បាប់មិនផុត
+                        </button>
                         <a href="/report/sala-chan" class="gov-btn cl-btn-report" id="btn-cl-report" title="របាយការណ៍សាលាឆាន់">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
@@ -124,7 +173,7 @@
                                 <line x1="16" y1="17" x2="8" y2="17"></line>
                                 <polyline points="10 9 9 9 8 9"></polyline>
                             </svg>
-                            របាយការណ៌
+                            របាយការណ៍សាលាឆាន់
                         </a>
                         <button type="button" class="gov-btn cl-btn-tg-report" id="btn-cl-tg-report" title="ផ្ញើរបាយការណ៍ទៅ Telegram">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -152,10 +201,12 @@
                             <li><strong>២</strong> កំណត់តុ ផ្តេក ឬ បញ្ឈរ</li>
                             <li><strong>៣</strong> ចុចកន្លែងដើម្បីជ្រើសឈ្មោះ</li>
                         </ol>
+                        {% if role == 'admin' %}
                         <button type="button" class="gov-btn gov-btn-primary cl-empty-cta" id="btn-setup-empty">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                             ចាប់ផ្តើមកំណត់ប្លង់
                         </button>
+                        {% endif %}
                     </div>
                     <div id="layout-canvas" class="cl-canvas" hidden></div>
                 </div>
@@ -217,7 +268,7 @@
 
                 <!-- Step 4: Done -->
                 <div class="cl-step-panel" data-panel="4">
-                    <p class="cl-step-desc">ប្លង់ត្រូវបានកំណត់ — ចុចលើកន្លែងទទេដើម្បីជ្រើសឈ្មោះ ឬ «រៀបតាមអក្សរ»</p>
+                    <p class="cl-step-desc">ប្លង់ត្រូវបានកំណត់ — ចុចលើកន្លែងទទេដើម្បីជ្រើសឈ្មោះ ឬ «រៀបតាមវស្សា»</p>
                     <div class="cl-summary" id="wizard-summary"></div>
                 </div>
             </div>
@@ -424,40 +475,100 @@
     <!-- Introduction modal -->
     <div id="intro-modal" class="cl-modal" hidden>
         <div class="cl-modal-backdrop" data-close="intro"></div>
-        <div class="cl-modal-box cl-modal-lg" role="dialog" aria-modal="true" aria-labelledby="intro-title">
-            <header class="cl-modal-head">
-                <h2 id="intro-title">ណែនាំ — ប្លងសាលាឆាន់</h2>
+        <div class="cl-modal-box cl-modal-lg cl-intro-box" role="dialog" aria-modal="true" aria-labelledby="intro-title">
+            <header class="cl-modal-head cl-intro-head">
+                <div class="cl-intro-head-text">
+                    <h2 id="intro-title">ណែនាំ — ប្លងសាលាឆាន់</h2>
+                    <span class="cl-perm-chip">ជួរ · តុ · ឈ្មោះ</span>
+                </div>
                 <button type="button" class="cl-modal-close" data-close="intro" aria-label="បិទ">&times;</button>
             </header>
             <div class="cl-modal-body cl-intro-body">
                 <p class="cl-intro-lead">ទំព័រនេះប្រើសម្រាប់រៀបចំតុ និងកន្លែងអង្គឆាន ក្នុងសាលាឆាន់ រួចជ្រើសឈ្មោះសង្ឃតាមកន្លែង។</p>
 
-                <h3>របៀបប្រើ</h3>
-                <ol class="cl-intro-list">
-                    <li><strong>កំណត់ប្លង់</strong> — បង្កើតជួរ តុ (ផ្តេក ៦ / បញ្ឈរ ៨) និងចំនួនកន្លែង</li>
-                    <li><strong>រូបតុលើផ្ទាំង</strong> — ចុចកន្លែងទទេ ដើម្បីជ្រើសឈ្មោះសង្ឃ</li>
-                    <li><strong>រៀបតាមអក្សរ</strong> — បំពេញកន្លែងទទេតាមលំដាប់អក្ខរក្រមដោយស្វ័យប្រវត្តិ</li>
-                    <li><strong>រក្សាទុក</strong> — រក្សាទុកប្លង់ទៅមូលដ្ឋានទិន្នន័យ</li>
-                </ol>
+                <section class="cl-intro-section">
+                    <h3>របៀបប្រើ</h3>
+                    <ol class="cl-intro-steps">
+                        <li>
+                            <span class="cl-intro-step-num">១</span>
+                            <div>
+                                <strong>កំណត់ប្លង់</strong>
+                                <p>បង្កើតជួរ តុ (ផ្តេក ៦ / បញ្ឈរ ៨) និងចំនួនកន្លែង</p>
+                            </div>
+                        </li>
+                        <li>
+                            <span class="cl-intro-step-num">២</span>
+                            <div>
+                                <strong>រូបតុលើផ្ទាំង</strong>
+                                <p>ចុចកន្លែងទទេ ដើម្បីជ្រើសឈ្មោះសង្ឃ</p>
+                            </div>
+                        </li>
+                        <li>
+                            <span class="cl-intro-step-num">៣</span>
+                            <div>
+                                <strong>រៀបតាមវស្សា</strong>
+                                <p>បំពេញកន្លែងទទេតាមលំដាប់អក្ខរក្រមដោយស្វ័យប្រវត្តិ</p>
+                            </div>
+                        </li>
+                        <li>
+                            <span class="cl-intro-step-num">៤</span>
+                            <div>
+                                <strong>រក្សាទុក</strong>
+                                <p>រក្សាទុកប្លង់ទៅមូលដ្ឋានទិន្នន័យ</p>
+                            </div>
+                        </li>
+                    </ol>
+                </section>
 
-                <h3>ប៊ូតុង «កែប្រែ» ខាងលើ</h3>
-                <ul class="cl-intro-list">
-                    <li><strong>បន្ថែម</strong> — បង្ហាញប៊ូតុងបន្ថែមជួរ / តុ (កំណត់ទីតាំង)</li>
-                    <li><strong>កែប្រែ</strong> — កែជួរ/តុ និងទីតាំងកន្លែង</li>
-                    <li><strong>ជ្រើស / ប្តូរឈ្មោះ</strong> — ចុចកន្លែងលើតុដើម្បីដាក់ឈ្មោះ</li>
-                    <li><strong>លុប / សម្អាត</strong> — លុបជួរ/តុ ឬ សម្អាតឈ្មោះ</li>
-                    <li><strong>បិទកែប្រែ</strong> — លាក់ប៊ូតុងគ្រប់គ្រងលើជួរ</li>
-                </ul>
-                <p class="cl-intro-note">ចុចឈ្មោះលើតុបានគ្រប់ពេល ដើម្បីកត់ អវត្តមាន / ច្បាប់ / យឺត (ដូចប្លង់អាសនៈ)។</p>
+                <section class="cl-intro-section">
+                    <h3>ប៊ូតុង «កែប្រែ» ខាងលើ</h3>
+                    <div class="cl-intro-modes">
+                        <article class="cl-intro-mode is-add">
+                            <span class="cl-dd-ico cl-dd-ico-add" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></span>
+                            <div>
+                                <strong>បន្ថែម</strong>
+                                <p>បង្ហាញប៊ូតុងបន្ថែមជួរ / តុ (កំណត់ទីតាំង)</p>
+                            </div>
+                        </article>
+                        <article class="cl-intro-mode is-edit">
+                            <span class="cl-dd-ico cl-dd-ico-edit" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></span>
+                            <div>
+                                <strong>កែប្រែ</strong>
+                                <p>កែជួរ/តុ និងទីតាំងកន្លែង</p>
+                            </div>
+                        </article>
+                        <article class="cl-intro-mode is-names">
+                            <span class="cl-dd-ico cl-dd-ico-names" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></span>
+                            <div>
+                                <strong>ជ្រើស / ប្តូរឈ្មោះ</strong>
+                                <p>ចុចកន្លែងលើតុដើម្បីដាក់ឈ្មោះ</p>
+                            </div>
+                        </article>
+                        <article class="cl-intro-mode is-del">
+                            <span class="cl-dd-ico cl-dd-ico-del" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></span>
+                            <div>
+                                <strong>លុប / សម្អាត</strong>
+                                <p>លុបជួរ/តុ ឬ សម្អាតឈ្មោះ</p>
+                            </div>
+                        </article>
+                    </div>
+                    <p class="cl-intro-note">ចុចឈ្មោះលើតុបានគ្រប់ពេល ដើម្បីកត់ អវត្តមាន / ច្បាប់ / យឺត (ដូចប្លង់អាសនៈ)។</p>
+                </section>
 
-                <h3>ប្រភេទតុ</h3>
-                <ul class="cl-intro-list">
-                    <li><strong>ផ្តេក</strong> — អតិបរមា ៦ កន្លែង (លើ ក្រោម ឆ្វេង ស្តាំ)</li>
-                    <li><strong>បញ្ឈរ</strong> — អតិបរមា ៨ កន្លែង</li>
-                    <li>បើកន្លែងតិចជាងអតិបរមា — ជ្រើសទីតាំងក្នុងគំរូតុពេលបន្ថែម/កែ</li>
-                </ul>
-
-                <p class="cl-intro-note">តុក្នុងមួយជួរដាក់តាមជួរផ្តេកមួយ — អូស ឬ ស្គ្រុល ឆ្វេង–ស្តាំ ដើម្បីមើលតុបន្តបន្ទាប់។</p>
+                <section class="cl-intro-section">
+                    <h3>ប្រភេទតុ</h3>
+                    <div class="cl-intro-tables">
+                        <article>
+                            <strong>ផ្តេក</strong>
+                            <p>អតិបរមា ៦ កន្លែង (លើ ក្រោម ឆ្វេង ស្តាំ)</p>
+                        </article>
+                        <article>
+                            <strong>បញ្ឈរ</strong>
+                            <p>អតិបរមា ៨ កន្លែង</p>
+                        </article>
+                    </div>
+                    <p class="cl-intro-note">តុក្នុងមួយជួរដាក់តាមជួរផ្តេកមួយ — អូស ឬ ស្គ្រុល ឆ្វេង–ស្តាំ ដើម្បីមើលតុបន្តបន្ទាប់។</p>
+                </section>
             </div>
             <footer class="cl-modal-foot">
                 <button type="button" class="gov-btn gov-btn-primary" data-close="intro">យល់ហើយ</button>
@@ -529,7 +640,33 @@
         </div>
     </div>
 
-    <script src="/static/js/classroom_layout.js?v=54"></script>
+    <div id="cl-perm-list-modal" class="cl-modal" hidden>
+        <div class="cl-modal-backdrop" data-close="cl-perm-list"></div>
+        <div class="cl-modal-box cl-modal-lg cl-perm-list-box" role="dialog" aria-modal="true" aria-labelledby="cl-perm-list-title">
+            <header class="cl-modal-head cl-perm-list-head">
+                <div class="cl-perm-list-head-text">
+                    <h2 id="cl-perm-list-title">ច្បាប់មិនផុតក្នុងរយៈពេល ១៥ ថ្ងៃ</h2>
+                    <div class="cl-perm-list-head-meta">
+                        <span class="cl-perm-chip" id="cl-perm-list-period">—</span>
+                        <span class="cl-perm-chip cl-perm-chip-count" id="cl-perm-list-count">0</span>
+                    </div>
+                </div>
+                <button type="button" class="cl-modal-close" data-close="cl-perm-list" aria-label="បិទ">&times;</button>
+            </header>
+            <div class="cl-modal-body cl-perm-list-body">
+                <label class="cl-perm-list-search-wrap">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <circle cx="11" cy="11" r="7"/><path d="M20 20l-3-3"/>
+                    </svg>
+                    <input type="search" id="cl-perm-list-search" class="cl-perm-list-search" placeholder="ស្វែងរកឈ្មោះ...">
+                </label>
+                <div id="cl-perm-list" class="cl-perm-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>const PAGE_ROLE = {{ role|tojson }};</script>
+    <script src="/static/js/classroom_layout.js?v=66"></script>
 </body>
 
 </html>

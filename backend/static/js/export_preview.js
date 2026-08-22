@@ -126,7 +126,10 @@
     async function onTelegramClick() {
         const btn = backdrop.querySelector('#exp-preview-tg');
         const handler = btn._handler;
-        if (!handler) return;
+        if (!handler) {
+            alert('មិនមានមុខងារផ្ញើ Telegram សម្រាប់ទម្រង់នេះ');
+            return;
+        }
 
         const label = btn.querySelector('span');
         const orig = label ? label.textContent : btn.textContent;
@@ -144,6 +147,11 @@
             if (label) label.textContent = orig;
             else btn.textContent = orig;
         }
+    }
+
+    function stripAutoPrint(html) {
+        return String(html || '')
+            .replace(/<script>[\s\S]*?window\.print\(\)[\s\S]*?<\/script>/gi, '');
     }
 
     function wrapPaper(el) {
@@ -178,7 +186,7 @@
             case 'html': {
                 const iframe = document.createElement('iframe');
                 iframe.title = 'មើលមុន';
-                iframe.srcdoc = preview.html || '';
+                iframe.srcdoc = stripAutoPrint(preview.html || '');
                 fitIframe(iframe);
                 body.appendChild(wrapPaper(iframe));
                 break;
@@ -200,6 +208,32 @@
                 img.alt = 'មើលមុន';
                 img.src = preview.canvas.toDataURL('image/png');
                 body.appendChild(wrapPaper(img));
+                break;
+            }
+            case 'canvases': {
+                const pages = preview.canvases || [];
+                if (!pages.length) {
+                    body.innerHTML = '<p class="exp-preview-note">មិនមានរូបមើល</p>';
+                    break;
+                }
+                pages.forEach((canvas, i) => {
+                    const wrap = document.createElement('div');
+                    const landscape = (canvas.width || 0) > (canvas.height || 0);
+                    wrap.className = 'exp-preview-paper exp-preview-paper-a4' +
+                        (landscape ? ' exp-preview-paper-landscape' : '');
+                    if (pages.length > 1) {
+                        const label = document.createElement('div');
+                        label.className = 'exp-preview-page-label';
+                        label.textContent = `ទំព័រ ${i + 1} / ${pages.length}`;
+                        wrap.appendChild(label);
+                    }
+                    const img = document.createElement('img');
+                    img.className = 'exp-preview-img';
+                    img.alt = pages.length > 1 ? `ទំព័រ ${i + 1}` : 'មើលមុន';
+                    img.src = canvas.toDataURL('image/png');
+                    wrap.appendChild(img);
+                    body.appendChild(wrap);
+                });
                 break;
             }
             case 'element': {
@@ -302,5 +336,131 @@
         a.click();
     }
 
-    global.ExportPreview = { open, close, downloadBlob, downloadUrl };
+    /** A4 @ ~96dpi */
+    const A4_PAGE_W_PX = 794;   // 210mm portrait
+    const A4_PAGE_H_PX = 1123;  // 297mm portrait
+
+    function detectA4Orientation(html, options) {
+        const forced = options && options.orientation;
+        if (forced === 'landscape' || forced === 'portrait') return forced;
+        const src = String(html || '');
+        if (/data-orientation=["']landscape["']/i.test(src) || /size:\s*A4\s+landscape/i.test(src)) {
+            return 'landscape';
+        }
+        return 'portrait';
+    }
+
+    function a4PageSize(orientation) {
+        return orientation === 'landscape'
+            ? { w: A4_PAGE_H_PX, h: A4_PAGE_W_PX }
+            : { w: A4_PAGE_W_PX, h: A4_PAGE_H_PX };
+    }
+
+    /** Split a tall canvas into separate A4 page canvases. */
+    function sliceCanvasToA4Pages(src, orientation) {
+        if (!src || !src.width || !src.height) return [];
+        const dims = a4PageSize(orientation);
+        const pageH = Math.round(src.width * (dims.h / dims.w));
+        const pages = [];
+        let y = 0;
+        while (y < src.height - 16) {
+            const page = document.createElement('canvas');
+            page.width = src.width;
+            page.height = pageH;
+            page.dataset.orientation = orientation === 'landscape' ? 'landscape' : 'portrait';
+            const ctx = page.getContext('2d');
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, page.width, page.height);
+            const sliceH = Math.min(pageH, src.height - y);
+            ctx.drawImage(src, 0, y, src.width, sliceH, 0, 0, src.width, sliceH);
+            pages.push(page);
+            y += pageH;
+        }
+        return pages.length ? pages : [src];
+    }
+
+    function a4PngFormatLabel(pages) {
+        const n = (pages && pages.length) || 1;
+        return n === 1 ? 'រូបភាព PNG · A4' : `រូបភាព PNG · A4 · ${n} ទំព័រ`;
+    }
+
+    async function downloadA4PngPages(pages, baseName) {
+        const list = pages && pages.length ? pages : [];
+        for (let i = 0; i < list.length; i++) {
+            const blob = await new Promise((r) => list[i].toBlob(r, 'image/png'));
+            const name = list.length === 1
+                ? `${baseName}.png`
+                : `${baseName}_p${i + 1}.png`;
+            downloadBlob(blob, name);
+            if (i < list.length - 1) {
+                await new Promise((r) => setTimeout(r, 250));
+            }
+        }
+    }
+
+    /**
+     * Render HTML off-screen at A4 width, then split into A4 page canvases.
+     * options: { stripPrintScript, selector }
+     */
+    async function renderHtmlToA4Pages(html, options) {
+        const opts = options || {};
+        let src = html || '';
+        if (opts.stripPrintScript !== false) {
+            src = src.replace(/<script>[\s\S]*?window\.print\(\)[\s\S]*?<\/script>/i, '');
+        }
+        const orientation = detectA4Orientation(src, opts);
+        const dims = a4PageSize(orientation);
+
+        const iframe = document.createElement('iframe');
+        iframe.style.cssText =
+            `position:fixed;top:-99999px;left:-99999px;width:${dims.w}px;border:0;`;
+        document.body.appendChild(iframe);
+
+        try {
+            await new Promise((resolve) => {
+                iframe.onload = resolve;
+                iframe.srcdoc = src;
+            });
+            const doc = iframe.contentDocument;
+            const pageEl = (opts.selector && doc.querySelector(opts.selector)) || doc.body;
+            const contentH = Math.max(
+                pageEl.scrollHeight || 0,
+                doc.body.scrollHeight || 0,
+                dims.h
+            );
+            iframe.style.height = contentH + 'px';
+            await new Promise((r) => setTimeout(r, opts.settleMs || 220));
+
+            if (typeof html2canvas !== 'function') {
+                throw new Error('html2canvas មិនទាន់ផ្ទុក');
+            }
+
+            const full = await html2canvas(pageEl, {
+                scale: opts.scale || 2,
+                useCORS: true,
+                backgroundColor: '#ffffff',
+                windowWidth: dims.w,
+                width: dims.w,
+                height: contentH,
+            });
+            return sliceCanvasToA4Pages(full, orientation);
+        } finally {
+            document.body.removeChild(iframe);
+        }
+    }
+
+    global.ExportPreview = {
+        open,
+        close,
+        downloadBlob,
+        downloadUrl,
+        A4_PAGE_W_PX,
+        A4_PAGE_H_PX,
+        detectA4Orientation,
+        a4PageSize,
+        sliceCanvasToA4Pages,
+        a4PngFormatLabel,
+        downloadA4PngPages,
+        renderHtmlToA4Pages,
+    };
 })(window);

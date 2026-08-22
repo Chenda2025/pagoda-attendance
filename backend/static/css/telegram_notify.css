@@ -10,7 +10,11 @@
 }
 
 /* ── Topbar ── */
-.tg-topbar { align-items: flex-start; }
+.tg-topbar {
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
 
 .tg-title-row {
     display: flex;
@@ -32,6 +36,40 @@
 }
 
 .tg-back-btn { flex-shrink: 0; }
+
+.tg-scope-tabs {
+    display: flex;
+    gap: 4px;
+    padding: 4px;
+    background: #f1f5f9;
+    border: 1px solid var(--line, #d8dee6);
+    border-radius: 10px;
+}
+
+.tg-scope-tab {
+    min-height: 36px;
+    padding: 6px 16px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--muted, #5c6b7a);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.tg-scope-tab:hover {
+    background: #fff;
+    color: var(--navy, #0c2d5a);
+}
+
+.tg-scope-tab.is-active {
+    background: #fff;
+    color: var(--navy, #0c2d5a);
+    box-shadow: 0 1px 4px rgba(7, 30, 61, 0.12);
+}
 
 /* ── Summary cards ── */
 .tg-summary {
@@ -1162,6 +1200,8 @@
 }
 
 @media (max-width: 720px) {
+    .tg-scope-tabs { width: 100%; }
+    .tg-scope-tab { flex: 1; text-align: center; }
     .tg-summary { grid-template-columns: repeat(2, 1fr); }
     .tg-list-head,
     .tg-report-head { padding: 16px 14px; flex-direction: column; }

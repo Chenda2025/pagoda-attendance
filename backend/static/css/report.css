@@ -686,6 +686,7 @@ body {
 .col-dates  { font-size: 11.5px; line-height: 1.8; min-width: 110px; }
 .date-absent { color: #c53030; display: block; }
 .date-perm   { color: #c05621; display: block; }
+.date-late   { color: #2b6cb0; display: block; }
 
 .monk-name { font-weight: 600; color: #1a202c; line-height: 1.35; }
 

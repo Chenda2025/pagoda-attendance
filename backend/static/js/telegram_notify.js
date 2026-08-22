@@ -264,70 +264,47 @@ async function fetchContractReportHtml() {
     return res.text();
 }
 
-async function renderReportHtmlToCanvas(html) {
-    const iframe = document.createElement('iframe');
-    iframe.style.cssText = `position:fixed;top:-99999px;left:-99999px;width:${A4_PORTRAIT_W}px;border:0;`;
-    document.body.appendChild(iframe);
-    try {
-        await new Promise((resolve) => {
-            iframe.onload = resolve;
-            iframe.srcdoc = html;
-        });
-        const doc = iframe.contentDocument;
-        const pageEl = doc.querySelector('.page') || doc.body;
-        const contentH = Math.max(pageEl.scrollHeight, A4_PORTRAIT_H);
-        iframe.style.height = `${contentH}px`;
-        await new Promise(r => setTimeout(r, 280));
+async function renderReportHtmlToA4Pages(html) {
+    return ExportPreview.renderHtmlToA4Pages(html, {
+        selector: '.page',
+        scale: A4_RENDER_SCALE,
+        settleMs: 280,
+    });
+}
 
-        const raw = await html2canvas(pageEl, {
-            scale: A4_RENDER_SCALE,
-            useCORS: true,
-            backgroundColor: '#ffffff',
-            windowWidth: A4_PORTRAIT_W,
-            width: A4_PORTRAIT_W,
-            height: contentH,
+async function renderReportHtmlToCanvas(html) {
+    const pages = await renderReportHtmlToA4Pages(html);
+    return pages[0];
+}
+
+async function sendReportImagePagesToTelegram(pages) {
+    for (let i = 0; i < pages.length; i++) {
+        const blob = await new Promise(r => pages[i].toBlob(r, 'image/png'));
+        const form = new FormData();
+        const base = reportBaseFilename('png').replace(/\.png$/i, '');
+        form.append('image', blob, pages.length === 1 ? `${base}.png` : `${base}_p${i + 1}.png`);
+        form.append('date', document.getElementById('ref-date').value);
+        form.append('period', currentPeriod());
+        form.append('source', currentSource());
+        const pageNote = pages.length > 1 ? ` — ទំព័រ ${i + 1}/${pages.length}` : '';
+        form.append('caption', `📋 របាយការណ៍កិច្ចសន្យារួច — ${blockPeriodText()}${pageNote}`);
+
+        const res = await fetch('/api/telegram-notify/contract-report/send-image', {
+            method: 'POST',
+            body: form,
         });
-        return padCanvasA4Portrait(raw);
-    } finally {
-        document.body.removeChild(iframe);
+        const json = await res.json();
+        if (!json.success) throw new Error(json.message || 'Error');
     }
 }
 
-function padCanvasA4Portrait(canvas) {
-    const pageW = A4_PORTRAIT_W * A4_RENDER_SCALE;
-    const pageH = A4_PORTRAIT_H * A4_RENDER_SCALE;
-    const pages = Math.max(1, Math.ceil(canvas.height / pageH));
-    const outH = pages * pageH;
-    const out = document.createElement('canvas');
-    out.width = pageW;
-    out.height = outH;
-    const ctx = out.getContext('2d');
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, out.width, out.height);
-    ctx.drawImage(canvas, 0, 0);
-    return out;
-}
-
 async function sendReportImageToTelegram(canvas) {
-    const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
-    const form = new FormData();
-    form.append('image', blob, reportBaseFilename('png'));
-    form.append('date', document.getElementById('ref-date').value);
-    form.append('period', currentPeriod());
-    form.append('caption', `📋 របាយការណ៍កិច្ចសន្យារួច — ${blockPeriodText()}`);
-
-    const res = await fetch('/api/telegram-notify/contract-report/send-image', {
-        method: 'POST',
-        body: form,
-    });
-    const json = await res.json();
-    if (!json.success) throw new Error(json.message || 'Error');
-    return json;
+    return sendReportImagePagesToTelegram([canvas]);
 }
 
 async function sendReportHtmlToTelegram(html) {
-    const canvas = await renderReportHtmlToCanvas(html);
-    return sendReportImageToTelegram(canvas);
+    const pages = await renderReportHtmlToA4Pages(html);
+    return sendReportImagePagesToTelegram(pages);
 }
 
 function contractReportPreviewBase(html, subtitle) {
@@ -343,24 +320,17 @@ function contractReportPreviewBase(html, subtitle) {
 }
 
 async function downloadReportPdf(html, filename) {
-    const canvas = await renderReportHtmlToCanvas(html);
+    const pages = await renderReportHtmlToA4Pages(html);
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const pageW = pdf.internal.pageSize.getWidth();
     const pageH = pdf.internal.pageSize.getHeight();
-    const imgW = pageW;
-    const imgH = (canvas.height * imgW) / canvas.width;
-    const imgData = canvas.toDataURL('image/jpeg', 0.95);
-    let heightLeft = imgH;
-    let position = 0;
-    pdf.addImage(imgData, 'JPEG', 0, position, imgW, imgH);
-    heightLeft -= pageH;
-    while (heightLeft > 0) {
-        position -= pageH;
-        pdf.addPage();
-        pdf.addImage(imgData, 'JPEG', 0, position, imgW, imgH);
-        heightLeft -= pageH;
-    }
+
+    pages.forEach((canvas, i) => {
+        if (i > 0) pdf.addPage();
+        const imgData = canvas.toDataURL('image/jpeg', 0.95);
+        pdf.addImage(imgData, 'JPEG', 0, 0, pageW, pageH);
+    });
     pdf.save(filename);
 }
 
@@ -500,17 +470,16 @@ async function exportContractReportBy(format) {
     const subtitle = blockPeriodText();
 
     if (format === 'telegram') {
-        const canvas = await renderReportHtmlToCanvas(html);
+        const pages = await renderReportHtmlToA4Pages(html);
         await ExportPreview.open({
             ...contractReportPreviewBase(html, subtitle),
-            formatLabel: 'Telegram · A4',
-            preview: { type: 'canvas', canvas },
+            formatLabel: ExportPreview.a4PngFormatLabel(pages).replace('រូបភាព PNG', 'Telegram'),
+            preview: { type: 'canvases', canvases: pages },
             onDownload: async () => {
-                const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
-                ExportPreview.downloadBlob(blob, reportBaseFilename('png'));
+                await ExportPreview.downloadA4PngPages(pages, reportBaseFilename('png').replace(/\.png$/i, ''));
             },
             onTelegram: async () => {
-                await sendReportImageToTelegram(canvas);
+                await sendReportImagePagesToTelegram(pages);
                 showToast('បានផ្ញើរូបភាពទៅ Telegram', 'success');
             },
         });
@@ -528,17 +497,16 @@ async function exportContractReportBy(format) {
     }
 
     if (format === 'image') {
-        const canvas = await renderReportHtmlToCanvas(html);
+        const pages = await renderReportHtmlToA4Pages(html);
         await ExportPreview.open({
             ...contractReportPreviewBase(html, subtitle),
-            formatLabel: 'PNG · A4',
-            preview: { type: 'canvas', canvas },
+            formatLabel: ExportPreview.a4PngFormatLabel(pages),
+            preview: { type: 'canvases', canvases: pages },
             onDownload: async () => {
-                const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
-                ExportPreview.downloadBlob(blob, reportBaseFilename('png'));
+                await ExportPreview.downloadA4PngPages(pages, reportBaseFilename('png').replace(/\.png$/i, ''));
             },
             onTelegram: async () => {
-                await sendReportImageToTelegram(canvas);
+                await sendReportImagePagesToTelegram(pages);
                 showToast('បានផ្ញើរូបភាពទៅ Telegram', 'success');
             },
         });
@@ -584,13 +552,36 @@ function currentPeriod() {
     return active?.dataset.period || '15d';
 }
 
+function currentSource() {
+    const active = document.querySelector('.tg-scope-tab.is-active');
+    return active?.dataset.source || 'layout';
+}
+
 function periodQuery(extra = {}) {
     const params = new URLSearchParams({
         date: document.getElementById('ref-date').value,
         period: currentPeriod(),
+        source: currentSource(),
         ...extra,
     });
     return params.toString();
+}
+
+function applyScopeChrome() {
+    const sala = currentSource() === 'sala_chan';
+    const chip = document.getElementById('tg-rule-chip');
+    if (chip) chip.textContent = sala ? 'អវត្តមាន > ២' : 'អវត្តមាន > ២ · ច្បាប់ ≥ ៣';
+    const title = document.querySelector('.tg-panel-title');
+    if (title) title.textContent = sala ? 'បញ្ជីរង់ចាំកិច្ចសន្យា · សាលាឆាន់' : 'បញ្ជីរង់ចាំកិច្ចសន្យា';
+}
+
+function setSource(value) {
+    document.querySelectorAll('.tg-scope-tab').forEach((btn) => {
+        const on = btn.dataset.source === value;
+        btn.classList.toggle('is-active', on);
+        btn.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    applyScopeChrome();
 }
 
 function setPeriod(value) {
@@ -603,6 +594,7 @@ function contractPayload(extra = {}) {
     return {
         date: document.getElementById('ref-date').value,
         period: currentPeriod(),
+        source: currentSource(),
         ...extra,
     };
 }
@@ -620,12 +612,19 @@ document.addEventListener('DOMContentLoaded', () => {
     dateEl.value = new Date().toISOString().slice(0, 10);
 
     dateEl.addEventListener('change', loadData);
+    document.querySelectorAll('.tg-scope-tab').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            setSource(btn.dataset.source);
+            loadData();
+        });
+    });
     document.querySelectorAll('.tg-period-seg').forEach(btn => {
         btn.addEventListener('click', () => {
             setPeriod(btn.dataset.period);
             loadData();
         });
     });
+    applyScopeChrome();
     document.querySelectorAll('.tg-segment').forEach(btn => {
         btn.addEventListener('click', () => {
             setFilterType(btn.dataset.filter);

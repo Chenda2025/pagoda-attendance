@@ -3,6 +3,7 @@
 
     const KHMER = '០១២៣៤៥៦៧៨៩';
     const toKhmer = (n) => String(n).replace(/\d/g, (d) => KHMER[d]);
+    const CAN_EDIT_LAYOUT = typeof PAGE_ROLE !== 'undefined' && PAGE_ROLE === 'admin';
 
     const H_SLOTS = ['name1', 'name2', 'name3', 'name4', 'name5', 'name6'];
     const V_SLOTS = ['name1', 'name2', 'name3', 'name4', 'name5', 'name6', 'name7', 'name8'];
@@ -40,6 +41,7 @@
     let draftRows = [];
     let pickerTarget = null; // { rowId, tableId, slot }
     let dirty = false;
+    let lastSavedAt = null;
     let editMode = ''; // '' | 'add' | 'update' | 'names' | 'delete'
     let attendanceMap = new Map(); // monk_id → 'absent' | 'permission' | 'late'
     let permissionsMap = new Map(); // monk_id → { end_date, days_left, ... }
@@ -105,6 +107,7 @@
     }
 
     function setEditMode(mode) {
+        if (!CAN_EDIT_LAYOUT) return;
         editMode = mode === 'add' || mode === 'update' || mode === 'names' || mode === 'delete' ? mode : '';
         applyEditModeChrome();
         hideAttPopover();
@@ -141,6 +144,9 @@
     }
 
     function renderRowActions(row) {
+        if (!CAN_EDIT_LAYOUT) {
+            return '<div class="cl-row-actions cl-row-actions-idle" title="ចុចឈ្មោះលើតុដើម្បីកត់វត្តមាន"></div>';
+        }
         if (!editMode || editMode === 'names') {
             if (editMode === 'names') {
                 return `
@@ -428,6 +434,7 @@
     }
 
     function tableControls(table, row, ti, rowTableCount) {
+        if (!CAN_EDIT_LAYOUT) return '';
         return `
             <div class="cl-table-controls">
                 <button type="button" title="ទៅឆ្វេង" data-move="left" data-row="${row.id}" data-table="${table.id}" ${ti === 0 ? 'disabled' : ''} aria-label="ទៅឆ្វេង">&#8592;</button>
@@ -511,29 +518,66 @@
         set('stat-tables', s.tables);
         set('stat-seats', s.seats);
         set('stat-filled', s.filled);
+        refreshSaveHint();
+    }
+
+    function savedStamp(ts) {
+        if (!ts) return '';
+        return String(ts).slice(0, 16).replace('T', ' ');
+    }
+
+    function seatOverflow() {
+        const s = computeStats();
+        const total = monks.length;
+        return {
+            seats: s.seats,
+            total,
+            overflow: Math.max(0, total - s.seats),
+        };
+    }
+
+    function seatOverflowMessage(info) {
+        return (
+            `សង្ឃសរុប ${toKhmer(info.total)} អង្គ លើសកន្លែងតុ ${toKhmer(info.seats)}` +
+            ` — សល់ ${toKhmer(info.overflow)} នាក់មិនមានកន្លែង`
+        );
+    }
+
+    function refreshSaveHint() {
+        if (!saveHint) return;
+        const hasLayout = layout.rows.length > 0;
+        const overflow = seatOverflow().overflow;
+
+        if (dirty) {
+            saveHint.textContent = 'មិនទាន់រក្សាទុក';
+        } else if (!hasLayout) {
+            saveHint.textContent = '—';
+        } else if (overflow > 0) {
+            saveHint.textContent = `ខ្វះកន្លែង ${toKhmer(overflow)} នាក់`;
+        } else if (lastSavedAt) {
+            saveHint.textContent = `រក្សាទុក · ${savedStamp(lastSavedAt)}`;
+        } else {
+            saveHint.textContent = 'រក្សាទុករួច';
+        }
+
+        if (saveBtn) saveBtn.classList.toggle('is-dirty', dirty);
+        saveHint.classList.toggle('is-dirty', dirty);
+        saveHint.classList.toggle('is-empty', !dirty && overflow > 0);
+        saveHint.classList.toggle('is-clean', !dirty && hasLayout && overflow === 0);
     }
 
     function updateSaveState() {
-        if (saveBtn) saveBtn.classList.toggle('is-dirty', dirty);
-        if (saveHint) {
-            saveHint.classList.toggle('is-dirty', dirty);
-            saveHint.classList.toggle('is-clean', !dirty && layout.rows.length > 0);
-        }
+        refreshSaveHint();
     }
 
     function markDirty() {
         dirty = true;
-        if (saveHint) saveHint.textContent = 'មិនទាន់រក្សាទុក';
         updateSaveState();
     }
 
     function markClean(ts) {
         dirty = false;
-        if (saveHint) {
-            saveHint.textContent = ts
-                ? `រក្សាទុក · ${ts.slice(0, 16).replace('T', ' ')}`
-                : (layout.rows.length ? 'រក្សាទុករួច' : '—');
-        }
+        if (ts) lastSavedAt = ts;
         updateSaveState();
     }
 
@@ -596,6 +640,11 @@
                 e.stopPropagation();
                 const monkId = btn.dataset.monkId ? parseInt(btn.dataset.monkId, 10) : null;
                 const monkName = btn.dataset.monkName || '';
+
+                if (!CAN_EDIT_LAYOUT) {
+                    if (monkId) showAttPopover(btn, monkId, monkName);
+                    return;
+                }
 
                 /* Name pick / change mode */
                 if (editMode === 'names') {
@@ -963,6 +1012,7 @@
 
     /* ── Wizard ── */
     function openSetup() {
+        if (!CAN_EDIT_LAYOUT) return;
         draftRows = JSON.parse(JSON.stringify(layout.rows));
         if (!draftRows.length) draftRows = [makeRow('ជួរទី១', 1)];
         wizardStep = 1;
@@ -1111,7 +1161,7 @@
             <p><strong>${toKhmer(totalRows)}</strong> ជួរ ·
                <strong>${toKhmer(totalTables)}</strong> តុ ·
                <strong>${toKhmer(totalSeats)}</strong> កន្លែង</p>
-            <p>បន្ទាប់ពីបញ្ចប់ — ចុចលើកន្លែងទទេ ដើម្បីជ្រើសឈ្មោះ ឬ «រៀបតាមអក្សរ»</p>`;
+            <p>បន្ទាប់ពីបញ្ចប់ — ចុចលើកន្លែងទទេ ដើម្បីជ្រើសឈ្មោះ ឬ «រៀបតាមវស្សា»</p>`;
     }
 
     function applyDraft() {
@@ -1174,6 +1224,7 @@
     }
 
     function autoFillAlphabetical() {
+        if (!CAN_EDIT_LAYOUT) return;
         const used = usedMonkIds(null);
         const pool = [...monks]
             .filter((m) => !used.has(Number(m.id)))
@@ -1192,7 +1243,14 @@
         });
         markDirty();
         renderCanvas();
-        toast(`បានរៀប ${toKhmer(pi)} ឈ្មោះ`);
+        const leftover = pool.length - pi;
+        if (leftover > 0) {
+            const info = seatOverflow();
+            alert(seatOverflowMessage(info));
+            toast(`បានរៀប ${toKhmer(pi)} ឈ្មោះ · សល់ ${toKhmer(leftover)} នាក់`, false);
+        } else {
+            toast(`បានរៀប ${toKhmer(pi)} ឈ្មោះ`);
+        }
     }
 
     /* ── Attendance (same API as ប្លង់អាសនៈ) ── */
@@ -1237,13 +1295,20 @@
             btn.title = '';
         });
         const rect = anchorEl.getBoundingClientRect();
-        const pw = 190;
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        const pad = 8;
+        const pw = Math.min(190, vw - pad * 2);
+        const ph = Math.min(pop.offsetHeight || 220, vh - pad * 2);
         let left = rect.right + 6;
-        if (left + pw > window.innerWidth) left = Math.max(8, rect.left - pw - 6);
-        let top = rect.top;
-        if (top + 200 > window.innerHeight) top = Math.max(8, window.innerHeight - 210);
-        pop.style.left = `${left}px`;
-        pop.style.top = `${top}px`;
+        if (left + pw > vw - pad) left = rect.left - pw - 6;
+        if (left < pad) left = Math.max(pad, (vw - pw) / 2);
+        let top = rect.bottom + 6;
+        if (top + ph > vh - pad) top = rect.top - ph - 6;
+        if (top < pad) top = pad;
+        pop.style.left = `${Math.round(left)}px`;
+        pop.style.top = `${Math.round(top)}px`;
+        pop.style.maxWidth = `${pw}px`;
         pop.hidden = false;
         pop.dataset.justOpened = '1';
         setTimeout(() => { delete pop.dataset.justOpened; }, 0);
@@ -1275,7 +1340,7 @@
             const res = await fetch('/api/attendance', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ monk_id: monkId, status, date: getActiveDate() }),
+                body: JSON.stringify({ monk_id: monkId, status, date: getActiveDate(), source: 'sala_chan' }),
             });
             const json = await res.json();
             if (!json.success) throw new Error(json.message || 'បរាជ័យ');
@@ -1307,7 +1372,7 @@
 
     async function clearClassroomAttendance(monkId) {
         try {
-            const res = await fetch(`/api/attendance/${monkId}?date=${getActiveDate()}`, { method: 'DELETE' });
+            const res = await fetch(`/api/attendance/${monkId}?date=${getActiveDate()}&source=sala_chan`, { method: 'DELETE' });
             const json = await res.json();
             if (!json.success) throw new Error(json.message || 'បរាជ័យ');
             attendanceMap.delete(monkId);
@@ -1368,9 +1433,179 @@
         if (modal) modal.hidden = true;
     }
 
+    function getFifteenDayBlock(iso) {
+        const [y, m, d] = String(iso).split('-').map(Number);
+        const last = new Date(y, m, 0).getDate();
+        const pad = (n) => String(n).padStart(2, '0');
+        if (d <= 15) {
+            return { start: `${y}-${pad(m)}-01`, end: `${y}-${pad(m)}-15` };
+        }
+        return { start: `${y}-${pad(m)}-16`, end: `${y}-${pad(m)}-${pad(last)}` };
+    }
+
+    let permStayCache = { block: null, rows: [] };
+
+    function rowsFromPermissionsMap(block) {
+        const rows = [];
+        permissionsMap.forEach((info, monkId) => {
+            if (!info || info.days_left < 0) return;
+            const monk = monkById(monkId);
+            rows.push({
+                id: monkId,
+                name: monk?.fullname || `ID ${monkId}`,
+                type: monk?.monk_type || '',
+                position: monk?.position || '',
+                start: info.start_date || '',
+                end: info.end_date || '',
+                daysLeft: info.days_left,
+                reason: info.reason || '',
+                shift: info.shift || '',
+            });
+        });
+        attendanceMap.forEach((status, monkId) => {
+            if (status !== 'permission' || rows.some((r) => r.id === monkId)) return;
+            const monk = monkById(monkId);
+            const info = permissionsMap.get(monkId);
+            rows.push({
+                id: monkId,
+                name: monk?.fullname || `ID ${monkId}`,
+                type: monk?.monk_type || '',
+                position: monk?.position || '',
+                start: info?.start_date || '',
+                end: info?.end_date || '',
+                daysLeft: info?.days_left,
+                reason: info?.reason || '',
+                shift: info?.shift || '',
+            });
+        });
+        return { block, rows: sortPermStayRows(rows) };
+    }
+
+    function isPermActiveInBlock(row, today, block) {
+        const days = Number(row.daysLeft);
+        if (Number.isFinite(days) && days < 0) return false;
+        if (row.end && row.end < today) return false;
+        if (block) {
+            if (row.end && row.end < block.start) return false;
+            if (row.start && row.start > block.end) return false;
+        }
+        return true;
+    }
+
+    function sortPermStayRows(rows) {
+        return [...rows].sort((a, b) => {
+            const da = Number(a.daysLeft);
+            const db = Number(b.daysLeft);
+            const na = Number.isFinite(da) ? da : -1;
+            const nb = Number.isFinite(db) ? db : -1;
+            if (nb !== na) return nb - na;
+            return (a.name || '').localeCompare(b.name || '');
+        });
+    }
+
+    function formatPermDate(iso) {
+        if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso || '';
+        const [, m, d] = iso.split('-');
+        return `${toKhmer(Number(d))}/${toKhmer(Number(m))}`;
+    }
+
+    function renderPermStayList(query = '') {
+        const list = document.getElementById('cl-perm-list');
+        const periodEl = document.getElementById('cl-perm-list-period');
+        const countEl = document.getElementById('cl-perm-list-count');
+        if (!list) return;
+        const today = getActiveDate();
+        const { block, rows } = {
+            block: permStayCache.block,
+            rows: sortPermStayRows((permStayCache.rows || []).filter((r) => isPermActiveInBlock(r, today, permStayCache.block))),
+        };
+        if (periodEl) {
+            periodEl.textContent = block
+                ? `${formatPermDate(block.start)} – ${formatPermDate(block.end)}`
+                : '—';
+        }
+        if (countEl) countEl.textContent = `${toKhmer(rows.length)} នាក់`;
+        const q = query.trim().toLowerCase();
+        const shown = rows.filter((r) => !q || r.name.toLowerCase().includes(q) || (r.position || '').toLowerCase().includes(q));
+        if (!shown.length) {
+            list.innerHTML = '<p class="cl-perm-list-empty">មិនមានឈ្មោះដែលច្បាប់មិនផុតក្នុងរយៈពេល ១៥ ថ្ងៃ</p>';
+            return;
+        }
+        list.innerHTML = shown.map((r, i) => {
+            const isToday = Number(r.daysLeft) === 0;
+            const days = r.daysLeft == null ? '—' : (isToday ? 'ថ្ងៃនេះ' : `សល់ ${toKhmer(r.daysLeft)} ថ្ងៃ`);
+            const tags = [r.type, r.position, r.shift].filter(Boolean)
+                .map((t) => `<span class="cl-perm-tag">${escapeHtml(t)}</span>`).join('');
+            const dates = (r.start || r.end)
+                ? `${formatPermDate(r.start)} – ${formatPermDate(r.end)}`
+                : '';
+            return `<article class="cl-perm-list-item${isToday ? ' is-today' : ''}">
+                <span class="cl-perm-list-num">${toKhmer(i + 1)}</span>
+                <div class="cl-perm-list-main">
+                    <p class="cl-perm-list-name">${escapeHtml(r.name)}</p>
+                    ${tags ? `<div class="cl-perm-list-tags">${tags}</div>` : ''}
+                    ${dates ? `<p class="cl-perm-list-dates">${escapeHtml(dates)}</p>` : ''}
+                    ${r.reason ? `<p class="cl-perm-list-reason">${escapeHtml(r.reason)}</p>` : ''}
+                </div>
+                <span class="cl-perm-list-days${isToday ? ' is-today' : ''}">${escapeHtml(days)}</span>
+            </article>`;
+        }).join('');
+    }
+
+    function closePermStayList() {
+        const modal = document.getElementById('cl-perm-list-modal');
+        if (modal) modal.hidden = true;
+        const search = document.getElementById('cl-perm-list-search');
+        if (search) search.value = '';
+    }
+
+    async function openPermStayList() {
+        const modal = document.getElementById('cl-perm-list-modal');
+        const list = document.getElementById('cl-perm-list');
+        if (!modal) return;
+        modal.hidden = false;
+        if (list) list.innerHTML = '<p class="cl-perm-list-empty">កំពុងផ្ទុក...</p>';
+        const today = getActiveDate();
+        const localBlock = getFifteenDayBlock(today);
+        try {
+            await loadAttendance();
+            const res = await fetch(`/api/permissions?date=${today}&source=sala_chan`);
+            const json = await res.json();
+            if (json.success && Array.isArray(json.records) && json.records.length) {
+                permStayCache = {
+                    block: {
+                        start: json.period_start || localBlock.start,
+                        end: json.period_end || localBlock.end,
+                    },
+                    rows: sortPermStayRows(json.records.map((r) => ({
+                        id: r.id,
+                        name: r.fullname,
+                        type: r.monk_type || '',
+                        position: r.position || '',
+                        start: r.start_date || '',
+                        end: r.end_date || '',
+                        daysLeft: r.days_left,
+                        reason: r.reason || '',
+                        shift: r.shift || '',
+                    }))),
+                };
+            } else {
+                permStayCache = rowsFromPermissionsMap({
+                    start: json.period_start || localBlock.start,
+                    end: json.period_end || localBlock.end,
+                });
+            }
+        } catch (err) {
+            console.error(err);
+            permStayCache = rowsFromPermissionsMap(localBlock);
+        }
+        renderPermStayList(document.getElementById('cl-perm-list-search')?.value || '');
+        document.getElementById('cl-perm-list-search')?.focus();
+    }
+
     async function loadAttendance() {
         try {
-            const res = await fetch(`/api/attendance?date=${getActiveDate()}`);
+            const res = await fetch(`/api/attendance?date=${getActiveDate()}&source=sala_chan`);
             const json = await res.json();
             attendanceMap = new Map();
             permissionsMap = new Map();
@@ -1388,6 +1623,7 @@
     }
 
     async function saveLayout(opts = {}) {
+        if (!CAN_EDIT_LAYOUT) return false;
         const silent = !!opts.silent;
         try {
             const res = await fetch('/api/classroom-layout', {
@@ -1432,10 +1668,10 @@
     }
 
     /* ── Events ── */
-    document.getElementById('btn-setup').addEventListener('click', openSetup);
+    document.getElementById('btn-setup')?.addEventListener('click', openSetup);
     document.getElementById('btn-setup-empty')?.addEventListener('click', openSetup);
-    document.getElementById('btn-save').addEventListener('click', saveLayout);
-    document.getElementById('btn-auto-fill').addEventListener('click', autoFillAlphabetical);
+    document.getElementById('btn-save')?.addEventListener('click', saveLayout);
+    document.getElementById('btn-auto-fill')?.addEventListener('click', autoFillAlphabetical);
     document.getElementById('btn-intro')?.addEventListener('click', () => {
         if (introModal) introModal.hidden = false;
     });
@@ -1502,7 +1738,15 @@
             if (el.dataset.close === 'table-delete') closeDeleteTable();
             if (el.dataset.close === 'table-clear') closeClearTable();
             if (el.dataset.close === 'cl-perm') closeClPermModal();
+            if (el.dataset.close === 'cl-perm-list') closePermStayList();
         });
+    });
+
+    document.getElementById('btn-cl-perm-list')?.addEventListener('click', () => {
+        openPermStayList();
+    });
+    document.getElementById('cl-perm-list-search')?.addEventListener('input', (e) => {
+        renderPermStayList(e.target.value);
     });
 
     /* Attendance popover + permission */
@@ -1569,6 +1813,7 @@
                     end_date: end,
                     reason,
                     shift: start === end ? getSelectedClPermShift() : null,
+                    source: 'sala_chan',
                 }),
             });
             const json = await res.json();

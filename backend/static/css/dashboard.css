@@ -36,6 +36,10 @@ body {
     max-width: 1280px;
     margin: 0 auto;
     padding: 16px 20px 28px;
+    padding-top: max(16px, env(safe-area-inset-top));
+    padding-right: max(20px, env(safe-area-inset-right));
+    padding-bottom: max(28px, env(safe-area-inset-bottom));
+    padding-left: max(20px, env(safe-area-inset-left));
     display: flex;
     flex-direction: column;
     gap: 18px;
@@ -552,8 +556,21 @@ body {
 }
 
 @media (max-width: 480px) {
-    .dash-shell { padding: 12px; }
+    .dash-shell {
+        padding: 10px;
+        padding-top: max(10px, env(safe-area-inset-top));
+        padding-right: max(10px, env(safe-area-inset-right));
+        padding-bottom: max(16px, env(safe-area-inset-bottom));
+        padding-left: max(10px, env(safe-area-inset-left));
+    }
     .kpi-grid { grid-template-columns: 1fr 1fr; }
     .dash-title { font-size: 18px; }
     .gov-seal { width: 58px; height: 58px; }
+    .dash-topbar { flex-direction: column; align-items: stretch; gap: 10px; }
+    .topbar-right { flex-wrap: wrap; }
+    .module-card { min-height: 44px; }
+}
+
+@media (max-height: 500px) and (orientation: landscape) {
+    .gov-masthead { display: none; }
 }
