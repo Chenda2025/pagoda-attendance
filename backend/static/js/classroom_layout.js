@@ -210,6 +210,28 @@
     let draftEditSlots = [];
     let scrollFocus = null; // { rowId, tableId } after add/edit
 
+    function captureTableScroll() {
+        const map = new Map();
+        if (!canvas) return map;
+        canvas.querySelectorAll('.cl-row-block').forEach((block) => {
+            const rowId = block.dataset.row;
+            const scroller = block.querySelector('.cl-tables-scroll');
+            if (rowId && scroller) map.set(rowId, scroller.scrollLeft);
+        });
+        return map;
+    }
+
+    function restoreTableScroll(prevScroll) {
+        if (!canvas || !prevScroll?.size) return;
+        canvas.querySelectorAll('.cl-row-block').forEach((block) => {
+            const rowId = block.dataset.row;
+            const scroller = block.querySelector('.cl-tables-scroll');
+            if (rowId && scroller && prevScroll.has(rowId)) {
+                scroller.scrollLeft = prevScroll.get(rowId);
+            }
+        });
+    }
+
     function normalizeSeatSlots(orientation, seatCount, seatSlots) {
         const vertical = orientation === 'vertical';
         const all = vertical ? V_SLOTS : H_SLOTS;
@@ -589,6 +611,7 @@
     /* ── Render canvas ── */
     function renderCanvas() {
         if (!canvas) return;
+        const prevScroll = captureTableScroll();
         const rows = sortRows(layout.rows);
         updateStats();
 
@@ -635,7 +658,7 @@
         }).join('');
 
         bindCanvasEvents();
-        scrollTablesIntoView();
+        scrollTablesIntoView(prevScroll);
     }
 
     function bindCanvasEvents() {
@@ -712,11 +735,11 @@
         });
     }
 
-    function scrollTablesIntoView() {
+    function scrollTablesIntoView(prevScroll) {
         const focus = scrollFocus;
         scrollFocus = null;
         requestAnimationFrame(() => {
-            if (focus && focus.tableId) {
+            if (focus?.tableId) {
                 const el = canvas.querySelector(`.cl-table-wrap[data-table="${focus.tableId}"]`);
                 if (el) {
                     el.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' });
@@ -725,12 +748,7 @@
                     return;
                 }
             }
-            /* One-row strips: keep latest tables visible from the right */
-            canvas.querySelectorAll('.cl-tables-row').forEach((rowEl) => {
-                if (rowEl.scrollWidth > rowEl.clientWidth) {
-                    rowEl.scrollTo({ left: rowEl.scrollWidth, behavior: 'smooth' });
-                }
-            });
+            restoreTableScroll(prevScroll);
         });
     }
 
@@ -1328,11 +1346,13 @@
 
     function assignMonk(monkId) {
         if (!pickerTarget) return;
-        const row = layout.rows.find((r) => r.id === pickerTarget.rowId);
-        const table = row?.tables.find((t) => t.id === pickerTarget.tableId);
+        const { rowId, tableId, slot } = pickerTarget;
+        const row = layout.rows.find((r) => r.id === rowId);
+        const table = row?.tables.find((t) => t.id === tableId);
         if (!table) return;
         if (!table.seats) table.seats = {};
-        table.seats[pickerTarget.slot] = monkId;
+        table.seats[slot] = monkId;
+        scrollFocus = { rowId, tableId };
         markDirty();
         closePicker();
         renderCanvas();
@@ -1340,10 +1360,12 @@
 
     function clearSeat() {
         if (!pickerTarget) return;
-        const row = layout.rows.find((r) => r.id === pickerTarget.rowId);
-        const table = row?.tables.find((t) => t.id === pickerTarget.tableId);
+        const { rowId, tableId, slot } = pickerTarget;
+        const row = layout.rows.find((r) => r.id === rowId);
+        const table = row?.tables.find((t) => t.id === tableId);
         if (!table || !table.seats) return;
-        table.seats[pickerTarget.slot] = null;
+        table.seats[slot] = null;
+        scrollFocus = { rowId, tableId };
         markDirty();
         closePicker();
         renderCanvas();
