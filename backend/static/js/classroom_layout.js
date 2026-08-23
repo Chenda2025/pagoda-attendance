@@ -1171,9 +1171,116 @@
     }
 
     /* ── Monk picker ── */
+    const PICKER_FILTER_IDS = [
+        'picker-filter-type',
+        'picker-filter-vassa',
+        'picker-filter-education',
+        'picker-filter-academic',
+        'picker-filter-position',
+    ];
+
+    function pickerFieldMatch(value, filterValue) {
+        if (!filterValue) return true;
+        return String(value ?? '').trim() === String(filterValue).trim();
+    }
+
+    function uniqueMonkFieldValues(field, sortFn) {
+        const seen = new Set();
+        monks.forEach((m) => {
+            const raw = m[field];
+            if (raw == null) return;
+            const v = String(raw).trim();
+            if (v) seen.add(v);
+        });
+        const values = [...seen];
+        if (sortFn) values.sort(sortFn);
+        else values.sort((a, b) => a.localeCompare(b, 'km'));
+        return values;
+    }
+
+    function fillPickerSelect(id, values, labelFn) {
+        const sel = document.getElementById(id);
+        if (!sel) return;
+        const current = sel.value;
+        const opts = values.map((v) => {
+            const label = labelFn ? labelFn(v) : v;
+            return `<option value="${escapeHtml(v)}">${escapeHtml(label)}</option>`;
+        }).join('');
+        sel.innerHTML = '<option value="">ទាំងអស់</option>' + opts;
+        if ([...sel.options].some((o) => o.value === current)) sel.value = current;
+    }
+
+    function populatePickerFilters() {
+        fillPickerSelect('picker-filter-type', uniqueMonkFieldValues('monk_type'));
+        fillPickerSelect(
+            'picker-filter-vassa',
+            uniqueMonkFieldValues('vassa_years', (a, b) => Number(a) - Number(b)),
+            (v) => toKhmer(v),
+        );
+        fillPickerSelect('picker-filter-education', uniqueMonkFieldValues('education_level'));
+        fillPickerSelect('picker-filter-academic', uniqueMonkFieldValues('academic_year'));
+        fillPickerSelect('picker-filter-position', uniqueMonkFieldValues('position'));
+    }
+
+    function resetPickerFilters() {
+        PICKER_FILTER_IDS.forEach((id) => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.value = '';
+                el.classList.remove('is-active');
+            }
+        });
+        const resetBtn = document.getElementById('btn-picker-reset');
+        if (resetBtn) resetBtn.hidden = true;
+    }
+
+    function syncPickerFilterUi() {
+        const filters = getPickerFilters();
+        const map = {
+            'picker-filter-type': filters.monk_type,
+            'picker-filter-vassa': filters.vassa_years,
+            'picker-filter-education': filters.education_level,
+            'picker-filter-academic': filters.academic_year,
+            'picker-filter-position': filters.position,
+        };
+        let active = 0;
+        Object.entries(map).forEach(([id, val]) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            const on = Boolean(val);
+            el.classList.toggle('is-active', on);
+            if (on) active += 1;
+        });
+        const query = (document.getElementById('picker-search')?.value || '').trim();
+        const resetBtn = document.getElementById('btn-picker-reset');
+        if (resetBtn) resetBtn.hidden = !(active || query);
+    }
+
+    function getPickerFilters() {
+        return {
+            monk_type: document.getElementById('picker-filter-type')?.value || '',
+            vassa_years: document.getElementById('picker-filter-vassa')?.value || '',
+            education_level: document.getElementById('picker-filter-education')?.value || '',
+            academic_year: document.getElementById('picker-filter-academic')?.value || '',
+            position: document.getElementById('picker-filter-position')?.value || '',
+        };
+    }
+
+    function monkPickerMeta(m) {
+        const parts = [];
+        if (m.monk_type) parts.push(m.monk_type);
+        if (m.vassa_years != null && String(m.vassa_years).trim() !== '') {
+            parts.push(`វស្សា ${toKhmer(m.vassa_years)}`);
+        }
+        if (m.position) parts.push(m.position);
+        return parts.join(' · ');
+    }
+
     function openPicker() {
-        renderPickerList('');
+        populatePickerFilters();
+        resetPickerFilters();
         document.getElementById('picker-search').value = '';
+        renderPickerList('');
         pickerModal.hidden = false;
         document.getElementById('picker-search').focus();
     }
@@ -1187,13 +1294,27 @@
         const list = document.getElementById('picker-list');
         const used = usedMonkIds(pickerTarget);
         const query = (q || '').trim().toLowerCase();
+        const filters = getPickerFilters();
         let pool = [...monks].sort((a, b) => (a.fullname || '').localeCompare(b.fullname || '', 'km'));
         if (query) pool = pool.filter((m) => (m.fullname || '').toLowerCase().includes(query));
+        if (filters.monk_type) pool = pool.filter((m) => pickerFieldMatch(m.monk_type, filters.monk_type));
+        if (filters.vassa_years) pool = pool.filter((m) => pickerFieldMatch(m.vassa_years, filters.vassa_years));
+        if (filters.education_level) pool = pool.filter((m) => pickerFieldMatch(m.education_level, filters.education_level));
+        if (filters.academic_year) pool = pool.filter((m) => pickerFieldMatch(m.academic_year, filters.academic_year));
+        if (filters.position) pool = pool.filter((m) => pickerFieldMatch(m.position, filters.position));
+
+        const countEl = document.getElementById('picker-count');
+        if (countEl) countEl.textContent = `${toKhmer(pool.length)} នាក់`;
+        syncPickerFilterUi();
 
         list.innerHTML = pool.map((m) => {
             const isUsed = used.has(Number(m.id));
-            return `<li><button type="button" class="${isUsed ? 'used' : ''}" data-monk="${m.id}">${escapeHtml(m.fullname)}</button></li>`;
-        }).join('') || '<li><span style="padding:12px;color:#64748b">មិនមាន</span></li>';
+            const meta = monkPickerMeta(m);
+            return `<li><button type="button" class="${isUsed ? 'used' : ''}" data-monk="${m.id}">
+                <span class="cl-monk-name">${escapeHtml(m.fullname)}</span>
+                ${meta ? `<span class="cl-monk-meta">${escapeHtml(meta)}</span>` : ''}
+            </button></li>`;
+        }).join('') || '<li><span class="cl-monk-empty">មិនមានឈ្មោះតាមតម្រងនេះ</span></li>';
 
         list.querySelectorAll('[data-monk]').forEach((btn) => {
             btn.addEventListener('click', () => assignMonk(normalizeMonkId(btn.dataset.monk)));
@@ -2007,6 +2128,18 @@
     document.getElementById('btn-clear-seat').addEventListener('click', clearSeat);
     document.getElementById('picker-search').addEventListener('input', (e) => {
         renderPickerList(e.target.value);
+    });
+    PICKER_FILTER_IDS.forEach((id) => {
+        document.getElementById(id)?.addEventListener('change', () => {
+            renderPickerList(document.getElementById('picker-search')?.value || '');
+        });
+    });
+    document.getElementById('btn-picker-reset')?.addEventListener('click', () => {
+        resetPickerFilters();
+        const search = document.getElementById('picker-search');
+        if (search) search.value = '';
+        renderPickerList('');
+        search?.focus();
     });
 
     document.getElementById('btn-cl-tg-report')?.addEventListener('click', async () => {

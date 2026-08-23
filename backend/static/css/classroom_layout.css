@@ -2013,6 +2013,151 @@
     border-radius: 12px;
 }
 
+.cl-picker-box {
+    width: min(560px, 100%);
+    max-height: min(86vh, 680px);
+}
+
+.cl-picker-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    padding: 0;
+    overflow: hidden;
+}
+
+.cl-picker-toolbar {
+    flex-shrink: 0;
+    padding: 14px 18px 10px;
+    background: linear-gradient(180deg, #f7f9fc 0%, #fff 100%);
+    border-bottom: 1px solid var(--line, #d8dee6);
+}
+
+.cl-picker-search-wrap {
+    position: relative;
+    margin-bottom: 10px;
+}
+
+.cl-picker-search-icon {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #94a3b8;
+    pointer-events: none;
+}
+
+.cl-picker-search-wrap .cl-search {
+    margin-bottom: 0;
+    padding-left: 38px;
+    background: #fff;
+    border: 1.5px solid #e2e8f0;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.cl-picker-search-wrap .cl-search:focus {
+    outline: none;
+    border-color: var(--navy, #0c2d5a);
+    box-shadow: 0 0 0 3px rgba(12, 45, 90, 0.1);
+}
+
+.cl-picker-filters {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.cl-picker-filter {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.cl-picker-filter-wide {
+    grid-column: 1 / -1;
+}
+
+.cl-picker-filter span {
+    font-size: 10px;
+    font-weight: 700;
+    color: #64748b;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.cl-picker-select {
+    width: 100%;
+    padding: 7px 8px;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 12.5px;
+    font-family: inherit;
+    background: #fff;
+    color: var(--ink, #1a2332);
+    cursor: pointer;
+    transition: border-color 0.12s, box-shadow 0.12s, background 0.12s;
+}
+
+.cl-picker-select:hover {
+    border-color: #cbd5e1;
+}
+
+.cl-picker-select:focus {
+    outline: none;
+    border-color: var(--navy, #0c2d5a);
+    box-shadow: 0 0 0 2px rgba(12, 45, 90, 0.1);
+}
+
+.cl-picker-select.is-active {
+    border-color: rgba(12, 45, 90, 0.45);
+    background: #f0f5fb;
+    color: var(--navy, #0c2d5a);
+    font-weight: 600;
+}
+
+.cl-picker-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 10px;
+    min-height: 22px;
+}
+
+.cl-picker-meta span {
+    font-size: 12px;
+    color: #64748b;
+}
+
+.cl-picker-reset {
+    border: none;
+    background: transparent;
+    color: var(--navy, #0c2d5a);
+    font-size: 12px;
+    font-family: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 2px 0;
+}
+
+.cl-picker-reset:hover {
+    text-decoration: underline;
+}
+
+.cl-picker-foot {
+    justify-content: stretch;
+    padding: 12px 18px;
+    border-top: 1px solid var(--line, #d8dee6);
+    background: #fafbfc;
+}
+
+.cl-picker-foot .cl-clear-seat {
+    width: 100%;
+}
+
 .cl-search {
     width: 100%;
     padding: 11px 14px;
@@ -2025,39 +2170,77 @@
 
 .cl-monk-list {
     list-style: none;
-    margin: 0 0 12px;
-    padding: 0;
-    max-height: 280px;
+    margin: 0;
+    padding: 10px 14px 12px;
+    flex: 1;
+    min-height: 180px;
+    max-height: none;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: 4px;
+    background: #fff;
 }
 
 .cl-monk-list li button {
     width: 100%;
     text-align: left;
-    padding: 11px 14px;
-    border: 1px solid var(--line, #d8dee6);
-    border-radius: 9px;
-    background: #fff;
-    font-size: 13px;
+    padding: 10px 12px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    background: #f8fafc;
+    font-size: 13.5px;
     cursor: pointer;
     font-family: inherit;
     transition: all 0.12s;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+}
+
+.cl-monk-list li button .cl-monk-name {
+    color: var(--ink, #1a2332);
+    font-weight: 600;
+    line-height: 1.35;
+}
+
+.cl-monk-list li button .cl-monk-meta {
+    font-size: 11px;
+    color: #64748b;
+    font-weight: 400;
+    line-height: 1.3;
 }
 
 .cl-monk-list li button:hover {
-    border-color: var(--navy, #0c2d5a);
-    background: #f0f4fa;
+    border-color: rgba(12, 45, 90, 0.25);
+    background: #eef3f9;
 }
 
 .cl-monk-list li button.used {
-    opacity: 0.4;
+    opacity: 0.42;
     pointer-events: none;
 }
 
+.cl-monk-list .cl-monk-empty {
+    display: block;
+    padding: 28px 12px;
+    text-align: center;
+    color: #94a3b8;
+    font-size: 13px;
+}
+
 .cl-clear-seat { width: 100%; }
+
+@media (max-width: 520px) {
+    .cl-picker-filters {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .cl-picker-filter-wide {
+        grid-column: 1 / -1;
+    }
+}
 
 .cl-toast {
     position: fixed;
