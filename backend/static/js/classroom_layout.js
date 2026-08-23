@@ -367,15 +367,18 @@
         table.seat_count = active.length;
     }
 
-    function seatDisplayName(fullname, isSide) {
-        const name = (fullname || '').trim();
-        if (!name) return '';
+    function nameLengthClass(fullname, isSide) {
+        const len = (fullname || '').trim().length;
         if (isSide) {
-            if (name.length <= 14) return name;
-            return name.slice(0, 13) + '…';
+            if (len <= 10) return 'cl-name-len-s';
+            if (len <= 16) return 'cl-name-len-m';
+            if (len <= 22) return 'cl-name-len-l';
+            return 'cl-name-len-xl';
         }
-        if (name.length <= 16) return name;
-        return name.slice(0, 15) + '…';
+        if (len <= 12) return 'cl-name-len-s';
+        if (len <= 18) return 'cl-name-len-m';
+        if (len <= 26) return 'cl-name-len-l';
+        return 'cl-name-len-xl';
     }
 
     function renderSeatBtn(table, row, slot, activeSlots, orient, group) {
@@ -384,8 +387,9 @@
         const mid = table.seats && table.seats[slot];
         const monk = mid != null ? monkById(mid) : null;
         const isSide = group === 'left' || group === 'right';
+        const fullName = monk ? (monk.fullname || '').trim() : '';
         const label = monk
-            ? seatDisplayName(monk.fullname, isSide)
+            ? fullName
             : (mid != null ? '?' : '');
         const extra = [];
         if (orient === 'horizontal') {
@@ -396,6 +400,7 @@
         } else {
             extra.push('cl-name-vert-edge');
         }
+        if (fullName) extra.push(nameLengthClass(fullName, isSide));
         const cls = [
             'cl-name',
             monk ? 'filled' : 'empty',
