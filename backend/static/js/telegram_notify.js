@@ -572,7 +572,11 @@ function applyScopeChrome() {
     const chip = document.getElementById('tg-rule-chip');
     if (chip) chip.textContent = sala ? 'អវត្តមាន > ២' : 'អវត្តមាន > ២ · ច្បាប់ ≥ ៣';
     const title = document.querySelector('.tg-panel-title');
-    if (title) title.textContent = sala ? 'បញ្ជីរង់ចាំកិច្ចសន្យា · សាលាឆាន់' : 'បញ្ជីរង់ចាំកិច្ចសន្យា';
+    if (title) {
+        title.textContent = sala
+            ? 'បញ្ជីរង់ចាំកិច្ចសន្យា · ប្លងសាលាឆាន់'
+            : 'បញ្ជីរង់ចាំកិច្ចសន្យា · ប្លង់អាសនៈ';
+    }
 }
 
 function setSource(value) {

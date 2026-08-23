@@ -1378,7 +1378,7 @@
             attendanceMap.delete(monkId);
             permissionsMap.delete(monkId);
             renderCanvas();
-            toast('បានលុបចោល');
+            toast(json.cleared_leave ? 'បានលុបច្បាប់ទាំងអស់' : 'បានលុបចោល');
         } catch (err) {
             toast(err.message || 'មានបញ្ហា', false);
         }
@@ -1528,7 +1528,7 @@
         const q = query.trim().toLowerCase();
         const shown = rows.filter((r) => !q || r.name.toLowerCase().includes(q) || (r.position || '').toLowerCase().includes(q));
         if (!shown.length) {
-            list.innerHTML = '<p class="cl-perm-list-empty">មិនមានឈ្មោះដែលច្បាប់មិនផុតក្នុងរយៈពេល ១៥ ថ្ងៃ</p>';
+            list.innerHTML = '<p class="cl-perm-list-empty">មិនមានឈ្មោះដែលច្បាប់មិនផុតក្នុងប្លងសាលាឆាន់ (រយៈពេល ១៥ ថ្ងៃ)</p>';
             return;
         }
         list.innerHTML = shown.map((r, i) => {
@@ -1571,6 +1571,8 @@
             await loadAttendance();
             const res = await fetch(`/api/permissions?date=${today}&source=sala_chan`);
             const json = await res.json();
+            const scopeEl = document.getElementById('cl-perm-list-scope');
+            if (scopeEl) scopeEl.textContent = json.source_label || 'ប្លងសាលាឆាន់';
             if (json.success && Array.isArray(json.records) && json.records.length) {
                 permStayCache = {
                     block: {
@@ -1613,7 +1615,12 @@
                 (json.records || []).forEach((r) => attendanceMap.set(r.monk_id, r.status));
                 if (json.permissions_info) {
                     Object.entries(json.permissions_info).forEach(([mid, info]) => {
-                        permissionsMap.set(parseInt(mid, 10), info);
+                        const id = parseInt(mid, 10);
+                        permissionsMap.set(id, info);
+                        // Active leave covering today → show ច្បាប់ badge on seat
+                        if (Number(info.days_left) >= 0 && !attendanceMap.has(id)) {
+                            attendanceMap.set(id, 'permission');
+                        }
                     });
                 }
             }

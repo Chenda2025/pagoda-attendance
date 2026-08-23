@@ -845,15 +845,16 @@ def dashboard_stats():
 
 
 def _log_telegram_notify(monk_id, fullname, notify_type, ref_date, absent_count=0,
-                         perm_count=0, detail=None):
+                         perm_count=0, detail=None, source='layout'):
     try:
+        source = _norm_attendance_source(source)
         conn = connect_db()
         cur = conn.cursor()
         cur.execute("""
             INSERT INTO telegram_notify_log
-                (monk_id, fullname, notify_type, absent_count, perm_count, ref_date, detail)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-        """, (monk_id, fullname, notify_type, absent_count, perm_count, ref_date, detail))
+                (monk_id, fullname, notify_type, absent_count, perm_count, ref_date, detail, source)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """, (monk_id, fullname, notify_type, absent_count, perm_count, ref_date, detail, source))
         conn.commit()
         cur.close()
         conn.close()
@@ -876,18 +877,33 @@ def _format_sala_chan_period_line(date_str):
     )
 
 
+def _attendance_source_label(source='layout'):
+    """Human label for Telegram / contract: layout vs sala_chan."""
+    source = _norm_attendance_source(source)
+    if source == 'sala_chan':
+        return 'ប្លងសាលាឆាន់'
+    return 'ប្លង់អាសនៈព្រះសង្ឃ'
+
+
 def _build_absent_alert_message(fullname, kuti, kuti_head, kuti_deputy, absent_count,
                                 perm_count, date_str, contract_no=None, contract_label=None,
-                                late_count=0):
+                                late_count=0, source='layout'):
     try:
         d_fmt = _to_khmer_digits(_date.fromisoformat(date_str).strftime('%d/%m/%Y'))
     except Exception:
         d_fmt = _to_khmer_digits(date_str)
     period_line = _format_sala_chan_period_line(date_str)
+    source = _norm_attendance_source(source)
+    scope_line = (
+        'កិច្ចវត្តសាលាឆាន់វត្តនិរោធរង្សី'
+        if source == 'sala_chan'
+        else 'កិច្ចវត្តប្លង់អាសនៈព្រះសង្ឃវត្តនិរោធរង្សី'
+    )
     return (
         "🔔 សេចក្តីប្រគេនដំណឹង 🔔\n"
         f"{period_line}\n"
-        "កិច្ចវត្តសាលាឆាន់វត្តនិរោធរង្សី\n"
+        f"{scope_line}\n"
+        f"ប្រភេទប្លង់ ៖ {_attendance_source_label(source)}\n"
         "----- សារព្រមាន -----\n"
         f"ព្រះសង្ឃនាម ៖ {fullname}\n"
         f"កុដិ ៖ {(kuti or '').replace('_', ' ') or '............'}\n"
@@ -924,8 +940,9 @@ def _fetch_monk_alert_context(cursor, monk_id):
 
 
 def _send_absent_alert_telegram(monk_id, date_str, absent_count, perm_count, notify_type='absent_alert',
-                                late_count=None):
+                                late_count=None, source='layout'):
     import requests as req
+    source = _norm_attendance_source(source)
     conn = connect_db()
     cur = conn.cursor()
     ctx = _fetch_monk_alert_context(cur, monk_id)
@@ -936,7 +953,8 @@ def _send_absent_alert_telegram(monk_id, date_str, absent_count, perm_count, not
                 SELECT COUNT(*) FROM attendance_tbl
                 WHERE monk_id = %s AND status = 'late'
                   AND date >= %s AND date <= %s
-            """, (monk_id, block_start.isoformat(), block_end.isoformat()))
+                  AND source = %s
+            """, (monk_id, block_start.isoformat(), block_end.isoformat(), source))
             late_count = int((cur.fetchone() or [0])[0] or 0)
         except Exception:
             late_count = 0
@@ -947,7 +965,7 @@ def _send_absent_alert_telegram(monk_id, date_str, absent_count, perm_count, not
     fullname, kuti, kuti_head, kuti_deputy = ctx
     msg = _build_absent_alert_message(
         fullname, kuti, kuti_head, kuti_deputy, absent_count, perm_count, date_str,
-        late_count=late_count,
+        late_count=late_count, source=source,
     )
     token, chat_id = _tg_bot_creds()
     if not token or not chat_id:
@@ -962,7 +980,8 @@ def _send_absent_alert_telegram(monk_id, date_str, absent_count, perm_count, not
     _log_telegram_notify(
         monk_id, fullname, notify_type, date_str,
         absent_count=absent_count, perm_count=perm_count,
-        detail=f'late={late_count}',
+        detail=f'late={late_count};source={source}',
+        source=source,
     )
     return True, None
 
@@ -1027,8 +1046,9 @@ def _fetch_telegram_eligible_monks(block_start, block_end, source='layout'):
                (ARRAY_AGG(notify_type ORDER BY sent_at DESC))[1] AS last_type
         FROM telegram_notify_log
         WHERE ref_date >= %s AND ref_date <= %s
+          AND COALESCE(source, 'layout') = %s
         GROUP BY monk_id
-    """, (block_start.isoformat(), block_end.isoformat()))
+    """, (block_start.isoformat(), block_end.isoformat(), source))
     sent_map = {
         r[0]: {'last_sent': r[1].isoformat() if r[1] else None, 'last_type': r[2]}
         for r in cur.fetchall()
@@ -1039,10 +1059,11 @@ def _fetch_telegram_eligible_monks(block_start, block_end, source='layout'):
             monk_id, contract_status, updated_at
         FROM telegram_contract_tbl
         WHERE block_start <= %s AND block_end >= %s
+          AND COALESCE(source, 'layout') = %s
         ORDER BY monk_id,
                  CASE WHEN contract_status = 'done' THEN 0 ELSE 1 END,
                  updated_at DESC NULLS LAST
-    """, (block_end.isoformat(), block_start.isoformat()))
+    """, (block_end.isoformat(), block_start.isoformat(), source))
     contract_map = {
         r[0]: {
             'status': r[1],
@@ -1055,8 +1076,9 @@ def _fetch_telegram_eligible_monks(block_start, block_end, source='layout'):
         SELECT monk_id, COUNT(*) AS contract_total
         FROM telegram_contract_tbl
         WHERE contract_status = 'done'
+          AND COALESCE(source, 'layout') = %s
         GROUP BY monk_id
-    """)
+    """, (source,))
     contract_total_map = {r[0]: int(r[1] or 0) for r in cur.fetchall()}
     cur.close()
     conn.close()
@@ -1109,7 +1131,7 @@ def _contract_violation_label(m):
     return ' + '.join(parts) or '—'
 
 
-def _make_contract_report_html(monks, block_start, block_end):
+def _make_contract_report_html(monks, block_start, block_end, source='layout'):
     import html as _html
     from datetime import date
 
@@ -1171,6 +1193,7 @@ td.name {{ font-weight: 600; }}
 </div>
 <div class="report-title">
   <h1>របាយការណ៍កិច្ចសន្យារួច</h1>
+  <p>{_html.escape(_attendance_source_label(source))}</p>
   <p>ព្រះសង្ឃអវត្តមាន ≥ {DISC_ABSENT_MIN} ឬច្បាប់ ≥ {DISC_PERM_MIN}</p>
 </div>
 <div class="meta"><span>រយៈពេល៖ {period}</span><span>ថ្ងៃចេញរបាយការណ៍៖ {today}</span>
@@ -1337,7 +1360,7 @@ def api_telegram_contract_report_export():
         done = [m for m in all_monks if m['contract_status'] == 'done']
 
         if fmt == 'html':
-            html = _make_contract_report_html(done, block_start, block_end)
+            html = _make_contract_report_html(done, block_start, block_end, source)
             return html, 200, {'Content-Type': 'text/html; charset=utf-8'}
 
         if fmt == 'word':
@@ -1358,6 +1381,10 @@ def api_telegram_contract_report_export():
             p = doc.add_paragraph()
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER
             p.add_run(f'រយៈពេល {block_start} → {block_end}')
+
+            p = doc.add_paragraph()
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            p.add_run(_attendance_source_label(source))
 
             p = doc.add_paragraph()
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -1506,6 +1533,7 @@ def api_telegram_notify_contract():
             return jsonify({'success': False, 'message': 'monk_id មិនត្រឹមត្រូវ'}), 400
 
         period = _telegram_period_from_request()
+        source = _telegram_source_from_request()
         period_start, period_end = _get_telegram_period_dates(date_str, period)
         block_start, block_end = _get_block_dates(date_str)
         contract_date_str = (data.get('contract_date') or '').strip()
@@ -1524,32 +1552,35 @@ def api_telegram_notify_contract():
                 SET contract_status = 'pending',
                     updated_at = COALESCE(%s::timestamp, NOW())
                 WHERE monk_id = %s AND block_start <= %s AND block_end >= %s
+                  AND COALESCE(source, 'layout') = %s
                 RETURNING contract_status, updated_at
-            """, (updated_at, monk_id, period_end.isoformat(), period_start.isoformat()))
+            """, (updated_at, monk_id, period_end.isoformat(), period_start.isoformat(), source))
             row = cur.fetchone()
             if not row:
                 cur.execute("""
-                    INSERT INTO telegram_contract_tbl (monk_id, block_start, block_end, contract_status, updated_at)
-                    VALUES (%s, %s, %s, %s, COALESCE(%s::timestamp, NOW()))
-                    ON CONFLICT (monk_id, block_start) DO UPDATE
+                    INSERT INTO telegram_contract_tbl
+                        (monk_id, block_start, block_end, contract_status, updated_at, source)
+                    VALUES (%s, %s, %s, %s, COALESCE(%s::timestamp, NOW()), %s)
+                    ON CONFLICT (monk_id, block_start, source) DO UPDATE
                         SET contract_status = EXCLUDED.contract_status,
                             block_end = EXCLUDED.block_end,
                             updated_at = COALESCE(%s::timestamp, telegram_contract_tbl.updated_at, NOW())
                     RETURNING contract_status, updated_at
                 """, (monk_id, block_start.isoformat(), block_end.isoformat(), status,
-                      updated_at, updated_at))
+                      updated_at, source, updated_at))
                 row = cur.fetchone()
         else:
             cur.execute("""
-                INSERT INTO telegram_contract_tbl (monk_id, block_start, block_end, contract_status, updated_at)
-                VALUES (%s, %s, %s, %s, COALESCE(%s::timestamp, NOW()))
-                ON CONFLICT (monk_id, block_start) DO UPDATE
+                INSERT INTO telegram_contract_tbl
+                    (monk_id, block_start, block_end, contract_status, updated_at, source)
+                VALUES (%s, %s, %s, %s, COALESCE(%s::timestamp, NOW()), %s)
+                ON CONFLICT (monk_id, block_start, source) DO UPDATE
                     SET contract_status = EXCLUDED.contract_status,
                         block_end = EXCLUDED.block_end,
                         updated_at = COALESCE(%s::timestamp, telegram_contract_tbl.updated_at, NOW())
                 RETURNING contract_status, updated_at
             """, (monk_id, block_start.isoformat(), block_end.isoformat(), status,
-                  updated_at, updated_at))
+                  updated_at, source, updated_at))
             row = cur.fetchone()
         saved = row[0]
         saved_at = row[1].isoformat() if row[1] else None
@@ -1618,6 +1649,7 @@ def api_telegram_notify_send():
                 continue
             ok, err = _send_absent_alert_telegram(
                 monk_id, date_str, absent_count, perm_count, notify_type='manual_alert',
+                source=source,
             )
             if ok:
                 sent += 1
@@ -3508,7 +3540,7 @@ def send_classroom_layout_telegram():
 
         parts = [
             '🏛 វត្តនិរោធរង្សី',
-            f'📋 ព័ត៌មានសាលាឆាន់ប្រចាំថ្ងៃ — {d_fmt}',
+            f'📋 ព័ត៌មានប្លងសាលាឆាន់ប្រចាំថ្ងៃ — {d_fmt}',
             '═' * 15,
         ]
         if bhikkhus:
@@ -3532,6 +3564,24 @@ def send_classroom_layout_telegram():
             }), 500
 
         _log_act('classroom_layout_telegram', 'classroom_layout', f'{len(rows)} — {date_str}')
+        conn_log = connect_db()
+        cur_log = conn_log.cursor()
+        cur_log.execute("""
+            SELECT a.monk_id, m.fullname, a.status
+            FROM attendance_tbl a
+            JOIN monk_tbl m ON m.id = a.monk_id
+            WHERE a.date = %s AND a.source = 'sala_chan'
+              AND a.status IN ('absent', 'permission', 'late')
+              AND a.monk_id = ANY(%s)
+        """, (date_str, list(seated_ids)))
+        for mid, fname, status in cur_log.fetchall():
+            _log_telegram_notify(
+                mid, fname, 'daily_submit', date_str,
+                detail=f'status={status}',
+                source='sala_chan',
+            )
+        cur_log.close()
+        conn_log.close()
         return jsonify({'success': True, 'message': 'បានផ្ញើរបាយការណ៍ទៅ Telegram', 'total': len(rows)})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
@@ -3633,9 +3683,18 @@ def get_attendance():
         records = [{'monk_id': r[0], 'status': r[1]} for r in cursor.fetchall()]
         
         cursor.execute("""
-            SELECT monk_id, start_date, end_date, reason, shift FROM monk_permission
-            WHERE %s BETWEEN start_date AND end_date
-        """, (date_str,))
+            SELECT p.monk_id, p.start_date, p.end_date, p.reason, p.shift
+            FROM monk_permission p
+            WHERE %s BETWEEN p.start_date AND p.end_date
+              AND EXISTS (
+                SELECT 1 FROM attendance_tbl a
+                WHERE a.monk_id = p.monk_id
+                  AND a.source = %s
+                  AND a.status = 'permission'
+                  AND a.date >= p.start_date
+                  AND a.date <= p.end_date
+              )
+        """, (date_str, source))
 
         perms = {}
         target_date = _date.fromisoformat(date_str)
@@ -3651,6 +3710,21 @@ def get_attendance():
                     'shift': shift or '',
                     'same_day': start_date == end_date,
                 }
+
+        # Multi-day leave: show ច្បាប់ on seats for every day in range, even if
+        # today's attendance row is missing (list already shows "សល់ N ថ្ងៃ").
+        present = {r['monk_id'] for r in records}
+        for monk_id in list(perms.keys()):
+            if monk_id in present:
+                continue
+            cursor.execute("""
+                INSERT INTO attendance_tbl (monk_id, status, date, source)
+                VALUES (%s, 'permission', %s, %s)
+                ON CONFLICT (monk_id, date, source) DO NOTHING;
+            """, (monk_id, date_str, source))
+            records.append({'monk_id': monk_id, 'status': 'permission'})
+            present.add(monk_id)
+        conn.commit()
                 
         cursor.close(); conn.close()
         return jsonify({'success': True, 'records': records, 'permissions_info': perms, 'source': source})
@@ -3723,7 +3797,7 @@ def set_attendance():
                 try:
                     ok, err = _send_absent_alert_telegram(
                         monk_id, date_str, absent_count, perm_count, 'absent_alert',
-                        late_count=late_count,
+                        late_count=late_count, source=source,
                     )
                     alert_sent = bool(ok)
                     alert_error = None if ok else (err or 'Telegram failed')
@@ -3756,7 +3830,11 @@ def set_attendance():
 
 @main_bp.route('/api/permissions', methods=['GET'])
 def list_active_permissions():
-    """Names whose permission is still valid in the current 15-day block."""
+    """Names whose permission is still valid in the current 15-day block.
+
+    Scoped by attendance source (layout = អាសនៈ, sala_chan = សាលាឆាន់) so the
+    two seating systems never mix in this list.
+    """
     try:
         date_str = request.args.get('date', _date.today().isoformat())
         source = _source_from_request(args=request.args)
@@ -3764,34 +3842,35 @@ def list_active_permissions():
         block_start, block_end = _get_block_dates(date_str)
         conn = connect_db()
         cursor = conn.cursor()
+        # Gate on attendance for this source only — monk_permission is shared
+        # and must not leak the other system into this list.
         cursor.execute("""
             SELECT m.id, m.fullname, m.monk_type, m.position,
                    MIN(a.date) AS first_day,
                    MAX(a.date) AS last_day,
-                   p.start_date, p.end_date, p.reason, p.shift
-            FROM monk_tbl m
+                   MAX(p.start_date) AS start_date,
+                   MAX(p.end_date) AS end_date,
+                   (ARRAY_AGG(p.reason ORDER BY p.end_date DESC NULLS LAST)
+                        FILTER (WHERE p.reason IS NOT NULL AND p.reason <> ''))[1] AS reason,
+                   (ARRAY_AGG(p.shift ORDER BY p.end_date DESC NULLS LAST)
+                        FILTER (WHERE p.shift IS NOT NULL AND p.shift <> ''))[1] AS shift
+            FROM attendance_tbl a
+            JOIN monk_tbl m ON m.id = a.monk_id
             LEFT JOIN monk_permission p
                    ON p.monk_id = m.id
                   AND p.start_date <= %s
                   AND p.end_date >= %s
-            LEFT JOIN attendance_tbl a
-                   ON a.monk_id = m.id
-                  AND a.source = %s
-                  AND a.status = 'permission'
-                  AND a.date >= %s AND a.date <= %s
-            WHERE p.monk_id IS NOT NULL
-               OR a.monk_id IS NOT NULL
-            GROUP BY m.id, m.fullname, m.monk_type, m.position,
-                     p.start_date, p.end_date, p.reason, p.shift
-            HAVING (p.end_date IS NOT NULL AND p.end_date >= %s)
-                OR MAX(a.date) >= %s
+            WHERE a.source = %s
+              AND a.status = 'permission'
+              AND a.date >= %s AND a.date <= %s
+            GROUP BY m.id, m.fullname, m.monk_type, m.position
+            HAVING COALESCE(MAX(p.end_date), MAX(a.date)) >= %s
         """, (
             block_end.isoformat(),
             target.isoformat(),
             source,
             block_start.isoformat(),
             block_end.isoformat(),
-            target.isoformat(),
             target.isoformat(),
         ))
         rows = []
@@ -3809,11 +3888,12 @@ def list_active_permissions():
                 'fullname': fullname,
                 'monk_type': monk_type or '',
                 'position': position or '',
-                'start_date': (start_date or first_day).isoformat() if (start_date or first_day) else '',
+                'start_date': start.isoformat() if start else '',
                 'end_date': end.isoformat() if end else '',
                 'days_left': days_left,
                 'reason': reason or '',
                 'shift': shift or '',
+                'source': source,
             })
         rows.sort(key=lambda r: (-(r.get('days_left') or 0), r.get('fullname') or ''))
         cursor.close()
@@ -3822,6 +3902,7 @@ def list_active_permissions():
             'success': True,
             'records': rows,
             'source': source,
+            'source_label': _attendance_source_label(source),
             'period_start': block_start.isoformat(),
             'period_end': block_end.isoformat(),
         })
@@ -3937,17 +4018,68 @@ def get_monk_attendance(monk_id):
 
 @main_bp.route('/api/attendance/<int:monk_id>', methods=['DELETE'])
 def remove_attendance(monk_id):
+    """Clear today's mark. For ច្បាប់, cancel the whole leave on this source
+    so multi-day leave does not reappear after refresh."""
     try:
         date_str = request.args.get('date', _date.today().isoformat())
         source = _source_from_request(args=request.args)
+        target = _date.fromisoformat(date_str)
         conn = connect_db()
         cursor = conn.cursor()
-        cursor.execute(
-            "DELETE FROM attendance_tbl WHERE monk_id = %s AND date = %s AND source = %s;",
-            (monk_id, date_str, source),
-        )
-        conn.commit(); cursor.close(); conn.close()
-        return jsonify({'success': True})
+
+        cursor.execute("""
+            SELECT status FROM attendance_tbl
+            WHERE monk_id = %s AND date = %s AND source = %s
+        """, (monk_id, date_str, source))
+        row = cursor.fetchone()
+        status = row[0] if row else None
+
+        # Active leave covering today (shared monk_permission), scoped by this source
+        cursor.execute("""
+            SELECT start_date, end_date FROM monk_permission
+            WHERE monk_id = %s AND %s BETWEEN start_date AND end_date
+            ORDER BY end_date DESC
+            LIMIT 1
+        """, (monk_id, date_str))
+        leave = cursor.fetchone()
+
+        cleared_leave = False
+        if status == 'permission' or leave:
+            if leave:
+                start_date, end_date = leave
+            else:
+                start_date = end_date = target
+            cursor.execute("""
+                DELETE FROM attendance_tbl
+                WHERE monk_id = %s
+                  AND source = %s
+                  AND status = 'permission'
+                  AND date >= %s AND date <= %s
+            """, (monk_id, source, start_date.isoformat(), end_date.isoformat()))
+            # Drop shared leave row only if no other source still has permission days
+            cursor.execute("""
+                SELECT COUNT(*) FROM attendance_tbl
+                WHERE monk_id = %s
+                  AND status = 'permission'
+                  AND date >= %s AND date <= %s
+            """, (monk_id, start_date.isoformat(), end_date.isoformat()))
+            other_left = int((cursor.fetchone() or [0])[0] or 0)
+            if other_left == 0:
+                cursor.execute(
+                    "DELETE FROM monk_permission WHERE monk_id = %s",
+                    (monk_id,),
+                )
+            cleared_leave = True
+        else:
+            cursor.execute(
+                "DELETE FROM attendance_tbl WHERE monk_id = %s AND date = %s AND source = %s;",
+                (monk_id, date_str, source),
+            )
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({'success': True, 'cleared_leave': cleared_leave})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 
@@ -4606,24 +4738,49 @@ def submit_attendance():
         except ValueError:
             return jsonify({'success': False, 'message': 'កាលបរិច្ឆេទមិនត្រឹមត្រូវ'}), 400
 
+        source = _source_from_request(data=data)
+        seated_ids = _layout_seated_monk_ids() if source == 'layout' else _classroom_seated_monk_ids()
+
         conn = connect_db()
         cursor = conn.cursor()
-        cursor.execute("""
-            SELECT m.fullname, m.monk_type, m.position, m.vassa_years, m.residence,
-                   a.status, p.reason
-            FROM attendance_tbl a
-            JOIN monk_tbl m ON m.id = a.monk_id
-            LEFT JOIN monk_permission p
-                   ON p.monk_id = a.monk_id
-                  AND a.date BETWEEN p.start_date AND p.end_date
-            WHERE a.date = %s
-            ORDER BY m.monk_type, a.status, m.fullname;
-        """, (date_str,))
+        if seated_ids:
+            cursor.execute("""
+                SELECT m.fullname, m.monk_type, m.position, m.vassa_years, m.residence,
+                       a.status, p.reason
+                FROM attendance_tbl a
+                JOIN monk_tbl m ON m.id = a.monk_id
+                LEFT JOIN monk_permission p
+                       ON p.monk_id = a.monk_id
+                      AND a.date BETWEEN p.start_date AND p.end_date
+                WHERE a.date = %s
+                  AND a.source = %s
+                  AND a.monk_id = ANY(%s)
+                  AND a.status IN ('absent', 'permission', 'late')
+                ORDER BY m.monk_type, a.status, m.fullname;
+            """, (date_str, source, list(seated_ids)))
+        else:
+            cursor.execute("""
+                SELECT m.fullname, m.monk_type, m.position, m.vassa_years, m.residence,
+                       a.status, p.reason
+                FROM attendance_tbl a
+                JOIN monk_tbl m ON m.id = a.monk_id
+                LEFT JOIN monk_permission p
+                       ON p.monk_id = a.monk_id
+                      AND a.date BETWEEN p.start_date AND p.end_date
+                WHERE a.date = %s
+                  AND a.source = %s
+                  AND a.status IN ('absent', 'permission', 'late')
+                ORDER BY m.monk_type, a.status, m.fullname;
+            """, (date_str, source))
         rows = cursor.fetchall()
         cursor.close(); conn.close()
 
         if not rows:
-            return jsonify({'success': False, 'message': 'មិនមានការចុះឈ្មោះត្រូវបញ្ជូនទេ'}), 400
+            scope_label = _attendance_source_label(source)
+            return jsonify({
+                'success': False,
+                'message': f'មិនមានអវត្តមាន / ច្បាប់ / យឺត សម្រាប់{scope_label} ថ្ងៃនេះ',
+            }), 400
 
         absent_count     = sum(1 for r in rows if r[5] == 'absent')
         permission_count = sum(1 for r in rows if r[5] == 'permission')
@@ -4657,10 +4814,11 @@ def submit_attendance():
         bhikkhus  = [r for r in rows if r[1] == 'ភិក្ខុ']
         samaneras = [r for r in rows if r[1] == 'សាមណេរ']
 
-        d_fmt = report_day.strftime('%d/%m/%Y')
+        d_fmt = _to_khmer_digits(report_day.strftime('%d/%m/%Y'))
+        scope_label = _attendance_source_label(source)
         parts = [
             f'🏛 វត្តនិរោធរង្សី',
-            f'📋 ព័ត៌មានថ្វាយបង្គំប្រចាំថ្ងៃ — {d_fmt}',
+            f'📋 ព័ត៌មាន{scope_label}ប្រចាំថ្ងៃ — {d_fmt}',
             '═' * 15,
         ]
         if bhikkhus:
@@ -4687,17 +4845,18 @@ def submit_attendance():
             SELECT a.monk_id, m.fullname, a.status
             FROM attendance_tbl a
             JOIN monk_tbl m ON m.id = a.monk_id
-            WHERE a.date = %s AND a.status IN ('absent', 'permission', 'late')
-        """, (date_str,))
+            WHERE a.date = %s AND a.source = %s AND a.status IN ('absent', 'permission', 'late')
+        """, (date_str, source))
         for mid, fname, status in cur2.fetchall():
             _log_telegram_notify(
                 mid, fname, 'daily_submit', date_str,
                 detail=f'status={status}',
+                source=source,
             )
         cur2.close()
         conn2.close()
 
-        _log_act('attendance_submit', 'layout', f'{len(rows)} monks — {date_str}')
+        _log_act('attendance_submit', source, f'{len(rows)} monks — {date_str}')
         return jsonify({'success': True, 'total': len(rows)})
 
     except Exception as e:
@@ -4721,7 +4880,7 @@ def submit_attendance_image():
             d_fmt = _date.fromisoformat(date_str).strftime('%d/%m/%Y')
         except ValueError:
             d_fmt = _date.today().strftime('%d/%m/%Y')
-        caption = f'📋 បញ្ជីអវត្តមាន/ច្បាប់ — {d_fmt}'
+        caption = f'📋 បញ្ជីអវត្តមាន/ច្បាប់ — ប្លង់អាសនៈ — {d_fmt}'
 
         resp = req.post(
             f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto',

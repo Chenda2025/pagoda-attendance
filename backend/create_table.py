@@ -643,8 +643,25 @@ def create_telegram_notify_table():
                 perm_count    INTEGER NOT NULL DEFAULT 0,
                 ref_date      DATE NOT NULL,
                 detail        TEXT,
+                source        VARCHAR(20) NOT NULL DEFAULT 'layout'
+                              CHECK (source IN ('layout', 'sala_chan')),
                 sent_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
+        """)
+        cursor.execute("""
+            ALTER TABLE telegram_notify_log
+            ADD COLUMN IF NOT EXISTS source VARCHAR(20) NOT NULL DEFAULT 'layout';
+        """)
+        cursor.execute("""
+            DO $$ BEGIN
+              IF NOT EXISTS (
+                SELECT 1 FROM pg_constraint WHERE conname = 'telegram_notify_log_source_check'
+              ) THEN
+                ALTER TABLE telegram_notify_log
+                  ADD CONSTRAINT telegram_notify_log_source_check
+                  CHECK (source IN ('layout', 'sala_chan'));
+              END IF;
+            END $$;
         """)
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_tg_notify_monk_date
@@ -653,6 +670,10 @@ def create_telegram_notify_table():
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_tg_notify_sent
             ON telegram_notify_log (sent_at DESC);
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_tg_notify_source_date
+            ON telegram_notify_log (source, ref_date DESC);
         """)
         conn.commit()
         print("Table 'telegram_notify_log' created / verified.")
@@ -680,13 +701,50 @@ def create_telegram_contract_table():
                 block_end       DATE NOT NULL,
                 contract_status VARCHAR(20) NOT NULL DEFAULT 'pending'
                     CHECK (contract_status IN ('pending', 'done')),
+                source          VARCHAR(20) NOT NULL DEFAULT 'layout'
+                    CHECK (source IN ('layout', 'sala_chan')),
                 updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE (monk_id, block_start)
+                UNIQUE (monk_id, block_start, source)
             );
+        """)
+        cursor.execute("""
+            ALTER TABLE telegram_contract_tbl
+            ADD COLUMN IF NOT EXISTS source VARCHAR(20) NOT NULL DEFAULT 'layout';
+        """)
+        cursor.execute("""
+            DO $$ BEGIN
+              IF NOT EXISTS (
+                SELECT 1 FROM pg_constraint WHERE conname = 'telegram_contract_tbl_source_check'
+              ) THEN
+                ALTER TABLE telegram_contract_tbl
+                  ADD CONSTRAINT telegram_contract_tbl_source_check
+                  CHECK (source IN ('layout', 'sala_chan'));
+              END IF;
+            END $$;
+        """)
+        cursor.execute("""
+            ALTER TABLE telegram_contract_tbl
+            DROP CONSTRAINT IF EXISTS telegram_contract_tbl_monk_id_block_start_key;
+        """)
+        cursor.execute("""
+            DO $$ BEGIN
+              IF NOT EXISTS (
+                SELECT 1 FROM pg_constraint
+                WHERE conname = 'telegram_contract_tbl_monk_id_block_start_source_key'
+              ) THEN
+                ALTER TABLE telegram_contract_tbl
+                  ADD CONSTRAINT telegram_contract_tbl_monk_id_block_start_source_key
+                  UNIQUE (monk_id, block_start, source);
+              END IF;
+            END $$;
         """)
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_tg_contract_block
             ON telegram_contract_tbl (block_start, block_end);
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_tg_contract_source_block
+            ON telegram_contract_tbl (source, block_start, block_end);
         """)
         conn.commit()
         print("Table 'telegram_contract_tbl' created / verified.")

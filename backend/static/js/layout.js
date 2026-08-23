@@ -228,7 +228,11 @@ async function loadData() {
             attJson.records.forEach(r => attendanceMap.set(r.monk_id, r.status));
             if (attJson.permissions_info) {
                 for (const [mid, info] of Object.entries(attJson.permissions_info)) {
-                    permissionsMap.set(parseInt(mid), info);
+                    const id = parseInt(mid);
+                    permissionsMap.set(id, info);
+                    if (Number(info.days_left) >= 0 && !attendanceMap.has(id)) {
+                        attendanceMap.set(id, 'permission');
+                    }
                 }
             }
         }
@@ -682,7 +686,9 @@ async function clearAttendance(monkId) {
         const json = await res.json();
         if (!json.success) throw new Error(json.message);
         attendanceMap.delete(monkId);
+        permissionsMap.delete(monkId);
         updateCellDisplay(monkId);
+        if (json.cleared_leave) showToast('បានលុបច្បាប់ទាំងអស់', 'success');
     } catch (err) {
         showToast('មានបញ្ហា: ' + err.message, 'error');
     }
@@ -1100,7 +1106,7 @@ async function submitAttendance() {
         const res  = await fetch('/api/attendance/submit', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ date }),
+            body: JSON.stringify({ date, source: 'layout' }),
         });
         const json = await res.json();
         if (!json.success) throw new Error(json.message);
