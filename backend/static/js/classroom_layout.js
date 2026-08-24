@@ -1461,7 +1461,7 @@
         pop.dataset.justOpened = '1';
         setTimeout(() => { delete pop.dataset.justOpened; }, 0);
 
-        fetch(`/api/attendance/history/${monkId}?date=${getActiveDate()}`)
+        fetch(`/api/attendance/history/${monkId}?date=${getActiveDate()}&source=sala_chan`)
             .then((res) => res.json())
             .then((hist) => {
                 if (!hist.success || activeAttMonkId !== monkId) return;

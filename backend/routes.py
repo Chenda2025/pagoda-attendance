@@ -4609,30 +4609,36 @@ def export_attendance_report():
 def attendance_history(monk_id):
     try:
         date_str = request.args.get('date', _date.today().isoformat())
+        source = _source_from_request(args=request.args)
         block_start, block_end = _get_block_dates(date_str)
         conn = connect_db()
         cursor = conn.cursor()
         cursor.execute("""
             SELECT
                 SUM(CASE WHEN status = 'absent'     THEN 1 ELSE 0 END),
-                SUM(CASE WHEN status = 'permission' THEN 1 ELSE 0 END)
+                SUM(CASE WHEN status = 'permission' THEN 1 ELSE 0 END),
+                SUM(CASE WHEN status = 'late'       THEN 1 ELSE 0 END)
             FROM attendance_tbl
             WHERE monk_id = %s
               AND date >= %s
-              AND date <= %s;
-        """, (monk_id, block_start.isoformat(), block_end.isoformat()))
+              AND date <= %s
+              AND source = %s;
+        """, (monk_id, block_start.isoformat(), block_end.isoformat(), source))
         row = cursor.fetchone()
         cursor.close(); conn.close()
         absent_count = int(row[0] or 0)
         permission_count = int(row[1] or 0)
+        late_count = int(row[2] or 0)
         step_no, step_label = _absent_contract_step(absent_count)
         return jsonify({
             'success': True,
             'absent_count':     absent_count,
             'permission_count': permission_count,
+            'late_count':       late_count,
             'perm_locked':      permission_count > 2,
             'contract_step':    step_no,
             'contract_label':   step_label,
+            'source':           source,
         })
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
@@ -4642,6 +4648,7 @@ def attendance_history(monk_id):
 def attendance_full_history(monk_id):
     try:
         date_str = request.args.get('date', _date.today().isoformat())
+        source = _source_from_request(args=request.args)
         block_start, block_end = _get_block_dates(date_str)
         conn = connect_db()
         cursor = conn.cursor()
@@ -4655,13 +4662,15 @@ def attendance_full_history(monk_id):
             WHERE a.monk_id = %s
               AND a.date >= %s
               AND a.date <= %s
+              AND a.source = %s
             ORDER BY a.date DESC;
-        """, (monk_id, block_start.isoformat(), block_end.isoformat()))
+        """, (monk_id, block_start.isoformat(), block_end.isoformat(), source))
         rows = cursor.fetchall()
         cursor.close(); conn.close()
 
         absent_dates = []
         perm_dates   = []
+        late_dates   = []
         for date, status, reason, end_date in rows:
             entry = {'date': date.isoformat() if hasattr(date, 'isoformat') else str(date)}
             if status == 'absent':
@@ -4670,13 +4679,18 @@ def attendance_full_history(monk_id):
                 entry['reason']   = reason   or ''
                 entry['end_date'] = end_date.isoformat() if end_date and hasattr(end_date, 'isoformat') else (str(end_date) if end_date else '')
                 perm_dates.append(entry)
+            elif status == 'late':
+                late_dates.append(entry)
 
         return jsonify({
             'success':          True,
             'absent_count':     len(absent_dates),
             'permission_count': len(perm_dates),
+            'late_count':       len(late_dates),
             'absent_dates':     absent_dates,
             'perm_dates':       perm_dates,
+            'late_dates':       late_dates,
+            'source':           source,
         })
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500

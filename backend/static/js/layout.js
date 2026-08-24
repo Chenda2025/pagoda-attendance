@@ -285,7 +285,7 @@ async function showAttList() {
     const histMap = new Map();
     await Promise.all(markedMonks.map(async m => {
         try {
-            const res  = await fetch(`/api/attendance/history/${m.id}?date=${date}`);
+            const res  = await fetch(`/api/attendance/history/${m.id}?date=${date}&source=layout`);
             const json = await res.json();
             if (json.success) histMap.set(m.id, json);
         } catch { /* show without totals */ }
@@ -378,7 +378,7 @@ async function showMonkHistory(monkId, monkName) {
 
     try {
         const date = getActiveDate();
-        const res  = await fetch(`/api/attendance/full-history/${monkId}?date=${date}`);
+        const res  = await fetch(`/api/attendance/full-history/${monkId}?date=${date}&source=layout`);
         const data = await res.json();
         if (!data.success) throw new Error(data.message || 'Error');
 
@@ -967,7 +967,7 @@ function initPopover() {
             popover.style.display = 'block';
 
             try {
-                const res  = await fetch(`/api/attendance/history/${activeMonkId}?date=${getActiveDate()}`);
+                const res  = await fetch(`/api/attendance/history/${activeMonkId}?date=${getActiveDate()}&source=layout`);
                 const hist = await res.json();
                 if (!hist.success) return;
 
