@@ -853,6 +853,7 @@ body {
 .btn-r-edit:hover { background: #bee3f8; transform: translateY(-1px); }
 
 .btn-r-del {
+    padding: 5px 7px;
     background: #fff5f5;
     color: #c53030;
 }

@@ -5,7 +5,10 @@ const PERM_LIMIT   = 3;
 
 let allData     = [];
 let _reportType = 'daily';
+let _reportPeriodStart = '';
+let _reportPeriodEnd   = '';
 const REPORT_SCOPE = document.body?.dataset?.reportScope || 'layout';
+const REPORT_HIDDEN_LS = 'pagoda_report_hidden_v1';
 
 const PAGE_SIZE   = 20;
 let _pages        = { bhikkhu: 1, samanera: 1 };
@@ -243,6 +246,89 @@ function buildQueryString(filters) {
     return p.toString();
 }
 
+function _reportHiddenKey() {
+    const filters = getFilters();
+    const reportType = getRdd('f-report-type') || 'daily';
+    const scope = filters.scope || REPORT_SCOPE || 'layout';
+    return [
+        reportType,
+        scope,
+        _reportPeriodStart || filters.date,
+        _reportPeriodEnd || filters.date,
+    ].join('|');
+}
+
+function _loadHiddenReportIds() {
+    try {
+        const store = JSON.parse(localStorage.getItem(REPORT_HIDDEN_LS) || '{}');
+        return new Set((store[_reportHiddenKey()] || []).map(Number));
+    } catch (_) {
+        return new Set();
+    }
+}
+
+function _saveHiddenReportIds(ids) {
+    try {
+        const store = JSON.parse(localStorage.getItem(REPORT_HIDDEN_LS) || '{}');
+        store[_reportHiddenKey()] = [...ids];
+        localStorage.setItem(REPORT_HIDDEN_LS, JSON.stringify(store));
+    } catch (_) { /* ignore quota / private mode */ }
+}
+
+function _applyReportHidden(monks) {
+    const hidden = _loadHiddenReportIds();
+    if (!hidden.size) return monks;
+    return monks.filter(m => !hidden.has(m.id));
+}
+
+function _hideFromReport(id) {
+    const hidden = _loadHiddenReportIds();
+    hidden.add(id);
+    _saveHiddenReportIds(hidden);
+}
+
+function _appendHiddenExcludeParams(params) {
+    const hidden = _loadHiddenReportIds();
+    if (hidden.size) params.set('exclude_ids', [...hidden].join(','));
+}
+
+function _attendanceScope() {
+    return getFilters().scope || REPORT_SCOPE || 'layout';
+}
+
+function _attendancePayload(extra = {}) {
+    return { source: _attendanceScope(), ...extra };
+}
+
+function _reportPeriodRange() {
+    const filters = getFilters();
+    return {
+        start: _reportPeriodStart || filters.date,
+        end: _reportPeriodEnd || filters.date,
+    };
+}
+
+async function _clearMonkReportAttendance(monkId) {
+    const { start, end } = _reportPeriodRange();
+    const res = await fetch('/api/reports/clear-monk-period', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(_attendancePayload({
+            monk_id: monkId,
+            start_date: start,
+            end_date: end,
+        })),
+    });
+    const json = await res.json();
+    if (!json.success) throw new Error(json.message || 'Error');
+    return json;
+}
+
+function _setReportPeriod(start, end) {
+    _reportPeriodStart = (start || '').slice(0, 10);
+    _reportPeriodEnd   = (end || start || '').slice(0, 10);
+}
+
 // ============ LOAD ============
 
 function _applyClientFilters(monks, filters) {
@@ -327,35 +413,48 @@ async function loadReport() {
             const res = await fetch(`/api/attendance/daily-report?${buildQueryString(filters)}`);
             json = await res.json();
             if (!json.success) throw new Error(json.message);
-            allData = _applyClientFilters(_normalizeMonks(json.records, 'daily', json), filters);
+            _setReportPeriod(json.date, json.date);
+            allData = _applyReportHidden(
+                _applyClientFilters(_normalizeMonks(json.records, 'daily', json), filters),
+            );
             _updateBanner(json.date, json.date, 'ប្រចាំថ្ងៃ');
 
         } else if (_reportType === 'monthly') {
             const res = await fetch(`/api/reports/monthly?year=${d.getFullYear()}&month=${d.getMonth() + 1}&${buildQueryString(filters)}`);
             json = await res.json();
             if (!json.success) throw new Error(json.message);
-            allData = _applyClientFilters(_normalizeMonks(json.monks, 'monthly', json), filters);
+            _setReportPeriod(json.period_start, json.period_end);
+            allData = _applyReportHidden(
+                _applyClientFilters(_normalizeMonks(json.monks, 'monthly', json), filters),
+            );
             _updateBanner(json.period_start, json.period_end, 'ប្រចាំខែ');
 
         } else if (_reportType === 'annual') {
             const res = await fetch(`/api/reports/annual?year=${d.getFullYear()}&${buildQueryString(filters)}`);
             json = await res.json();
             if (!json.success) throw new Error(json.message);
-            allData = _applyClientFilters(_normalizeMonks(json.monks, 'annual', json), filters);
+            _setReportPeriod(json.period_start, json.period_end);
+            allData = _applyReportHidden(
+                _applyClientFilters(_normalizeMonks(json.monks, 'annual', json), filters),
+            );
             _updateBanner(json.period_start, json.period_end, 'ប្រចាំឆ្នាំ');
 
         } else if (_reportType === 'triennial') {
             const res = await fetch(`/api/reports/triennial?start_year=${d.getFullYear() - 2}&${buildQueryString(filters)}`);
             json = await res.json();
             if (!json.success) throw new Error(json.message);
-            allData = _applyClientFilters(_normalizeMonks(json.monks, 'triennial', json), filters);
+            _setReportPeriod(json.period_start, json.period_end);
+            allData = _applyReportHidden(
+                _applyClientFilters(_normalizeMonks(json.monks, 'triennial', json), filters),
+            );
             _updateBanner(json.period_start, json.period_end, 'ប្រចាំ ៣ ឆ្នាំ');
 
         } else {
             const res = await fetch(`/api/attendance/report?${buildQueryString(filters)}`);
             json = await res.json();
             if (!json.success) throw new Error(json.message);
-            allData = json.monks.filter(hasAttendanceIssue);
+            _setReportPeriod(json.start_date, json.end_date);
+            allData = _applyReportHidden(json.monks.filter(hasAttendanceIssue));
             _updateBanner(json.start_date, json.end_date, '១៥ ថ្ងៃ');
         }
 
@@ -510,13 +609,12 @@ function renderSection(tbodyId, countId, paginId, monks, section) {
                             </svg>
                             វត្តមាន
                         </button>
-                        <button class="btn-r-del" data-id="${m.id}" data-name="${escHtml(m.fullname)}" title="លុប">
+                        <button class="btn-r-del" data-id="${m.id}" data-name="${escHtml(m.fullname)}" title="លុបចេញពីរបាយការណ៍" aria-label="លុបចេញពីរបាយការណ៍">
                             <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none"
                                 stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                                 <polyline points="3 6 5 6 21 6"/>
                                 <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
                             </svg>
-                            លុប
                         </button>
                     </div>
                 </td>
@@ -676,6 +774,7 @@ async function exportReport(action, fmt = 'docx') {
         name:            filters.name,
     });
     if (filters.scope) p.set('scope', filters.scope);
+    _appendHiddenExcludeParams(p);
 
     if (type === 'annual') {
         p.set('year', d.getFullYear());
@@ -816,7 +915,7 @@ async function loadAttendRecords() {
 
     try {
         const res  = await fetch(
-            `/api/attendance/monk/${_attendMonkId}?start=${_attendRange.start}&end=${_attendRange.end}`
+            `/api/attendance/monk/${_attendMonkId}?start=${_attendRange.start}&end=${_attendRange.end}&scope=${encodeURIComponent(_attendanceScope())}`
         );
         const json = await res.json();
         if (!json.success) throw new Error(json.message);
@@ -860,7 +959,7 @@ async function _refreshReport() {
         const res  = await fetch(`/api/attendance/report?${buildQueryString(getFilters())}`);
         const json = await res.json();
         if (json.success) {
-            allData = json.monks;
+            allData = _applyReportHidden(json.monks.filter(hasAttendanceIssue));
             renderReport(allData, getFilters().violation);
         }
     } catch (_) {}
@@ -879,7 +978,7 @@ async function addAttendRecord() {
         const res  = await fetch('/api/attendance', {
             method:  'POST',
             headers: { 'Content-Type': 'application/json' },
-            body:    JSON.stringify({ monk_id: _attendMonkId, status, date })
+            body:    JSON.stringify(_attendancePayload({ monk_id: _attendMonkId, status, date })),
         });
         const json = await res.json();
         if (!json.success) throw new Error(json.message);
@@ -899,7 +998,7 @@ async function toggleAttendRecord(date, newStatus) {
         const res  = await fetch('/api/attendance', {
             method:  'POST',
             headers: { 'Content-Type': 'application/json' },
-            body:    JSON.stringify({ monk_id: _attendMonkId, status: newStatus, date })
+            body:    JSON.stringify(_attendancePayload({ monk_id: _attendMonkId, status: newStatus, date })),
         });
         const json = await res.json();
         if (!json.success) throw new Error(json.message);
@@ -913,7 +1012,10 @@ async function toggleAttendRecord(date, newStatus) {
 
 async function removeAttendRecord(date) {
     try {
-        const res  = await fetch(`/api/attendance/${_attendMonkId}?date=${date}`, { method: 'DELETE' });
+        const res  = await fetch(
+            `/api/attendance/${_attendMonkId}?date=${date}&scope=${encodeURIComponent(_attendanceScope())}`,
+            { method: 'DELETE' },
+        );
         const json = await res.json();
         if (!json.success) throw new Error(json.message);
         await loadAttendRecords();
@@ -931,7 +1033,7 @@ let _pendingDeleteId = null;
 function openDeleteModal(id, name) {
     _pendingDeleteId = id;
     document.getElementById('r-delete-msg').textContent =
-        `តើអ្នកពិតជាចង់លុបទិន្នន័យ "${name}" មែនទេ? សកម្មភាពនេះមិនអាចត្រឡប់វិញបានទេ។`;
+        `តើអ្នកចង់លុប "${name}" ចេញពីរបាយការណ៍នេះមែនទេ? អវត្តមាន · ច្បាប់ · យឺត នឹងក្លាយជា ០ (មិនលុបឈ្មោះពីប្រព័ន្ធ)។`;
     document.getElementById('r-delete-modal').classList.add('active');
 }
 
@@ -944,21 +1046,18 @@ function closeDeleteModal() {
 
 async function executeDelete() {
     if (!_pendingDeleteId) return;
-    const id  = _pendingDeleteId;
+    const id = _pendingDeleteId;
     const btn = document.getElementById('r-delete-confirm');
     btn.disabled = true;
     document.getElementById('r-delete-text').textContent = 'កំពុងលុប...';
 
     try {
-        const res  = await fetch(`/api/monks/${id}`, { method: 'DELETE' });
-        const json = await res.json();
-        if (!json.success) throw new Error(json.message);
-
+        await _clearMonkReportAttendance(id);
+        _hideFromReport(id);
         allData = allData.filter(m => m.id !== id);
         closeDeleteModal();
         renderReport(allData, getFilters().violation);
-        showToast('ទិន្នន័យត្រូវបានលុបចោលជោគជ័យ!', 'success');
-
+        showToast('បានលុប — អវត្តមាន · ច្បាប់ · យឺត = ០', 'success');
     } catch (err) {
         showToast('មានបញ្ហា: ' + err.message, 'error');
         btn.disabled = false;

@@ -746,6 +746,34 @@ def create_telegram_contract_table():
             CREATE INDEX IF NOT EXISTS idx_tg_contract_source_block
             ON telegram_contract_tbl (source, block_start, block_end);
         """)
+        cursor.execute("""
+            ALTER TABLE telegram_contract_tbl
+            ADD COLUMN IF NOT EXISTS done_count INTEGER NOT NULL DEFAULT 0;
+        """)
+        cursor.execute("""
+            ALTER TABLE telegram_contract_tbl
+            ADD COLUMN IF NOT EXISTS done_absent_snapshot INTEGER;
+        """)
+        cursor.execute("""
+            ALTER TABLE telegram_contract_tbl
+            ADD COLUMN IF NOT EXISTS done_perm_snapshot INTEGER;
+        """)
+        cursor.execute("""
+            ALTER TABLE telegram_contract_tbl
+            ADD COLUMN IF NOT EXISTS contract_done_dates JSONB NOT NULL DEFAULT '[]'::jsonb;
+        """)
+        cursor.execute("""
+            UPDATE telegram_contract_tbl
+            SET done_count = 1
+            WHERE contract_status = 'done' AND done_count = 0;
+        """)
+        cursor.execute("""
+            UPDATE telegram_contract_tbl
+            SET contract_done_dates = jsonb_build_array(to_jsonb(updated_at::text))
+            WHERE done_count > 0
+              AND (contract_done_dates IS NULL OR contract_done_dates = '[]'::jsonb)
+              AND updated_at IS NOT NULL;
+        """)
         conn.commit()
         print("Table 'telegram_contract_tbl' created / verified.")
         cursor.close()

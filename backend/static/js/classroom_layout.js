@@ -1946,7 +1946,7 @@
             hideAttPopover();
             if (!monkId) return;
             if (action === 'clear') await clearClassroomAttendance(monkId);
-            else             if (action === 'permission' || action === 'late') {
+            else if (action === 'permission' || action === 'late') {
                 if (btn.disabled) return;
             }
             if (action === 'permission') {

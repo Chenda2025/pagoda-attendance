@@ -42,6 +42,32 @@ function fmtDateShort(iso) {
     return d.toLocaleDateString('km-KH', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
+function parseIsoYmd(iso) {
+    const ymd = (iso || '').slice(0, 10);
+    const parts = ymd.split('-');
+    if (parts.length !== 3) return null;
+    const year = Number(parts[0]);
+    const month = Number(parts[1]);
+    const day = Number(parts[2]);
+    if (!year || !month || !day) return null;
+    return { year, month, day };
+}
+
+function formatContractDoneDates(dates) {
+    const groups = [];
+    for (const iso of dates || []) {
+        const p = parseIsoYmd(iso);
+        if (!p) continue;
+        const last = groups[groups.length - 1];
+        if (last && last.year === p.year && last.month === p.month) {
+            last.days.push(p.day);
+        } else {
+            groups.push({ year: p.year, month: p.month, days: [p.day] });
+        }
+    }
+    return groups.map(g => `${g.days.join('-')} / ${g.month} / ${g.year}`);
+}
+
 function isoDateOnly(iso) {
     if (!iso) return '';
     return iso.slice(0, 10);
@@ -56,11 +82,19 @@ function reportNameCell(m) {
 }
 
 function reportDateCell(m) {
+    const dates = (m.contract_done_dates && m.contract_done_dates.length)
+        ? m.contract_done_dates
+        : (m.contract_updated_at ? [m.contract_updated_at] : []);
     if (editingReportId === m.id) {
-        const val = isoDateOnly(m.contract_updated_at) || document.getElementById('ref-date').value;
+        const val = isoDateOnly(dates[dates.length - 1] || m.contract_updated_at) || document.getElementById('ref-date').value;
         return `<input type="date" class="tg-input tg-date-edit report-date-input" data-id="${m.id}" value="${val}">`;
     }
-    return `<span class="tg-date-badge">${fmtDateShort(m.contract_updated_at)}</span>`;
+    if (!dates.length) return '<span class="tg-date-badge">—</span>';
+    const labels = formatContractDoneDates(dates);
+    if (!labels.length) return '<span class="tg-date-badge">—</span>';
+    return `<div class="tg-date-stack">${labels.map(label =>
+        `<span class="tg-date-badge">${escapeHtml(label)}</span>`
+    ).join('')}</div>`;
 }
 
 function reportActions(m) {
@@ -71,6 +105,7 @@ function reportActions(m) {
     </div>`;
 }
 function violationLabel(m) {
+    if (m.violation_label) return m.violation_label;
     const parts = [];
     if (m.over_absent) {
         if (m.contract_step && m.contract_label) {
@@ -83,14 +118,22 @@ function violationLabel(m) {
     return parts.join(' + ') || '—';
 }
 
+function reportViolationLabel(m) {
+    return m.violation_label || violationLabel(m);
+}
+
 function contractSelect(m) {
-    const pending = m.contract_status !== 'done' ? ' selected' : '';
-    const done = m.contract_status === 'done' ? ' selected' : '';
-    const cls = m.contract_status === 'done' ? 'tg-contract-done' : 'tg-contract-pending';
+    const cls = 'tg-contract-pending';
     return `<select class="tg-contract-select ${cls}" data-id="${m.id}" aria-label="កិច្ចសន្យា">
-        <option value="pending"${pending}>មិនទាន់ធ្វើ</option>
-        <option value="done"${done}>ធ្វើកិច្ចសន្យារួច</option>
+        <option value="pending" selected>មិនទាន់ធ្វើ</option>
+        <option value="done">ធ្វើកិច្ចសន្យារួច</option>
     </select>`;
+}
+
+function repeatContractBadge(m) {
+    const n = m.block_done_count ?? m.contract_total ?? 0;
+    if (!n) return '';
+    return `<span class="tg-repeat-badge" title="បានធ្វើកិច្ចសន្យា ${n} ដង">×${n}</span>`;
 }
 
 function safeFileName(value) {
@@ -116,6 +159,7 @@ function monkNameCell(m) {
     return `<div class="tg-monk-name">
         <span class="tg-avatar tg-avatar-blue">${escapeHtml(initial)}</span>
         <span class="tg-name">${escapeHtml(m.fullname)}</span>
+        ${repeatContractBadge(m)}
     </div>`;
 }
 
@@ -178,8 +222,8 @@ function renderTable() {
     body.innerHTML = filtered.map((m, i) => {
         const checked = selectedIds.has(m.id) ? ' checked' : '';
         const rowCls = selectedIds.has(m.id) ? ' class="is-selected"' : '';
-        const absentCls = m.over_absent ? ' tg-over' : '';
-        const permCls = m.over_perm ? ' tg-over' : '';
+        const absentCls = (m.block_done_count > 0 ? m.absent_count > 0 : m.over_absent) ? ' tg-over' : '';
+        const permCls = (m.block_done_count > 0 ? m.perm_count > 0 : m.over_perm) ? ' tg-over' : '';
         return `<tr${rowCls} data-id="${m.id}">
             <td class="col-check"><input type="checkbox" class="row-check" data-id="${m.id}"${checked}></td>
             <td class="col-num">${i + 1}</td>
@@ -226,7 +270,7 @@ function renderReport() {
             <td data-label="កុដិ">${escapeHtml(m.residence)}</td>
             <td class="col-num" data-label="អវត្តមាន"><span class="tg-count-absent tg-over">${m.absent_count}</span></td>
             <td class="col-num" data-label="ច្បាប់"><span class="tg-count-perm tg-over">${m.perm_count}</span></td>
-            <td class="col-hide-sm" data-label="មូលហេតុ"><span class="tg-violation">${escapeHtml(violationLabel(m))}</span></td>
+            <td class="col-hide-sm" data-label="មូលហេតុ"><span class="tg-violation">${escapeHtml(reportViolationLabel(m))}</span></td>
             <td class="col-num" data-label="ចំនួន"><span class="tg-count-contract">${m.contract_total ?? 0}</span></td>
             <td data-label="ថ្ងៃធ្វើកិច្ចសន្យា">${reportDateCell(m)}</td>
             <td class="col-actions">${reportActions(m)}</td>
@@ -361,12 +405,13 @@ async function loadData() {
     }
 }
 
-async function saveReportContract(monkId, { status = 'done', contractDate } = {}) {
+async function saveReportContract(monkId, { status = 'done', contractDate, dateOnly = false } = {}) {
     const payload = contractPayload({
         monk_id: monkId,
         contract_status: status,
     });
     if (contractDate) payload.contract_date = contractDate;
+    if (dateOnly) payload.date_only = true;
 
     const res = await fetch('/api/telegram-notify/contract', {
         method: 'POST',
@@ -395,9 +440,16 @@ async function deleteReportRow(monkId, name) {
 async function saveReportDate(monkId, dateValue) {
     if (!dateValue) return;
     try {
-        const json = await saveReportContract(monkId, { status: 'done', contractDate: dateValue });
+        const json = await saveReportContract(monkId, { status: 'done', contractDate: dateValue, dateOnly: true });
         const monk = reportMonks.find(m => m.id === monkId);
-        if (monk) monk.contract_updated_at = json.contract_updated_at;
+        if (monk) {
+            monk.contract_updated_at = json.contract_updated_at;
+            if (monk.contract_done_dates?.length) {
+                monk.contract_done_dates[monk.contract_done_dates.length - 1] = json.contract_updated_at;
+            } else {
+                monk.contract_done_dates = json.contract_updated_at ? [json.contract_updated_at] : [];
+            }
+        }
         editingReportId = null;
         renderReport();
         showToast('បានរក្សាទុកថ្ងៃធ្វើកិច្ចសន្យា', 'success');
@@ -423,12 +475,10 @@ async function updateContract(monkId, status, selectEl) {
         const json = await res.json();
         if (!json.success) throw new Error(json.message || 'Error');
 
-        if (json.contract_status === 'done' && monk) {
+        if (json.contract_status === 'done') {
             selectedIds.delete(monkId);
-            allMonks = allMonks.filter(m => m.id !== monkId);
-            renderTable();
-            await loadReport();
-            showToast(`${monk.fullname} → របាយការណ៍កិច្ចសន្យារួច`, 'success');
+            showToast(`${monk?.fullname || 'ឈ្មោះ'} → របាយការណ៍កិច្ចសន្យារួច${json.contract_total > 1 ? ` (×${json.contract_total})` : ''}`, 'success');
+            await loadData();
         } else {
             if (monk) monk.contract_status = json.contract_status;
             renderTable();
@@ -569,8 +619,6 @@ function periodQuery(extra = {}) {
 
 function applyScopeChrome() {
     const sala = currentSource() === 'sala_chan';
-    const chip = document.getElementById('tg-rule-chip');
-    if (chip) chip.textContent = sala ? 'អវត្តមាន > ២' : 'អវត្តមាន > ២ · ច្បាប់ ≥ ៣';
     const title = document.querySelector('.tg-panel-title');
     if (title) {
         title.textContent = sala
@@ -636,6 +684,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
     document.getElementById('search-name').addEventListener('input', renderTable);
+
     document.getElementById('btn-export-report').addEventListener('click', () => toggleExportMenu());
     document.getElementById('btn-export-report-word').addEventListener('click', () => exportContractReportBy('word'));
     document.getElementById('btn-export-report-pdf').addEventListener('click', () => exportContractReportBy('pdf'));

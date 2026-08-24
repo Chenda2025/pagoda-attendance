@@ -169,6 +169,197 @@ def _absent_contract_step(absent_count):
     return None, None
 
 
+def _cycle_attendance_counts(absent_count, perm_count, contract):
+    """Counts since the last completed contract (pending list display)."""
+    absent_count = int(absent_count or 0)
+    perm_count = int(perm_count or 0)
+    if not contract:
+        return absent_count, perm_count
+    snap_a = contract.get('done_absent_snapshot')
+    snap_p = contract.get('done_perm_snapshot')
+    if snap_a is None and snap_p is None:
+        return absent_count, perm_count
+    return (
+        max(0, absent_count - int(snap_a or 0)),
+        max(0, perm_count - int(snap_p or 0)),
+    )
+
+
+def _fetch_block_contract(cur, monk_id, block_start, block_end, source):
+    """Latest contract row for this monk in the viewing 15-day block."""
+    source = _norm_attendance_source(source)
+    cur.execute("""
+        SELECT DISTINCT ON (monk_id)
+            contract_status, done_count, done_absent_snapshot, done_perm_snapshot
+        FROM telegram_contract_tbl
+        WHERE monk_id = %s
+          AND block_start <= %s AND block_end >= %s
+          AND COALESCE(source, 'layout') = %s
+        ORDER BY monk_id, updated_at DESC NULLS LAST
+    """, (monk_id, block_end.isoformat(), block_start.isoformat(), source))
+    row = cur.fetchone()
+    if not row:
+        return {}
+    return {
+        'status': row[0],
+        'done_count': int(row[1] or 0),
+        'done_absent_snapshot': row[2],
+        'done_perm_snapshot': row[3],
+    }
+
+
+def _display_cycle_counts(absent_count, perm_count, contract):
+    """After a completed contract, counts restart from 0 for the new round."""
+    absent_count = int(absent_count or 0)
+    perm_count = int(perm_count or 0)
+    if int(contract.get('done_count') or 0) <= 0:
+        return absent_count, perm_count
+    return _cycle_attendance_counts(absent_count, perm_count, contract)
+
+
+def _parse_contract_done_dates(raw):
+    if not raw:
+        return []
+    if isinstance(raw, str):
+        import json as _json
+        try:
+            raw = _json.loads(raw)
+        except ValueError:
+            return []
+    if not isinstance(raw, list):
+        return []
+    out = []
+    for item in raw:
+        if not item:
+            continue
+        s = item.isoformat() if hasattr(item, 'isoformat') else str(item)
+        if s:
+            out.append(s)
+    return out
+
+
+def _merge_contract_done_dates(rows):
+    merged = []
+    for raw in rows:
+        merged.extend(_parse_contract_done_dates(raw))
+    return merged
+
+
+def _json_contract_done_dates(dates):
+    import json as _json
+    return _json.dumps(dates or [])
+
+
+def _pop_contract_done_date(cur, monk_id, source, period_start, period_end, block_start=None):
+    """Remove the most recent contract date when undoing a completion."""
+    if block_start is not None:
+        cur.execute("""
+            SELECT id, contract_done_dates FROM telegram_contract_tbl
+            WHERE monk_id = %s AND source = %s AND block_start = %s AND done_count >= 0
+        """, (monk_id, source, block_start.isoformat()))
+    else:
+        cur.execute("""
+            SELECT id, contract_done_dates FROM telegram_contract_tbl
+            WHERE monk_id = %s AND source = %s AND done_count > 0
+              AND block_start <= %s AND block_end >= %s
+            ORDER BY updated_at DESC NULLS LAST
+            LIMIT 1
+        """, (monk_id, source, period_end.isoformat(), period_start.isoformat()))
+    row = cur.fetchone()
+    if not row:
+        return
+    dates = _parse_contract_done_dates(row[1])
+    if dates:
+        dates.pop()
+    cur.execute(
+        "UPDATE telegram_contract_tbl SET contract_done_dates = %s::jsonb WHERE id = %s",
+        (_json_contract_done_dates(dates), row[0]),
+    )
+
+
+def _replace_last_contract_done_date(cur, monk_id, source, period_start, period_end, new_date):
+    cur.execute("""
+        SELECT id, contract_done_dates FROM telegram_contract_tbl
+        WHERE monk_id = %s AND source = %s AND done_count > 0
+          AND block_start <= %s AND block_end >= %s
+        ORDER BY updated_at DESC NULLS LAST
+        LIMIT 1
+    """, (monk_id, source, period_end.isoformat(), period_start.isoformat()))
+    row = cur.fetchone()
+    if not row:
+        return
+    dates = _parse_contract_done_dates(row[1])
+    stamp = new_date or _date.today().isoformat()
+    if dates:
+        dates[-1] = stamp
+    else:
+        dates = [stamp]
+    cur.execute(
+        "UPDATE telegram_contract_tbl SET contract_done_dates = %s::jsonb WHERE id = %s",
+        (_json_contract_done_dates(dates), row[0]),
+    )
+
+
+def _append_contract_done_date(cur, monk_id, block_start, source, done_ts):
+    cur.execute("""
+        UPDATE telegram_contract_tbl
+        SET contract_done_dates = COALESCE(contract_done_dates, '[]'::jsonb) || to_jsonb(%s::text)
+        WHERE monk_id = %s AND block_start = %s AND source = %s
+    """, (done_ts, monk_id, block_start.isoformat(), source))
+
+
+def _pending_violation_label(absent_total, perm_total, cycle_absent, cycle_perm, source,
+                             block_done_count=0):
+    parts = []
+    if cycle_absent > 0 or absent_total > 2:
+        round_no = int(block_done_count or 0) + 1
+        step_no, step_label = _absent_contract_step(absent_total)
+        if block_done_count > 0:
+            parts.append(f'អវត្តមាន · រង្វង់ទី{round_no}')
+        elif step_no and step_label:
+            parts.append(f'អវត្តមាន · កិច្ចសន្យាទី{step_no} ({step_label})')
+        else:
+            parts.append('អវត្តមាន')
+    if source != 'sala_chan' and (cycle_perm > 0 or perm_total >= DISC_PERM_MIN):
+        parts.append('ច្បាប់ > ២')
+    return ' + '.join(parts) or '—'
+
+
+def _report_violation_label(absent_count, perm_count, contract_total=0, source='layout'):
+    parts = [f'អវត្តមានសរុប {int(absent_count or 0)}']
+    if source != 'sala_chan':
+        parts.append(f'ច្បាប់សរុប {int(perm_count or 0)}')
+    if int(contract_total or 0) > 0:
+        parts.append(f'ធ្វើកិច្ចសន្យា {int(contract_total)}ដង')
+    return ' · '.join(parts)
+
+
+def _format_contract_done_dates_cell(m, html=False):
+    """Group contract dates as 24-25 / 8 / 2026 (days of the same month)."""
+    dates = m.get('contract_done_dates') or []
+    if not dates and m.get('contract_updated_at'):
+        dates = [m['contract_updated_at']]
+    groups = []
+    for raw in dates:
+        ymd = (raw or '')[:10]
+        parts = ymd.split('-')
+        if len(parts) != 3:
+            continue
+        year, month, day = parts
+        key = (year, str(int(month)))
+        if not groups or groups[-1][:2] != key:
+            groups.append((year, str(int(month)), [str(int(day))]))
+        else:
+            groups[-1][2].append(str(int(day)))
+    if not groups:
+        return '—'
+    lines = [
+        f'{"-".join(days)} / {month} / {year}'
+        for year, month, days in groups
+    ]
+    return '<br>'.join(lines) if html else '\n'.join(lines)
+
+
 def _should_send_absent_contract_alert(absent_count):
     """Send សារព្រមាន only on even absent counts in the 15-day block: 2, 4, 6, 8, …"""
     n = int(absent_count or 0)
@@ -1022,9 +1213,34 @@ def _telegram_source_from_request():
     return _norm_attendance_source(raw)
 
 
+def _monk_needs_contract(absent_count, perm_count, source, contract):
+    """True when monk exceeds limits and still needs a contract action."""
+    over_absent = absent_count > 2
+    over_perm = source != 'sala_chan' and perm_count >= DISC_PERM_MIN
+    if not over_absent and not over_perm:
+        return False
+    if not contract or contract.get('status') != 'done':
+        return True
+    snap_a = contract.get('done_absent_snapshot')
+    snap_p = contract.get('done_perm_snapshot')
+    if snap_a is None and snap_p is None:
+        return False
+    return absent_count > int(snap_a or 0) or perm_count > int(snap_p or 0)
+
+
 def _fetch_telegram_eligible_monks(block_start, block_end, source='layout'):
-    """All contract-eligible monks in block with telegram + contract status."""
+    """Monks over absent/permission limits with telegram + contract tracking.
+
+    Counts only attendance_tbl rows for the given source (layout vs sala_chan).
+    Monks must be seated on that layout so the two systems never mix.
+    """
     source = _norm_attendance_source(source)
+    seated_ids = (
+        _classroom_seated_monk_ids() if source == 'sala_chan' else _layout_seated_monk_ids()
+    )
+    if not seated_ids:
+        return []
+    seated_list = list(seated_ids)
     conn = connect_db()
     cur = conn.cursor()
     cur.execute("""
@@ -1035,10 +1251,11 @@ def _fetch_telegram_eligible_monks(block_start, block_end, source='layout'):
         LEFT JOIN attendance_tbl a
             ON a.monk_id = m.id AND a.date >= %s AND a.date <= %s AND a.source = %s
         WHERE COALESCE(m.living_status, %s) = %s
+          AND m.id = ANY(%s)
         GROUP BY m.id, m.fullname, m.monk_type, m.residence, m.position
         ORDER BY absent_count DESC, perm_count DESC, m.fullname
     """, (block_start.isoformat(), block_end.isoformat(), source,
-          _ACTIVE_LIVING_STATUS, _ACTIVE_LIVING_STATUS))
+          _ACTIVE_LIVING_STATUS, _ACTIVE_LIVING_STATUS, seated_list))
     rows = cur.fetchall()
 
     cur.execute("""
@@ -1056,27 +1273,29 @@ def _fetch_telegram_eligible_monks(block_start, block_end, source='layout'):
 
     cur.execute("""
         SELECT DISTINCT ON (monk_id)
-            monk_id, contract_status, updated_at
+            monk_id, contract_status, updated_at, done_count,
+            done_absent_snapshot, done_perm_snapshot
         FROM telegram_contract_tbl
         WHERE block_start <= %s AND block_end >= %s
           AND COALESCE(source, 'layout') = %s
-        ORDER BY monk_id,
-                 CASE WHEN contract_status = 'done' THEN 0 ELSE 1 END,
-                 updated_at DESC NULLS LAST
+        ORDER BY monk_id, updated_at DESC NULLS LAST
     """, (block_end.isoformat(), block_start.isoformat(), source))
     contract_map = {
         r[0]: {
             'status': r[1],
             'updated_at': r[2].isoformat() if r[2] else None,
+            'done_count': int(r[3] or 0),
+            'done_absent_snapshot': r[4],
+            'done_perm_snapshot': r[5],
         }
         for r in cur.fetchall()
     }
 
     cur.execute("""
-        SELECT monk_id, COUNT(*) AS contract_total
+        SELECT monk_id, COALESCE(SUM(done_count), 0) AS contract_total
         FROM telegram_contract_tbl
-        WHERE contract_status = 'done'
-          AND COALESCE(source, 'layout') = %s
+        WHERE COALESCE(source, 'layout') = %s
+          AND done_count > 0
         GROUP BY monk_id
     """, (source,))
     contract_total_map = {r[0]: int(r[1] or 0) for r in cur.fetchall()}
@@ -1094,7 +1313,149 @@ def _fetch_telegram_eligible_monks(block_start, block_end, source='layout'):
         contract = contract_map.get(r[0], {})
         over_absent = absent_count > 2
         over_perm = False if source == 'sala_chan' else perm_count >= DISC_PERM_MIN
-        step_no, step_label = _absent_contract_step(absent_count) if over_absent else (None, None)
+        needs_contract = _monk_needs_contract(absent_count, perm_count, source, contract)
+        block_done_count = int(contract.get('done_count') or 0)
+        cycle_absent, cycle_perm = _cycle_attendance_counts(absent_count, perm_count, contract)
+        display_absent = cycle_absent if block_done_count > 0 else absent_count
+        display_perm = cycle_perm if block_done_count > 0 else perm_count
+        step_basis = cycle_absent if block_done_count > 0 else absent_count
+        step_no, step_label = _absent_contract_step(step_basis) if step_basis >= 2 or over_absent else (None, None)
+        monks.append({
+            'id': r[0],
+            'fullname': r[1],
+            'monk_type': r[2],
+            'residence': (r[3] or '').replace('_', ' '),
+            'position': r[4],
+            'absent_count': display_absent,
+            'perm_count': display_perm,
+            'absent_count_total': absent_count,
+            'perm_count_total': perm_count,
+            'over_absent': over_absent,
+            'over_perm': over_perm,
+            'needs_contract': needs_contract,
+            'contract_step': step_no,
+            'contract_label': step_label,
+            'violation_label': _pending_violation_label(
+                absent_count, perm_count, cycle_absent, cycle_perm, source, block_done_count,
+            ),
+            'sent': bool(sent),
+            'last_sent': sent['last_sent'] if sent else None,
+            'last_type': sent['last_type'] if sent else None,
+            'contract_status': 'pending' if needs_contract else contract.get('status', 'pending'),
+            'contract_updated_at': contract.get('updated_at'),
+            'contract_total': contract_total_map.get(r[0], 0),
+            'block_done_count': block_done_count,
+        })
+    return monks
+
+
+def _fetch_telegram_seated_monks_for_test(block_start, block_end, source='layout'):
+    """All monks seated on the active layout with period attendance counts (for admin test UI)."""
+    source = _norm_attendance_source(source)
+    seated_ids = (
+        _classroom_seated_monk_ids() if source == 'sala_chan' else _layout_seated_monk_ids()
+    )
+    if not seated_ids:
+        return []
+    seated_list = list(seated_ids)
+    conn = connect_db()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT m.id, m.fullname,
+               COALESCE(SUM(CASE WHEN a.status = 'absent' THEN 1 END), 0) AS absent_count,
+               COALESCE(SUM(CASE WHEN a.status = 'permission' THEN 1 END), 0) AS perm_count
+        FROM monk_tbl m
+        LEFT JOIN attendance_tbl a
+            ON a.monk_id = m.id
+           AND a.date >= %s AND a.date <= %s
+           AND a.source = %s
+        WHERE m.id = ANY(%s)
+          AND COALESCE(m.living_status, %s) = %s
+        GROUP BY m.id, m.fullname
+        ORDER BY m.fullname
+    """, (
+        block_start.isoformat(), block_end.isoformat(), source,
+        seated_list, _ACTIVE_LIVING_STATUS, _ACTIVE_LIVING_STATUS,
+    ))
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return [
+        {
+            'id': r[0],
+            'fullname': r[1],
+            'absent_count': int(r[2] or 0),
+            'perm_count': int(r[3] or 0),
+        }
+        for r in rows
+    ]
+
+
+def _fetch_telegram_contract_report_monks(block_start, block_end, source='layout'):
+    """Monks who completed at least one contract in the viewing period."""
+    source = _norm_attendance_source(source)
+    seated_ids = (
+        _classroom_seated_monk_ids() if source == 'sala_chan' else _layout_seated_monk_ids()
+    )
+    if not seated_ids:
+        return []
+    seated_list = list(seated_ids)
+    conn = connect_db()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT m.id, m.fullname, m.monk_type, m.residence, m.position,
+               COALESCE(SUM(CASE WHEN a.status = 'absent' THEN 1 END), 0) AS absent_count,
+               COALESCE(SUM(CASE WHEN a.status = 'permission' THEN 1 END), 0) AS perm_count,
+               COALESCE(SUM(c.done_count), 0) AS period_done,
+               MAX(c.updated_at) AS contract_updated_at,
+               (SELECT COALESCE(SUM(tc.done_count), 0)
+                FROM telegram_contract_tbl tc
+                WHERE tc.monk_id = m.id AND tc.source = %s) AS contract_total
+        FROM monk_tbl m
+        INNER JOIN telegram_contract_tbl c
+            ON c.monk_id = m.id
+           AND c.source = %s
+           AND c.done_count > 0
+           AND c.block_start <= %s
+           AND c.block_end >= %s
+        LEFT JOIN attendance_tbl a
+            ON a.monk_id = m.id
+           AND a.date >= %s AND a.date <= %s
+           AND a.source = %s
+        WHERE m.id = ANY(%s)
+        GROUP BY m.id, m.fullname, m.monk_type, m.residence, m.position
+        ORDER BY period_done DESC, m.fullname
+    """, (
+        source, source,
+        block_end.isoformat(), block_start.isoformat(),
+        block_start.isoformat(), block_end.isoformat(), source,
+        seated_list,
+    ))
+    rows = cur.fetchall()
+
+    cur.execute("""
+        SELECT monk_id, contract_done_dates
+        FROM telegram_contract_tbl
+        WHERE source = %s AND done_count > 0
+          AND block_start <= %s AND block_end >= %s
+    """, (source, block_end.isoformat(), block_start.isoformat()))
+    dates_by_monk = {}
+    for monk_id, raw_dates in cur.fetchall():
+        dates_by_monk.setdefault(monk_id, []).append(raw_dates)
+
+    cur.close()
+    conn.close()
+
+    monks = []
+    for r in rows:
+        absent_count = int(r[5] or 0)
+        perm_count = int(r[6] or 0)
+        period_done = int(r[7] or 0)
+        contract_total = int(r[9] or 0)
+        updated = r[8].isoformat() if r[8] else None
+        done_dates = _merge_contract_done_dates(dates_by_monk.get(r[0], []))
+        if not done_dates and updated:
+            done_dates = [updated]
         monks.append({
             'id': r[0],
             'fullname': r[1],
@@ -1103,21 +1464,23 @@ def _fetch_telegram_eligible_monks(block_start, block_end, source='layout'):
             'position': r[4],
             'absent_count': absent_count,
             'perm_count': perm_count,
-            'over_absent': over_absent,
-            'over_perm': over_perm,
-            'contract_step': step_no,
-            'contract_label': step_label,
-            'sent': bool(sent),
-            'last_sent': sent['last_sent'] if sent else None,
-            'last_type': sent['last_type'] if sent else None,
-            'contract_status': contract.get('status', 'pending'),
-            'contract_updated_at': contract.get('updated_at'),
-            'contract_total': contract_total_map.get(r[0], 0),
+            'over_absent': absent_count > 2,
+            'over_perm': False if source == 'sala_chan' else perm_count >= DISC_PERM_MIN,
+            'contract_status': 'done',
+            'contract_updated_at': updated,
+            'contract_total': contract_total,
+            'period_done_count': period_done,
+            'contract_done_dates': done_dates,
+            'violation_label': _report_violation_label(
+                absent_count, perm_count, contract_total, source,
+            ),
         })
     return monks
 
 
 def _contract_violation_label(m):
+    if m.get('violation_label'):
+        return m['violation_label']
     parts = []
     if m.get('over_absent'):
         step = m.get('contract_step')
@@ -1139,7 +1502,7 @@ def _make_contract_report_html(monks, block_start, block_end, source='layout'):
     period = f'{block_start.strftime("%d/%m/%Y")} — {block_end.strftime("%d/%m/%Y")}'
 
     def _row(m, idx):
-        updated = (m.get('contract_updated_at') or '')[:10].replace('-', '/') or '—'
+        updated = _format_contract_done_dates_cell(m, html=True)
         return (
             f'<tr>'
             f'<td class="c">{idx}</td>'
@@ -1211,7 +1574,11 @@ td.name {{ font-weight: 600; }}
 def telegram_notify_page():
     if not user_allowed(_session_user(), '/telegram-notify'):
         abort(403)
-    return render_template('telegram_notify.html', username=session.get('username', ''))
+    return render_template(
+        'telegram_notify.html',
+        username=session.get('username', ''),
+        role=session.get('role', ''),
+    )
 
 
 @main_bp.route('/telegram-settings')
@@ -1290,15 +1657,15 @@ def api_telegram_notify_list():
         block_start, block_end = _get_telegram_period_dates(date_str, period)
 
         all_monks = _fetch_telegram_eligible_monks(block_start, block_end, source)
-        done_monks = [m for m in all_monks if m['contract_status'] == 'done']
-        monks = [m for m in all_monks if m['contract_status'] != 'done']
+        monks = [m for m in all_monks if m.get('needs_contract')]
+        done_monks = _fetch_telegram_contract_report_monks(block_start, block_end, source)
 
         if filt == 'sent':
             monks = [m for m in monks if m['sent']]
         elif filt == 'unsent':
             monks = [m for m in monks if not m['sent']]
 
-        return jsonify({
+        payload = {
             'success': True,
             'date': date_str,
             'period': period,
@@ -1313,6 +1680,39 @@ def api_telegram_notify_list():
             'total': len(monks),
             'sent_count': sum(1 for m in monks if m['sent']),
             'contract_done_count': len(done_monks),
+        }
+        if _session_user().get('role') == 'admin':
+            payload['test_monks'] = _fetch_telegram_seated_monks_for_test(
+                block_start, block_end, source,
+            )
+        return jsonify(payload)
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@main_bp.route('/api/telegram-notify/test-monks', methods=['GET'])
+def api_telegram_notify_test_monks():
+    """Seated monks with period counts — for admin test-absent picker."""
+    user = _session_user()
+    if not user_allowed(user, '/telegram-notify'):
+        abort(403)
+    if user.get('role') != 'admin':
+        return jsonify({'success': True, 'monks': [], 'total': 0})
+    try:
+        date_str = (request.args.get('date') or '').strip() or _date.today().isoformat()
+        period = _telegram_period_from_request()
+        source = _telegram_source_from_request()
+        block_start, block_end = _get_telegram_period_dates(date_str, period)
+        monks = _fetch_telegram_seated_monks_for_test(block_start, block_end, source)
+        return jsonify({
+            'success': True,
+            'date': date_str,
+            'period': period,
+            'source': source,
+            'block_start': block_start.isoformat(),
+            'block_end': block_end.isoformat(),
+            'monks': monks,
+            'total': len(monks),
         })
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
@@ -1328,8 +1728,7 @@ def api_telegram_notify_contract_done():
         period = _telegram_period_from_request()
         source = _telegram_source_from_request()
         block_start, block_end = _get_telegram_period_dates(date_str, period)
-        all_monks = _fetch_telegram_eligible_monks(block_start, block_end, source)
-        done = [m for m in all_monks if m['contract_status'] == 'done']
+        done = _fetch_telegram_contract_report_monks(block_start, block_end, source)
         return jsonify({
             'success': True,
             'date': date_str,
@@ -1356,8 +1755,7 @@ def api_telegram_contract_report_export():
         period = _telegram_period_from_request()
         source = _telegram_source_from_request()
         block_start, block_end = _get_telegram_period_dates(date_str, period)
-        all_monks = _fetch_telegram_eligible_monks(block_start, block_end, source)
-        done = [m for m in all_monks if m['contract_status'] == 'done']
+        done = _fetch_telegram_contract_report_monks(block_start, block_end, source)
 
         if fmt == 'html':
             html = _make_contract_report_html(done, block_start, block_end, source)
@@ -1399,7 +1797,7 @@ def api_telegram_contract_report_export():
 
             for i, m in enumerate(done, 1):
                 row = table.add_row().cells
-                updated = (m.get('contract_updated_at') or '')[:10] or '—'
+                updated = _format_contract_done_dates_cell(m)
                 vals = [
                     str(i), m['fullname'], m['monk_type'], m['residence'],
                     str(m['absent_count']), str(m['perm_count']),
@@ -1448,7 +1846,7 @@ def api_telegram_contract_report_export():
 
             for i, m in enumerate(done, 1):
                 row = 4 + i
-                updated = (m.get('contract_updated_at') or '')[:10] or '—'
+                updated = _format_contract_done_dates_cell(m)
                 vals = [
                     i, m['fullname'], m['monk_type'], m['residence'],
                     m['absent_count'], m['perm_count'],
@@ -1515,6 +1913,82 @@ def api_telegram_contract_report_send_image():
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
+@main_bp.route('/api/telegram-notify/test-absent', methods=['POST'])
+def api_telegram_notify_test_absent():
+    """Admin-only: add absent record for contract-notify testing."""
+    user = _session_user()
+    if not user_allowed(user, '/telegram-notify'):
+        abort(403)
+    if user.get('role') != 'admin':
+        return jsonify({'success': False, 'message': 'សម្រាប់អ្នកគ្រប់គ្រងតែប៉ុណ្ណោះ'}), 403
+    try:
+        data = request.get_json(silent=True) or {}
+        monk_id = data.get('monk_id')
+        date_str = (data.get('date') or '').strip() or _date.today().isoformat()
+        source = _telegram_source_from_request()
+        try:
+            monk_id = int(monk_id)
+        except (TypeError, ValueError):
+            return jsonify({'success': False, 'message': 'monk_id មិនត្រឹមត្រូវ'}), 400
+
+        seated_ids = (
+            _classroom_seated_monk_ids() if source == 'sala_chan' else _layout_seated_monk_ids()
+        )
+        if monk_id not in seated_ids:
+            return jsonify({'success': False, 'message': 'ព្រះសង្ឃមិនស្ថិតក្នុងប្លង់នេះ'}), 400
+
+        period = _telegram_period_from_request()
+        period_start, period_end = _get_telegram_period_dates(date_str, period)
+        try:
+            absent_date = _date.fromisoformat(date_str)
+        except ValueError:
+            return jsonify({'success': False, 'message': 'ថ្ងៃមិនត្រឹមត្រូវ'}), 400
+        if absent_date < period_start or absent_date > period_end:
+            return jsonify({
+                'success': False,
+                'message': f'ថ្ងៃត្រូវនៅក្នុង {period_start} → {period_end}',
+            }), 400
+
+        conn = connect_db()
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO attendance_tbl (monk_id, status, date, source)
+            VALUES (%s, 'absent', %s, %s)
+            ON CONFLICT (monk_id, date, source) DO UPDATE SET status = EXCLUDED.status
+        """, (monk_id, date_str, source))
+        cur.execute("""
+            SELECT
+                COUNT(CASE WHEN status = 'absent' THEN 1 END),
+                COUNT(CASE WHEN status = 'permission' THEN 1 END)
+            FROM attendance_tbl
+            WHERE monk_id = %s
+              AND date >= %s AND date <= %s
+              AND source = %s
+        """, (monk_id, period_start.isoformat(), period_end.isoformat(), source))
+        row = cur.fetchone() or (0, 0)
+        cur.execute("SELECT fullname FROM monk_tbl WHERE id = %s", (monk_id,))
+        name_row = cur.fetchone()
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        absent_count = int(row[0] or 0)
+        perm_count = int(row[1] or 0)
+        _log_act('telegram_test_absent', 'telegram_notify',
+                 f'{name_row[0] if name_row else monk_id} — {date_str} ({source})')
+        return jsonify({
+            'success': True,
+            'monk_id': monk_id,
+            'fullname': name_row[0] if name_row else '',
+            'date': date_str,
+            'absent_count': absent_count,
+            'perm_count': perm_count,
+            'source': source,
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 @main_bp.route('/api/telegram-notify/contract', methods=['POST'])
 def api_telegram_notify_contract():
     """Update contract status (pending / done) for a monk in the current block."""
@@ -1546,16 +2020,62 @@ def api_telegram_notify_contract():
 
         conn = connect_db()
         cur = conn.cursor()
-        if status == 'pending' and period == 'month':
+        cur.execute("""
+            SELECT
+                COUNT(CASE WHEN status = 'absent' THEN 1 END),
+                COUNT(CASE WHEN status = 'permission' THEN 1 END)
+            FROM attendance_tbl
+            WHERE monk_id = %s
+              AND date >= %s AND date <= %s
+              AND source = %s
+        """, (monk_id, period_start.isoformat(), period_end.isoformat(), source))
+        count_row = cur.fetchone() or (0, 0)
+        absent_now = int(count_row[0] or 0)
+        perm_now = int(count_row[1] or 0)
+        date_only = bool(data.get('date_only'))
+
+        if status == 'done' and date_only:
             cur.execute("""
                 UPDATE telegram_contract_tbl
-                SET contract_status = 'pending',
-                    updated_at = COALESCE(%s::timestamp, NOW())
-                WHERE monk_id = %s AND block_start <= %s AND block_end >= %s
-                  AND COALESCE(source, 'layout') = %s
+                SET updated_at = COALESCE(%s::timestamp, NOW())
+                WHERE id = (
+                    SELECT id FROM telegram_contract_tbl
+                    WHERE monk_id = %s AND source = %s AND done_count > 0
+                      AND block_start <= %s AND block_end >= %s
+                    ORDER BY updated_at DESC NULLS LAST
+                    LIMIT 1
+                )
                 RETURNING contract_status, updated_at
-            """, (updated_at, monk_id, period_end.isoformat(), period_start.isoformat(), source))
+            """, (updated_at, monk_id, source,
+                  period_end.isoformat(), period_start.isoformat()))
             row = cur.fetchone()
+            if not row:
+                return jsonify({'success': False, 'message': 'រកមិនឃើញកិច្ចសន្យារួច'}), 404
+            _replace_last_contract_done_date(
+                cur, monk_id, source, period_start, period_end,
+                contract_date_str or (row[1].isoformat() if row[1] else None),
+            )
+        elif status == 'pending' and period == 'month':
+            cur.execute("""
+                UPDATE telegram_contract_tbl
+                SET contract_status = CASE WHEN done_count > 1 THEN 'done' ELSE 'pending' END,
+                    done_count = GREATEST(0, done_count - 1),
+                    done_absent_snapshot = NULL,
+                    done_perm_snapshot = NULL,
+                    updated_at = COALESCE(%s::timestamp, NOW())
+                WHERE id = (
+                    SELECT id FROM telegram_contract_tbl
+                    WHERE monk_id = %s AND source = %s AND done_count > 0
+                      AND block_start <= %s AND block_end >= %s
+                    ORDER BY updated_at DESC NULLS LAST
+                    LIMIT 1
+                )
+                RETURNING contract_status, updated_at
+            """, (updated_at, monk_id, source,
+                  period_end.isoformat(), period_start.isoformat()))
+            row = cur.fetchone()
+            if row:
+                _pop_contract_done_date(cur, monk_id, source, period_start, period_end)
             if not row:
                 cur.execute("""
                     INSERT INTO telegram_contract_tbl
@@ -1564,6 +2084,39 @@ def api_telegram_notify_contract():
                     ON CONFLICT (monk_id, block_start, source) DO UPDATE
                         SET contract_status = EXCLUDED.contract_status,
                             block_end = EXCLUDED.block_end,
+                            done_absent_snapshot = NULL,
+                            done_perm_snapshot = NULL,
+                            updated_at = COALESCE(%s::timestamp, telegram_contract_tbl.updated_at, NOW())
+                    RETURNING contract_status, updated_at
+                """, (monk_id, block_start.isoformat(), block_end.isoformat(), status,
+                      updated_at, source, updated_at))
+                row = cur.fetchone()
+        elif status == 'pending':
+            cur.execute("""
+                UPDATE telegram_contract_tbl
+                SET contract_status = CASE WHEN done_count > 1 THEN 'done' ELSE 'pending' END,
+                    done_count = GREATEST(0, done_count - 1),
+                    done_absent_snapshot = NULL,
+                    done_perm_snapshot = NULL,
+                    updated_at = COALESCE(%s::timestamp, NOW())
+                WHERE monk_id = %s AND block_start = %s AND source = %s AND done_count > 0
+                RETURNING contract_status, updated_at
+            """, (updated_at, monk_id, block_start.isoformat(), source))
+            row = cur.fetchone()
+            if row:
+                _pop_contract_done_date(
+                    cur, monk_id, source, period_start, period_end, block_start=block_start,
+                )
+            if not row:
+                cur.execute("""
+                    INSERT INTO telegram_contract_tbl
+                        (monk_id, block_start, block_end, contract_status, updated_at, source)
+                    VALUES (%s, %s, %s, %s, COALESCE(%s::timestamp, NOW()), %s)
+                    ON CONFLICT (monk_id, block_start, source) DO UPDATE
+                        SET contract_status = EXCLUDED.contract_status,
+                            block_end = EXCLUDED.block_end,
+                            done_absent_snapshot = NULL,
+                            done_perm_snapshot = NULL,
                             updated_at = COALESCE(%s::timestamp, telegram_contract_tbl.updated_at, NOW())
                     RETURNING contract_status, updated_at
                 """, (monk_id, block_start.isoformat(), block_end.isoformat(), status,
@@ -1572,18 +2125,29 @@ def api_telegram_notify_contract():
         else:
             cur.execute("""
                 INSERT INTO telegram_contract_tbl
-                    (monk_id, block_start, block_end, contract_status, updated_at, source)
-                VALUES (%s, %s, %s, %s, COALESCE(%s::timestamp, NOW()), %s)
+                    (monk_id, block_start, block_end, contract_status, updated_at, source,
+                     done_count, done_absent_snapshot, done_perm_snapshot)
+                VALUES (%s, %s, %s, %s, COALESCE(%s::timestamp, NOW()), %s, 1, %s, %s)
                 ON CONFLICT (monk_id, block_start, source) DO UPDATE
-                    SET contract_status = EXCLUDED.contract_status,
+                    SET contract_status = 'done',
                         block_end = EXCLUDED.block_end,
+                        done_count = telegram_contract_tbl.done_count + 1,
+                        done_absent_snapshot = EXCLUDED.done_absent_snapshot,
+                        done_perm_snapshot = EXCLUDED.done_perm_snapshot,
                         updated_at = COALESCE(%s::timestamp, telegram_contract_tbl.updated_at, NOW())
                 RETURNING contract_status, updated_at
             """, (monk_id, block_start.isoformat(), block_end.isoformat(), status,
-                  updated_at, source, updated_at))
+                  updated_at, source, absent_now, perm_now, updated_at))
             row = cur.fetchone()
+            done_stamp = row[1].isoformat() if row[1] else _date.today().isoformat()
+            _append_contract_done_date(cur, monk_id, block_start, source, done_stamp)
         saved = row[0]
         saved_at = row[1].isoformat() if row[1] else None
+        cur.execute("""
+            SELECT COALESCE(SUM(done_count), 0) FROM telegram_contract_tbl
+            WHERE monk_id = %s AND source = %s
+        """, (monk_id, source))
+        contract_total = int((cur.fetchone() or [0])[0] or 0)
         cur.execute("SELECT fullname FROM monk_tbl WHERE id = %s", (monk_id,))
         name_row = cur.fetchone()
         conn.commit()
@@ -1597,6 +2161,7 @@ def api_telegram_notify_contract():
             'success': True,
             'contract_status': saved,
             'contract_updated_at': saved_at,
+            'contract_total': contract_total,
         })
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
@@ -1633,10 +2198,17 @@ def api_telegram_notify_send():
                 WHERE monk_id = %s AND date >= %s AND date <= %s AND source = %s
             """, (monk_id, block_start.isoformat(), block_end.isoformat(), source))
             row = cur.fetchone()
-            absent_count = int(row[0] or 0)
-            perm_count = int(row[1] or 0)
-            eligible = absent_count > 2 or (
-                source != 'sala_chan' and perm_count >= DISC_PERM_MIN
+            absent_total = int(row[0] or 0)
+            perm_total = int(row[1] or 0)
+            contract = _fetch_block_contract(cur, monk_id, block_start, block_end, source)
+            absent_count, perm_count = _display_cycle_counts(absent_total, perm_total, contract)
+            seated_ids = (
+                _classroom_seated_monk_ids() if source == 'sala_chan' else _layout_seated_monk_ids()
+            )
+            eligible = monk_id in seated_ids and (
+                absent_total > 2 or (
+                    source != 'sala_chan' and perm_total >= DISC_PERM_MIN
+                )
             )
             if not eligible:
                 cur.execute("SELECT fullname FROM monk_tbl WHERE id = %s", (monk_id,))
@@ -3786,11 +4358,13 @@ def set_attendance():
                   AND source = %s;
             """, (monk_id, block_start.isoformat(), block_end.isoformat(), source))
             row = cursor.fetchone()
-            absent_count = int(row[0] or 0)
-            perm_count = int(row[1] or 0)
+            absent_total = int(row[0] or 0)
+            perm_total = int(row[1] or 0)
             late_count = int(row[2] or 0)
+            contract = _fetch_block_contract(cursor, monk_id, block_start, block_end, source)
+            absent_count, perm_count = _display_cycle_counts(absent_total, perm_total, contract)
 
-            # Auto Telegram សារព្រមាន: អវត្តមានលេខគូ ២, ៤, ៦, ៨… ក្នុងរយៈ ១៥ ថ្ងៃ
+            # Auto Telegram សារព្រមាន: អវត្តមានលេខគូ ២, ៤, ៦… ក្នុងរង្វង់កិច្ចសន្យាបច្ចុប្បន្ន
             alert_sent = False
             alert_error = None
             if _should_send_absent_contract_alert(absent_count):
@@ -3816,7 +4390,9 @@ def set_attendance():
         if status == 'absent':
             payload.update({
                 'absent_count': absent_count,
+                'absent_count_total': absent_total,
                 'permission_count': perm_count,
+                'permission_count_total': perm_total,
                 'late_count': late_count,
                 'alert_sent': alert_sent,
                 'alert_error': alert_error,
@@ -4000,8 +4576,9 @@ def get_monk_attendance(monk_id):
         end   = request.args.get('end',   '')
         conn   = connect_db()
         cursor = conn.cursor()
-        where_parts = ["monk_id = %s"]
-        params      = [monk_id]
+        source = _source_from_request(args=request.args)
+        where_parts = ["monk_id = %s", "source = %s"]
+        params      = [monk_id, source]
         if start: where_parts.append("date >= %s"); params.append(start)
         if end:   where_parts.append("date <= %s"); params.append(end)
         cursor.execute(f"""
@@ -4308,6 +4885,59 @@ def attendance_report():
             'start_date': start_date.isoformat(),
             'end_date':   end_date.isoformat(),
             'monks':      monks
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@main_bp.route('/api/reports/clear-monk-period', methods=['POST'])
+def clear_monk_report_period():
+    """Clear absent/permission/late for one monk in a report period (by source).
+    Used when removing a monk from the on-screen report — monk record stays."""
+    try:
+        data = request.get_json() or {}
+        monk_id = data.get('monk_id')
+        start_str = (data.get('start_date') or '').strip()
+        end_str = (data.get('end_date') or '').strip()
+        source = _source_from_request(data=data)
+        if not monk_id or not start_str or not end_str:
+            return jsonify({'success': False, 'message': 'monk_id, start_date, end_date required'}), 400
+
+        conn = connect_db()
+        cursor = conn.cursor()
+        cursor.execute("""
+            DELETE FROM attendance_tbl
+            WHERE monk_id = %s AND source = %s
+              AND date >= %s AND date <= %s
+              AND status IN ('absent', 'permission', 'late')
+        """, (int(monk_id), source, start_str, end_str))
+        cleared = cursor.rowcount
+
+        cursor.execute("""
+            SELECT start_date, end_date FROM monk_permission
+            WHERE monk_id = %s AND end_date >= %s AND start_date <= %s
+        """, (int(monk_id), start_str, end_str))
+        for start_date, end_date in cursor.fetchall():
+            cursor.execute("""
+                SELECT COUNT(*) FROM attendance_tbl
+                WHERE monk_id = %s AND status = 'permission'
+                  AND date >= %s AND date <= %s
+            """, (int(monk_id), start_date.isoformat(), end_date.isoformat()))
+            if int((cursor.fetchone() or [0])[0] or 0) == 0:
+                cursor.execute(
+                    "DELETE FROM monk_permission WHERE monk_id = %s AND start_date = %s AND end_date = %s",
+                    (int(monk_id), start_date, end_date),
+                )
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({
+            'success': True,
+            'cleared': cleared,
+            'absent_count': 0,
+            'permission_count': 0,
+            'late_count': 0,
         })
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
@@ -4625,17 +5255,23 @@ def attendance_history(monk_id):
               AND source = %s;
         """, (monk_id, block_start.isoformat(), block_end.isoformat(), source))
         row = cursor.fetchone()
-        cursor.close(); conn.close()
-        absent_count = int(row[0] or 0)
-        permission_count = int(row[1] or 0)
+        absent_total = int(row[0] or 0)
+        permission_total = int(row[1] or 0)
         late_count = int(row[2] or 0)
+        contract = _fetch_block_contract(cursor, monk_id, block_start, block_end, source)
+        cursor.close(); conn.close()
+        absent_count, permission_count = _display_cycle_counts(
+            absent_total, permission_total, contract,
+        )
         step_no, step_label = _absent_contract_step(absent_count)
         return jsonify({
             'success': True,
             'absent_count':     absent_count,
+            'absent_count_total': absent_total,
             'permission_count': permission_count,
+            'permission_count_total': permission_total,
             'late_count':       late_count,
-            'perm_locked':      permission_count > 2,
+            'perm_locked':      permission_total > 2,
             'contract_step':    step_no,
             'contract_label':   step_label,
             'source':           source,
@@ -6527,7 +7163,16 @@ def _apply_report_filters(monks, args):
             return False
         return True
 
-    return [m for m in monks if keep(m)]
+    filtered = [m for m in monks if keep(m)]
+    exclude_raw = (args.get('exclude_ids') or '').strip()
+    if exclude_raw:
+        exclude_ids = {
+            int(x) for x in exclude_raw.split(',')
+            if x.strip().isdigit()
+        }
+        if exclude_ids:
+            filtered = [m for m in filtered if int(m.get('id') or 0) not in exclude_ids]
+    return filtered
 
 
 @main_bp.route('/api/reports/export', methods=['GET'])
