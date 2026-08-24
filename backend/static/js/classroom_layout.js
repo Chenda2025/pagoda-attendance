@@ -659,6 +659,39 @@
 
         bindCanvasEvents();
         scrollTablesIntoView(prevScroll);
+        reapplyNameSearch();
+    }
+
+    function highlightNameSearch(query) {
+        if (!canvas) return;
+        const q = (query || '').trim();
+        canvas.querySelectorAll('.cl-name.filled[data-monk-id]').forEach((btn) => {
+            const name = btn.dataset.monkName || '';
+            const match = q && name.includes(q);
+            btn.classList.toggle('cl-name-highlight', !!match);
+        });
+    }
+
+    function reapplyNameSearch() {
+        const input = document.getElementById('cl-search-name');
+        if (input) highlightNameSearch(input.value);
+    }
+
+    function initNameSearch() {
+        const input = document.getElementById('cl-search-name');
+        const clearBtn = document.getElementById('btn-cl-clear-search');
+        if (!input) return;
+        input.addEventListener('input', () => {
+            const q = input.value.trim();
+            if (clearBtn) clearBtn.hidden = !q;
+            highlightNameSearch(q);
+        });
+        clearBtn?.addEventListener('click', () => {
+            input.value = '';
+            if (clearBtn) clearBtn.hidden = true;
+            highlightNameSearch('');
+            input.focus();
+        });
     }
 
     function bindCanvasEvents() {
@@ -2204,5 +2237,6 @@
         if (dirty) e.preventDefault();
     });
 
+    initNameSearch();
     loadAll();
 })();

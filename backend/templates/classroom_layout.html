@@ -10,7 +10,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&family=Kantumruy+Pro:wght@400;500;600;700&family=Moul&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/gov-shell.css?v=2">
-    <link rel="stylesheet" href="/static/css/classroom_layout.css?v=64">
+    <link rel="stylesheet" href="/static/css/classroom_layout.css?v=65">
 </head>
 
 <body class="gov-page-body{% if role != 'admin' %} cl-use-only{% endif %}">
@@ -156,6 +156,15 @@
                     <div class="cl-panel-head-left">
                         <h2 class="panel-title">ប្លង់តុឆាន</h2>
                         <span class="cl-status-pill" id="save-hint" aria-live="polite">—</span>
+                    </div>
+                    <div class="cl-panel-search">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                        <input type="search" id="cl-search-name" class="cl-search-name-input" placeholder="ស្វែងរកឈ្មោះ…" autocomplete="off">
+                        <button type="button" id="btn-cl-clear-search" class="cl-btn-clear-search" hidden title="លុបការស្វែងរក" aria-label="លុបការស្វែងរក">✕</button>
                     </div>
                     <div class="cl-panel-head-actions">
                         <button type="button" class="gov-btn cl-btn-perm-list" id="btn-cl-perm-list" title="មើលបញ្ជីឈ្មោះដែលច្បាប់មិនផុតក្នុងរយៈពេល ១៥ ថ្ងៃ">
@@ -710,7 +719,7 @@
     </div>
 
     <script>const PAGE_ROLE = {{ role|tojson }};</script>
-    <script src="/static/js/classroom_layout.js?v=76"></script>
+    <script src="/static/js/classroom_layout.js?v=77"></script>
 </body>
 
 </html>
