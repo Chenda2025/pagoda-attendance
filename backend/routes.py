@@ -5340,12 +5340,30 @@ def _to_khmer_digits(value):
 def _tg_send_message(token, chat_id, text, req_lib, timeout=10):
     """Send a text message to Telegram, splitting into chunks if > 4000 chars."""
     MAX = 4000
+
+    def _post(chunk):
+        try:
+            resp = req_lib.post(
+                f'https://api.telegram.org/bot{token}/sendMessage',
+                json={'chat_id': chat_id, 'text': chunk},
+                timeout=timeout,
+            )
+            try:
+                return resp.json()
+            except ValueError:
+                snippet = (resp.text or '')[:200]
+                return {
+                    'ok': False,
+                    'description': f'Invalid Telegram response ({resp.status_code}): {snippet}',
+                }
+        except Exception as e:
+            return {'ok': False, 'description': str(e)}
+
+    if not (text or '').strip():
+        return {'ok': False, 'description': 'Message is empty'}
+
     if len(text) <= MAX:
-        return req_lib.post(
-            f'https://api.telegram.org/bot{token}/sendMessage',
-            json={'chat_id': chat_id, 'text': text},
-            timeout=timeout,
-        ).json()
+        return _post(text)
 
     # Split on double-newline paragraph boundaries to keep records intact
     paragraphs = text.split('\n\n')
@@ -5361,16 +5379,129 @@ def _tg_send_message(token, chat_id, text, req_lib, timeout=10):
     if current:
         chunks.append(current)
 
-    last = None
+    if not chunks:
+        return {'ok': False, 'description': 'Message could not be split for Telegram'}
+
+    last = {'ok': False, 'description': 'No Telegram chunks sent'}
     for chunk in chunks:
-        last = req_lib.post(
-            f'https://api.telegram.org/bot{token}/sendMessage',
-            json={'chat_id': chat_id, 'text': chunk},
-            timeout=timeout,
-        ).json()
+        last = _post(chunk)
         if not last.get('ok'):
             return last
     return last
+
+
+_DAILY_SESSIONS = ('ព្រឹក', 'ថ្ងៃត្រង់', 'ល្ងាច')
+
+_TG_FANCY_RULE  = '࿇ ══━━━━✥◈✥━━━━═ ࿇'
+_TG_FANCY_RULE_TIGHT = '࿇ ══━━━━✥◈✥━━━━═࿇'
+_TG_FANCY_BLANK = '࿇                                                   ࿇'
+_TG_SECTION_RULE = '━━━━✥◈✥━━━━'
+_TG_TOTAL_RULE   = '══━━━━✥◈✥━━━━═ '
+
+
+def _daily_session_label(raw=None, source='layout'):
+    """Session printed on the daily Telegram report: ព្រឹក / ថ្ងៃត្រង់ / ល្ងាច."""
+    label = str(raw or '').strip()
+    if label in _DAILY_SESSIONS:
+        return label
+    if label == 'យប់':
+        return 'ល្ងាច'
+    from datetime import datetime as _dt
+    if _dt.now().hour < 12:
+        return 'ព្រឹក'
+    return 'ថ្ងៃត្រង់' if _norm_attendance_source(source) == 'sala_chan' else 'ល្ងាច'
+
+
+def _tg_stat_count(n, placeholder='.......'):
+    """Khmer number for Telegram stats, or dotted placeholder when zero."""
+    return _to_khmer_digits(int(n or 0)) if int(n or 0) > 0 else placeholder
+
+
+def _build_daily_attendance_message(
+    rows, report_day, session, total_seated=0, home_count=0, sick_count=0,
+):
+    """Telegram daily report for absent / permission / late monks."""
+    absent_count     = sum(1 for r in rows if r[5] == 'absent')
+    permission_count = sum(1 for r in rows if r[5] == 'permission')
+
+    def fmt_group(monks, show_position=True):
+        lines = []
+        for i, (name, _, position, vassa, kuti, status, reason) in enumerate(monks, 1):
+            if status == 'absent':
+                icon, label = '❌', 'អវត្តមាន'
+            elif status == 'late':
+                icon, label = '⏰', 'យឺត'
+            else:
+                icon, label = '📋', 'ច្បាប់'
+            block = [f'{i}. {icon} {name}']
+            if show_position:
+                block.append(f'   ▸ តួនាទី: {position}')
+            block += [
+                f'   ▸ វស្សា: {vassa} ឆ្នាំ',
+                f'   ▸ កុដិ: {(kuti or "").replace("_", " ")}',
+                f'   ▸ ស្ថានភាព: {label}',
+            ]
+            if status == 'permission' and (reason or '').strip():
+                block.append(f'   ▸ មូលហេតុ: {reason.strip()}')
+            lines.append('\n'.join(block))
+        return '\n\n'.join(lines)
+
+    total_seated = int(total_seated or 0)
+    home_count   = int(home_count or 0)
+    sick_count   = int(sick_count or 0)
+    total_txt = _to_khmer_digits(total_seated) if total_seated else '……'
+    present_n = max(0, total_seated - absent_count - permission_count) if total_seated else 0
+    present_txt = _to_khmer_digits(present_n) if total_seated else '……'
+    d_fmt = _to_khmer_digits(report_day.strftime('%d/%m/%Y'))
+
+    parts = [
+        '🏛 វត្តនិរោធរង្សី',
+        '📋 ព័ត៌មានកិច្ចវត្តរបស់ព្រះសង្ឃ',
+        f'ប្រចាំថ្ងៃ — {d_fmt} ({session})',
+        '                                             ',
+    ]
+
+    bhikkhus  = [r for r in rows if r[1] == 'ភិក្ខុ']
+    samaneras = [r for r in rows if r[1] == 'សាមណេរ']
+
+    if bhikkhus:
+        parts += [
+            '              |  ភិក្ខុ  |',
+            _TG_SECTION_RULE,
+            '',
+            fmt_group(bhikkhus, show_position=False),
+            '',
+        ]
+
+    if samaneras:
+        parts += [
+            '           | សាមណេរ |',
+            _TG_SECTION_RULE,
+            '',
+            fmt_group(samaneras, show_position=True),
+            '',
+        ]
+
+    parts += [
+        ' ════════════  ',
+        '|                                              ',
+        f'| ព្រះសង្ឃសរុបទាំងអស់ {total_txt} អង្គ ',
+        '|                                             ',
+        _TG_TOTAL_RULE,
+        f'|    ❇️  សុំច្បាប់ ចំនួន {_tg_stat_count(permission_count)} អង្គ',
+        f'|    🚑  អាពាធ ចំនួន {_tg_stat_count(sick_count, "........")} អង្គ               ',
+        f'|    🎁  ទៅស្រុក ចំនួន {_tg_stat_count(home_count, "...........")}  អង្គ                ',
+        f'|    ❌  អវត្តមាន ចំនួន {_tg_stat_count(absent_count)} អង្គ  ',
+        _TG_FANCY_RULE_TIGHT,
+        f'|     ស្ថិតិព្រះសង្ឃពេល {session} ',
+        f'|   គិតត្រឹមថ្ងៃទី {d_fmt}    ',
+        _TG_FANCY_RULE,
+        _TG_FANCY_BLANK,
+        f'࿇    ព្រះសង្ឃថ្វាយបង្គំសរុប {present_txt} អង្គ   ࿇',
+        _TG_FANCY_BLANK,
+        _TG_FANCY_RULE,
+    ]
+    return '\n'.join(parts)
 
 
 @main_bp.route('/api/attendance/submit', methods=['POST'])
@@ -5423,6 +5554,22 @@ def submit_attendance():
                 ORDER BY m.monk_type, a.status, m.fullname;
             """, (date_str, source))
         rows = cursor.fetchall()
+
+        home_count = 0
+        sick_count = 0
+        if seated_ids:
+            cursor.execute("""
+                SELECT
+                    COUNT(*) FILTER (WHERE living_status = 'នៅស្រុក'),
+                    COUNT(*) FILTER (WHERE living_status = 'ឈឺនៅពេទ្យ')
+                FROM monk_tbl
+                WHERE id = ANY(%s)
+            """, (list(seated_ids),))
+            stat_row = cursor.fetchone()
+            if stat_row:
+                home_count = int(stat_row[0] or 0)
+                sick_count = int(stat_row[1] or 0)
+
         cursor.close(); conn.close()
 
         if not rows:
@@ -5432,62 +5579,20 @@ def submit_attendance():
                 'message': f'មិនមានអវត្តមាន / ច្បាប់ / យឺត សម្រាប់{scope_label} ថ្ងៃនេះ',
             }), 400
 
-        absent_count     = sum(1 for r in rows if r[5] == 'absent')
-        permission_count = sum(1 for r in rows if r[5] == 'permission')
-        late_count       = sum(1 for r in rows if r[5] == 'late')
-
-        def fmt_group(monks, show_position=True):
-            lines = []
-            for i, (name, _, position, vassa, kuti, status, reason) in enumerate(monks, 1):
-                if status == 'absent':
-                    icon, label = '❌', 'អវត្តមាន'
-                elif status == 'late':
-                    icon, label = '⏰', 'យឺត'
-                else:
-                    icon, label = '📋', 'ច្បាប់'
-                kuti_display = (kuti or '').replace('_', ' ')
-                block = [
-                    f'{i}. {icon} {name}',
-                ]
-                if show_position:
-                    block.append(f'   ▸ តួនាទី: {position}')
-                block += [
-                    f'   ▸ វស្សា: {vassa} ឆ្នាំ',
-                    f'   ▸ កុដិ: {kuti_display}',
-                    f'   ▸ ស្ថានភាព: {label}',
-                ]
-                if status == 'permission' and (reason or '').strip():
-                    block.append(f'   ▸ មូលហេតុ: {reason.strip()}')
-                lines.append('\n'.join(block))
-            return '\n\n'.join(lines)
-
-        bhikkhus  = [r for r in rows if r[1] == 'ភិក្ខុ']
-        samaneras = [r for r in rows if r[1] == 'សាមណេរ']
-
-        d_fmt = _to_khmer_digits(report_day.strftime('%d/%m/%Y'))
-        scope_label = _attendance_source_label(source)
-        parts = [
-            f'🏛 វត្តនិរោធរង្សី',
-            f'📋 ព័ត៌មាន{scope_label}ប្រចាំថ្ងៃ — {d_fmt}',
-            '═' * 15,
-        ]
-        if bhikkhus:
-            parts += ['\n📿 ភិក្ខុ', '─' * 15, fmt_group(bhikkhus, show_position=False)]
-        if samaneras:
-            parts += ['\n🔰 សាមណេរ', '─' * 15, fmt_group(samaneras, show_position=True)]
-        parts += [
-            '\n' + '═' * 15,
-            f'📊 សរុបចំនួន : {len(rows)} នាក់',
-            f'   ❌ អវត្តមាន : {absent_count} នាក់',
-            f'   📋 ច្បាប់    : {permission_count} នាក់',
-            f'   ⏰ យឺត      : {late_count} នាក់',
-        ]
-        message = '\n'.join(parts)
+        message = _build_daily_attendance_message(
+            rows,
+            report_day,
+            _daily_session_label(data.get('shift') or data.get('session'), source),
+            total_seated=len(seated_ids),
+            home_count=home_count,
+            sick_count=sick_count,
+        )
 
         tg = _tg_send_message(TELEGRAM_TOKEN, TELEGRAM_CHAT_ID, message, req)
 
-        if not tg.get('ok'):
-            return jsonify({'success': False, 'message': f"Telegram: {tg.get('description', 'error')}"}), 500
+        if not tg or not tg.get('ok'):
+            desc = (tg or {}).get('description', 'error')
+            return jsonify({'success': False, 'message': f'Telegram: {desc}'}), 500
 
         conn2 = connect_db()
         cur2 = conn2.cursor()
@@ -5510,6 +5615,8 @@ def submit_attendance():
         return jsonify({'success': True, 'total': len(rows)})
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'message': str(e)}), 500
 
 

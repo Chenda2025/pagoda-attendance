@@ -1093,6 +1093,10 @@ function initPopover() {
 
 // ============ TELEGRAM SUBMIT ============
 
+function currentSessionLabel() {
+    return new Date().getHours() < 12 ? 'ព្រឹក' : 'ល្ងាច';
+}
+
 async function submitAttendance() {
     if (attendanceMap.size === 0) {
         showToast('មិនមានការចុះឈ្មោះត្រូវបញ្ជូនទេ', 'error');
@@ -1106,7 +1110,7 @@ async function submitAttendance() {
         const res  = await fetch('/api/attendance/submit', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ date, source: 'layout' }),
+            body: JSON.stringify({ date, source: 'layout', shift: currentSessionLabel() }),
         });
         const json = await res.json();
         if (!json.success) throw new Error(json.message);
