@@ -8,8 +8,8 @@ from conn import connect_db
 MODULE_PATHS = {
     'entry':       ('/entry',),
     'view':        ('/view', '/api/monks', '/api/check'),
-    'layout':      ('/layout', '/api/monks', '/api/attendance', '/api/permissions',
-                    '/api/export-layout', '/api/seat-order'),
+    'layout':      ('/layout', '/alt-layout', '/api/monks', '/api/attendance', '/api/permissions',
+                    '/api/export-layout', '/api/seat-order', '/api/alt-assemblies'),
     'classroom_layout': ('/classroom-layout', '/api/classroom-layout', '/report/sala-chan',
                          '/api/attendance', '/api/permissions', '/api/monks',
                          '/api/reports'),

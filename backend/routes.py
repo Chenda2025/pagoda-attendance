@@ -3935,6 +3935,236 @@ def layout():
     return render_template('layout.html', role=session.get('role', ''))
 
 
+def _alt_assembly_row_to_dict(row):
+    return {
+        'id': row[0],
+        'name': row[1],
+        'sort_order': row[2],
+        'updated_at': row[3].isoformat() if row[3] else None,
+    }
+
+
+@main_bp.route('/alt-layout')
+def alt_layout_hub():
+    return render_template(
+        'alt_layout_hub.html',
+        username=session.get('username', ''),
+        role=session.get('role', ''),
+    )
+
+
+@main_bp.route('/alt-layout/<int:layout_id>/edit')
+def alt_layout_edit(layout_id):
+    conn = connect_db()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT id, name FROM alt_assembly_layout WHERE id = %s",
+        (layout_id,),
+    )
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    if not row:
+        abort(404)
+    return render_template(
+        'layout.html',
+        role=session.get('role', ''),
+        alt_layout_id=row[0],
+        alt_layout_name=row[1],
+    )
+
+
+@main_bp.route('/api/alt-assemblies', methods=['GET'])
+def list_alt_assemblies():
+    try:
+        conn = connect_db()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT id, name, sort_order, updated_at
+            FROM alt_assembly_layout
+            ORDER BY sort_order, id
+        """)
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        return jsonify({
+            'success': True,
+            'layouts': [_alt_assembly_row_to_dict(r) for r in rows],
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@main_bp.route('/api/alt-assemblies', methods=['POST'])
+def create_alt_assembly():
+    if not user_allowed(_session_user(), '/alt-layout'):
+        abort(403)
+    data = request.get_json(silent=True) or {}
+    name = (data.get('name') or '').strip()
+    if not name:
+        return jsonify({'success': False, 'message': 'សូមបញ្ចូលឈ្មោះអាសនៈ'}), 400
+    if len(name) > 120:
+        return jsonify({'success': False, 'message': 'ឈ្មោះវែងពេក'}), 400
+    import json as _json
+    raw_grid = data.get('grid_config') or {}
+    try:
+        grid_cfg = {
+            'br': max(1, min(30, int(raw_grid.get('br') or 3))),
+            'bc': max(1, min(30, int(raw_grid.get('bc') or 5))),
+            'sr': max(1, min(30, int(raw_grid.get('sr') or 12))),
+            'sc': max(1, min(30, int(raw_grid.get('sc') or 10))),
+        }
+    except (TypeError, ValueError):
+        grid_cfg = {'br': 3, 'bc': 5, 'sr': 12, 'sc': 10}
+
+    bhikkhu_ids = data.get('bhikkhu_ids')
+    samanera_ids = data.get('samanera_ids')
+    if bhikkhu_ids is not None and not isinstance(bhikkhu_ids, list):
+        return jsonify({'success': False, 'message': 'bhikkhu_ids must be a list'}), 400
+    if samanera_ids is not None and not isinstance(samanera_ids, list):
+        return jsonify({'success': False, 'message': 'samanera_ids must be a list'}), 400
+    bh_json = _json.dumps(bhikkhu_ids if bhikkhu_ids is not None else [])
+    sam_json = _json.dumps(samanera_ids if samanera_ids is not None else [])
+
+    try:
+        conn = connect_db()
+        cur = conn.cursor()
+        cur.execute("SELECT COALESCE(MAX(sort_order), 0) + 1 FROM alt_assembly_layout")
+        sort_order = int((cur.fetchone() or [0])[0] or 0)
+        cur.execute("""
+            INSERT INTO alt_assembly_layout (name, sort_order, grid_config, bhikkhu_ids, samanera_ids)
+            VALUES (%s, %s, %s, %s, %s)
+            RETURNING id, name, sort_order, updated_at
+        """, (name, sort_order, _json.dumps(grid_cfg), bh_json, sam_json))
+        row = cur.fetchone()
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({'success': True, 'layout': _alt_assembly_row_to_dict(row)})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@main_bp.route('/api/alt-assemblies/<int:layout_id>', methods=['PATCH'])
+def update_alt_assembly(layout_id):
+    if not user_allowed(_session_user(), '/alt-layout'):
+        abort(403)
+    data = request.get_json(silent=True) or {}
+    name = (data.get('name') or '').strip()
+    if not name:
+        return jsonify({'success': False, 'message': 'សូមបញ្ចូលឈ្មោះអាសនៈ'}), 400
+    try:
+        conn = connect_db()
+        cur = conn.cursor()
+        cur.execute("""
+            UPDATE alt_assembly_layout
+            SET name = %s, updated_at = NOW()
+            WHERE id = %s
+            RETURNING id, name, sort_order, updated_at
+        """, (name, layout_id))
+        row = cur.fetchone()
+        if not row:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'រកមិនឃើញ'}), 404
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({'success': True, 'layout': _alt_assembly_row_to_dict(row)})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@main_bp.route('/api/alt-assemblies/<int:layout_id>', methods=['DELETE'])
+def delete_alt_assembly(layout_id):
+    if not user_allowed(_session_user(), '/alt-layout'):
+        abort(403)
+    try:
+        conn = connect_db()
+        cur = conn.cursor()
+        cur.execute("DELETE FROM alt_assembly_layout WHERE id = %s", (layout_id,))
+        deleted = cur.rowcount
+        conn.commit()
+        cur.close()
+        conn.close()
+        if not deleted:
+            return jsonify({'success': False, 'message': 'រកមិនឃើញ'}), 404
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@main_bp.route('/api/alt-assemblies/<int:layout_id>/seats', methods=['GET'])
+def get_alt_assembly_seats(layout_id):
+    import json as _json
+    try:
+        conn = connect_db()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT bhikkhu_ids, samanera_ids, grid_config, updated_at
+            FROM alt_assembly_layout WHERE id = %s
+        """, (layout_id,))
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        if not row:
+            return jsonify({'success': False, 'message': 'រកមិនឃើញ'}), 404
+        grid_cfg = row[2]
+        if grid_cfg and isinstance(grid_cfg, str):
+            grid_cfg = _json.loads(grid_cfg)
+        return jsonify({
+            'success': True,
+            'bhikkhu': _json.loads(row[0] or '[]'),
+            'samanera': _json.loads(row[1] or '[]'),
+            'grid_config': grid_cfg,
+            'updated_at': row[3].isoformat() if row[3] else None,
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@main_bp.route('/api/alt-assemblies/<int:layout_id>/seats', methods=['POST'])
+def save_alt_assembly_seats(layout_id):
+    if not user_allowed(_session_user(), '/alt-layout'):
+        abort(403)
+    import json as _json
+    data = request.get_json(silent=True) or {}
+    type_ = str(data.get('type', '')).strip()
+    ids = data.get('ids', [])
+    if type_ not in ('bhikkhu', 'samanera', 'grid_config'):
+        return jsonify({'success': False, 'message': 'Invalid type'}), 400
+    if type_ == 'grid_config':
+        if not isinstance(ids, dict):
+            return jsonify({'success': False, 'message': 'ids must be a dict for grid_config'}), 400
+        payload = _json.dumps(ids)
+        col = 'grid_config'
+    elif not isinstance(ids, list):
+        return jsonify({'success': False, 'message': 'ids must be a list'}), 400
+    else:
+        col = 'bhikkhu_ids' if type_ == 'bhikkhu' else 'samanera_ids'
+        payload = _json.dumps(ids)
+    try:
+        conn = connect_db()
+        cur = conn.cursor()
+        cur.execute(f"""
+            UPDATE alt_assembly_layout
+            SET {col} = %s, updated_at = NOW()
+            WHERE id = %s
+            RETURNING updated_at
+        """, (payload, layout_id))
+        row = cur.fetchone()
+        if not row:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'រកមិនឃើញ'}), 404
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({'success': True, 'updated_at': row[0].isoformat() if row[0] else None})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 @main_bp.route('/classroom-layout')
 def classroom_layout_page():
     return render_template(

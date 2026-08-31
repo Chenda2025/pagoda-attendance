@@ -10,7 +10,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&family=Kantumruy+Pro:wght@400;500;600;700&family=Moul&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/gov-shell.css?v=2">
-    <link rel="stylesheet" href="/static/css/classroom_layout.css?v=65">
+    <link rel="stylesheet" href="/static/css/classroom_layout.css?v=72">
 </head>
 
 <body class="gov-page-body{% if role != 'admin' %} cl-use-only{% endif %}">
@@ -39,7 +39,8 @@
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polyline points="15 18 9 12 15 6"/>
                     </svg>
-                    ផ្ទាំងគ្រប់គ្រង
+                    <span class="cl-btn-full">ផ្ទាំងគ្រប់គ្រង</span>
+                    <span class="cl-btn-short" aria-hidden="true">ត្រឡប់</span>
                 </a>
                 <div class="cl-title-block">
                     <h1 class="gov-page-title">ប្លងសាលាឆាន់</h1>
@@ -109,11 +110,13 @@
                 <div class="cl-action-group" role="group" aria-label="សកម្មភាព">
                     <button type="button" class="gov-btn gov-btn-primary" id="btn-setup">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-                        កំណត់ប្លង់
+                        <span class="cl-btn-full">កំណត់ប្លង់</span>
+                        <span class="cl-btn-short" aria-hidden="true">កំណត់</span>
                     </button>
                     <button type="button" class="gov-btn" id="btn-auto-fill">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M7 12h10"/><path d="M10 18h4"/></svg>
-                        រៀបតាមវស្សា
+                        <span class="cl-btn-full">រៀបតាមវស្សា</span>
+                        <span class="cl-btn-short" aria-hidden="true">រៀបវស្សា</span>
                     </button>
                 </div>
                 <button type="button" class="gov-btn gov-btn-success cl-save-btn" id="btn-save">
@@ -167,12 +170,45 @@
                         <button type="button" id="btn-cl-clear-search" class="cl-btn-clear-search" hidden title="លុបការស្វែងរក" aria-label="លុបការស្វែងរក">✕</button>
                     </div>
                     <div class="cl-panel-head-actions">
+                        <div class="cl-export-dd" id="cl-export-dd">
+                            <button type="button" class="gov-btn cl-btn-export" id="btn-cl-export-trigger" title="នាំចេញប្លង់តុឆាន់" aria-haspopup="true" aria-expanded="false">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                    <polyline points="7 10 12 15 17 10"></polyline>
+                                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                                </svg>
+                                នាំចេញ
+                                <svg class="cl-export-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <polyline points="6 9 12 15 18 9"></polyline>
+                                </svg>
+                            </button>
+                            <div class="cl-export-menu" id="cl-export-menu" role="menu">
+                                <button type="button" class="cl-export-item" id="btn-cl-export-pdf" role="menuitem">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#c53030" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                        <polyline points="14 2 14 8 20 8"></polyline>
+                                        <line x1="12" y1="18" x2="12" y2="12"></line>
+                                        <line x1="9" y1="15" x2="15" y2="15"></line>
+                                    </svg>
+                                    PDF
+                                </button>
+                                <button type="button" class="cl-export-item" id="btn-cl-export-image" role="menuitem">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#2b6cb0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                        <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+                                        <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                                        <polyline points="21 15 16 10 5 21"></polyline>
+                                    </svg>
+                                    រូបភាព (PNG)
+                                </button>
+                            </div>
+                        </div>
                         <button type="button" class="gov-btn cl-btn-perm-list" id="btn-cl-perm-list" title="មើលបញ្ជីឈ្មោះដែលច្បាប់មិនផុតក្នុងរយៈពេល ១៥ ថ្ងៃ">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                                 <path d="M9 11l3 3L22 4"/>
                                 <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
                             </svg>
-                            មើលច្បាប់មិនផុត
+                            <span class="cl-btn-full">មើលច្បាប់មិនផុត</span>
+                            <span class="cl-btn-short" aria-hidden="true">ច្បាប់</span>
                         </button>
                         <a href="/report/sala-chan" class="gov-btn cl-btn-report" id="btn-cl-report" title="របាយការណ៍សាលាឆាន់">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -182,13 +218,15 @@
                                 <line x1="16" y1="17" x2="8" y2="17"></line>
                                 <polyline points="10 9 9 9 8 9"></polyline>
                             </svg>
-                            របាយការណ៍សាលាឆាន់
+                            <span class="cl-btn-full">របាយការណ៍សាលាឆាន់</span>
+                            <span class="cl-btn-short" aria-hidden="true">របាយការណ៍</span>
                         </a>
                         <button type="button" class="gov-btn cl-btn-tg-report" id="btn-cl-tg-report" title="ផ្ញើរបាយការណ៍ទៅ Telegram">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                                 <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06-.01.14-.02.22z"/>
                             </svg>
-                            ផ្ញើរបាយការណ៍
+                            <span class="cl-btn-full">ផ្ញើរបាយការណ៍</span>
+                            <span class="cl-btn-short" aria-hidden="true">ផ្ញើ TG</span>
                         </button>
                     </div>
                 </div>
@@ -719,7 +757,9 @@
     </div>
 
     <script>const PAGE_ROLE = {{ role|tojson }};</script>
-    <script src="/static/js/classroom_layout.js?v=80"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="/static/js/classroom_layout.js?v=84"></script>
 </body>
 
 </html>

@@ -451,6 +451,35 @@ def create_seat_order_table():
         if conn: conn.close()
 
 
+def create_alt_assembly_table():
+    """Named assembly layouts (tabs) separate from the main អាសនៈ seat_order."""
+    conn = None
+    try:
+        conn = connect_db()
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS alt_assembly_layout (
+                id            SERIAL PRIMARY KEY,
+                name          VARCHAR(120) NOT NULL,
+                sort_order    INTEGER NOT NULL DEFAULT 0,
+                bhikkhu_ids   TEXT NOT NULL DEFAULT '[]',
+                samanera_ids  TEXT NOT NULL DEFAULT '[]',
+                grid_config   TEXT,
+                created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+        conn.commit()
+        cursor.close()
+    except Exception as e:
+        print(f'Database error creating alt_assembly_layout: {e}')
+        if conn:
+            conn.rollback()
+    finally:
+        if conn:
+            conn.close()
+
+
 def create_classroom_layout_table():
     """Store sala-chan (classroom) table/seat layout as JSON."""
     conn = None

@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="km">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>ប្លង់អាសនៈផ្សេង — វត្តនិរោធរង្សី</title>
+    <link rel="icon" type="image/jpeg" href="/static/logo.jpg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&family=Kantumruy+Pro:wght@300;400;500;600;700&family=Moul&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/gov-shell.css">
+    <link rel="stylesheet" href="/static/css/alt_layout_hub.css?v=8">
+</head>
+
+<body class="gov-page-body">
+    <div class="alt-hub-shell">
+
+        <header class="gov-masthead">
+            <div class="gov-masthead-inner">
+                <div class="gov-col gov-col-left">
+                    <p>មន្ទីរធម្មការ និងសាសនា រាជធានីភ្នំពេញ</p>
+                    <p>សាលាអនុគណខណ្ឌច្បារអំពៅ</p>
+                    <p class="gov-pagoda">វត្តនិរោធរង្សី</p>
+                </div>
+                <div class="gov-col gov-col-center">
+                    <img src="/static/logo.jpg" alt="វត្តនិរោធរង្សី" class="gov-seal">
+                </div>
+                <div class="gov-col gov-col-right">
+                    <p class="gov-kingdom">ព្រះរាជាណាចក្រកម្ពុជា</p>
+                    <p class="gov-motto">ជាតិ សាសនា ព្រះមហាក្សត្រ</p>
+                </div>
+            </div>
+        </header>
+
+        <div class="alt-hub-topbar">
+            <div class="alt-hub-topbar-left">
+                <a href="/" class="alt-nav-btn" title="ត្រឡប់ទៅផ្ទាំងគ្រប់គ្រង">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="15 18 9 12 15 6"></polyline>
+                    </svg>
+                    ផ្ទាំងគ្រប់គ្រង
+                </a>
+                <div class="alt-hub-titles">
+                    <h1>ប្លង់អាសនៈផ្សេង</h1>
+                    <p>បង្កើតអាសនៈតាមក្រុម ជ្រើសរើសព្រះសង្ឃ និងកំណត់ជួរដេក×ជួរឈរ</p>
+                </div>
+            </div>
+            <a href="/layout" class="alt-nav-btn alt-nav-gold">
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="3" width="7" height="7"></rect>
+                    <rect x="14" y="3" width="7" height="7"></rect>
+                    <rect x="14" y="14" width="7" height="7"></rect>
+                    <rect x="3" y="14" width="7" height="7"></rect>
+                </svg>
+                ប្លង់អាសនៈគោល
+            </a>
+        </div>
+
+        <section class="alt-hub-panel">
+            <div class="alt-tab-bar" id="alt-tab-bar">
+                <div class="alt-tab-scroll" id="alt-tab-scroll"></div>
+                {% if role == 'admin' %}
+                <button type="button" class="alt-tab-add" id="btn-add-alt-tab" title="បន្ថែមអាសនៈ">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    បន្ថែមអាសនៈ
+                </button>
+                {% endif %}
+            </div>
+
+            <div class="alt-hub-body" id="alt-hub-body">
+                <div class="alt-loading" id="alt-loading">
+                    <div class="alt-spinner"></div>
+                    <span>កំពុងផ្ទុក...</span>
+                </div>
+                <div class="alt-empty" id="alt-empty" style="display:none">
+                    <div class="alt-empty-icon" aria-hidden="true">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="3" width="7" height="7"></rect>
+                            <rect x="14" y="3" width="7" height="7"></rect>
+                            <rect x="14" y="14" width="7" height="7"></rect>
+                            <rect x="3" y="14" width="7" height="7"></rect>
+                        </svg>
+                    </div>
+                    <p class="alt-empty-title">មិនមានអាសនៈផ្សេងទេ</p>
+                    <p class="alt-empty-hint">ចុច «បន្ថែមអាសនៈ» ដើម្បីបង្កើតប្លង់ថ្មី</p>
+                </div>
+                <div class="alt-detail" id="alt-detail" style="display:none">
+                    <div class="alt-detail-head">
+                        <div>
+                            <p class="alt-detail-kicker">អាសនៈដែលបានជ្រើស</p>
+                            <h2 id="alt-detail-name">—</h2>
+                            <p class="alt-detail-meta" id="alt-detail-meta"></p>
+                        </div>
+                        <div class="alt-detail-actions">
+                            <a class="alt-btn-primary" id="alt-view-layout" href="#">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
+                                មើលប្លង់
+                            </a>
+                            {% if role == 'admin' %}
+                            <button type="button" class="alt-btn-ghost" id="btn-rename-alt">កែឈ្មោះ</button>
+                            <button type="button" class="alt-btn-danger" id="btn-delete-alt">លុប</button>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    {% if role == 'admin' %}
+                    <div class="alt-grid-config" id="alt-grid-config">
+                        <div class="alt-grid-config-head">
+                            <div>
+                                <h3 class="alt-grid-title">ទំហំប្លង់</h3>
+                                <p class="alt-grid-hint">កំណត់ចំនួនជួរដេក និងជួរឈរសម្រាប់អាសនៈនេះ</p>
+                            </div>
+                            <button type="button" class="alt-btn-primary" id="btn-save-alt-grid">
+                                រក្សាទុកជួរ/ឈរ
+                            </button>
+                        </div>
+                        <div class="alt-grid-cards">
+                            <div class="alt-grid-card alt-grid-card-bh">
+                                <span class="alt-grid-badge">ភិក្ខុ</span>
+                                <div class="alt-grid-inputs">
+                                    <label>ជួរដេក
+                                        <input type="number" id="alt-bhikkhu-rows" min="1" max="30" value="3">
+                                    </label>
+                                    <span class="alt-grid-x">×</span>
+                                    <label>ជួរឈរ
+                                        <input type="number" id="alt-bhikkhu-cols" min="1" max="30" value="5">
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="alt-grid-card alt-grid-card-sam">
+                                <span class="alt-grid-badge">សាមណេរ</span>
+                                <div class="alt-grid-inputs">
+                                    <label>ជួរដេក
+                                        <input type="number" id="alt-samanera-rows" min="1" max="30" value="12">
+                                    </label>
+                                    <span class="alt-grid-x">×</span>
+                                    <label>ជួរឈរ
+                                        <input type="number" id="alt-samanera-cols" min="1" max="30" value="10">
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <div id="alt-modal" class="alt-modal" style="display:none" aria-hidden="true">
+        <div class="alt-modal-card alt-modal-card-wide">
+            <h3 id="alt-modal-title">បន្ថែមអាសនៈ</h3>
+            <p class="alt-modal-lead">ដាក់ឈ្មោះ កំណត់ទំហំ និងជ្រើសរើសព្រះសង្ឃសម្រាប់អាសនៈនេះ</p>
+
+            <label for="alt-modal-name">ឈ្មោះអាសនៈ</label>
+            <input type="text" id="alt-modal-name" class="alt-modal-input" maxlength="120"
+                placeholder="ឧ. អាសនៈព្រឹក, អាសនៈបរិច្ឆេទពិសេស...">
+
+            <div class="alt-modal-grid">
+                <p class="alt-modal-grid-title">ទំហំប្លង់ (ជួរដេក × ជួរឈរ)</p>
+                <div class="alt-modal-grid-cards">
+                    <div class="alt-modal-grid-row">
+                        <span>ភិក្ខុ</span>
+                        <input type="number" id="alt-modal-br" min="1" max="30" value="3" aria-label="ភិក្ខុ ជួរដេក">
+                        <span class="alt-grid-x">×</span>
+                        <input type="number" id="alt-modal-bc" min="1" max="30" value="5" aria-label="ភិក្ខុ ជួរឈរ">
+                    </div>
+                    <div class="alt-modal-grid-row">
+                        <span>សាមណេរ</span>
+                        <input type="number" id="alt-modal-sr" min="1" max="30" value="12" aria-label="សាមណេរ ជួរដេក">
+                        <span class="alt-grid-x">×</span>
+                        <input type="number" id="alt-modal-sc" min="1" max="30" value="10" aria-label="សាមណេរ ជួរឈរ">
+                    </div>
+                </div>
+            </div>
+
+            <div id="alt-modal-pick-section" class="alt-modal-pick-section">
+                <p class="alt-modal-grid-title">ជ្រើសរើសព្រះសង្ឃ</p>
+                <div class="alt-pick-mode" role="radiogroup" aria-label="របៀបជ្រើសរើស">
+                    <label class="alt-pick-mode-opt">
+                        <input type="radio" name="alt-pick-mode" value="single" checked>
+                        <span>ជ្រើសតែមួយ</span>
+                    </label>
+                    <label class="alt-pick-mode-opt">
+                        <input type="radio" name="alt-pick-mode" value="multiple">
+                        <span>ជ្រើសច្រើន</span>
+                    </label>
+                </div>
+                <div id="alt-pick-single" class="alt-pick-panel">
+                    <div class="alt-pick-search-row">
+                        <input type="text" id="alt-pick-search" class="alt-modal-input"
+                            placeholder="ស្វែងរកឈ្មោះព្រះសង្ឃ..." autocomplete="off">
+                        <button type="button" class="alt-btn-primary" id="alt-pick-add-btn">បន្ថែម</button>
+                    </div>
+                    <div id="alt-pick-suggestions" class="alt-pick-suggestions" hidden></div>
+                </div>
+                <div id="alt-pick-multiple" class="alt-pick-panel" style="display:none">
+                    <div class="alt-pick-multi-actions">
+                        <button type="button" class="alt-btn-ghost" id="alt-pick-all-bh">ភិក្ខុទាំងអស់</button>
+                        <button type="button" class="alt-btn-ghost" id="alt-pick-all-sam">សាមណេរទាំងអស់</button>
+                        <button type="button" class="alt-btn-ghost" id="alt-pick-clear">លុបជ្រើសរើស</button>
+                    </div>
+                    <div id="alt-pick-checklist" class="alt-pick-checklist"></div>
+                </div>
+                <div class="alt-pick-selected">
+                    <p class="alt-pick-count" id="alt-pick-count">ជ្រើសរើស: ០ អង្គ</p>
+                    <div id="alt-pick-chips" class="alt-pick-chips"></div>
+                </div>
+            </div>
+            <div class="alt-modal-actions">
+                <button type="button" class="alt-btn-ghost" id="alt-modal-cancel">បោះបង់</button>
+                <button type="button" class="alt-btn-primary" id="alt-modal-save">រក្សាទុក</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script>const PAGE_ROLE = "{{ role }}";</script>
+    <script src="/static/js/alt_layout_hub.js?v=9"></script>
+</body>
+
+</html>

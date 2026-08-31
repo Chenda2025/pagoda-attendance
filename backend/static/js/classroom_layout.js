@@ -2233,6 +2233,215 @@
         }
     });
 
+    async function captureClassroomLayout() {
+        if (!canvas || canvas.hidden || !layout.rows?.length) {
+            throw new Error('មិនមានប្លង់ដើម្បីនាំចេញ');
+        }
+        if (typeof html2canvas !== 'function') {
+            throw new Error('មិនអាចផ្ទុកឧបករណ៍នាំចេញ');
+        }
+
+        const wrap = document.createElement('div');
+        Object.assign(wrap.style, {
+            position: 'fixed',
+            top: '-99999px',
+            left: '0',
+            width: Math.max(canvas.scrollWidth, canvas.offsetWidth, 900) + 'px',
+            background: '#ffffff',
+            padding: '20px 24px',
+            boxSizing: 'border-box',
+            fontFamily: "'Kantumruy Pro', 'Battambang', sans-serif",
+            color: '#1a2332',
+        });
+
+        const header = document.createElement('div');
+        header.innerHTML = `
+            <div style="text-align:center;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #c9a227;">
+                <div style="font-family:'Moul','Battambang',serif;font-size:20px;color:#0c2d5a;margin-bottom:4px;">ប្លង់តុឆាន់</div>
+                <div style="font-size:12px;color:#5c6b7a;">វត្តនិរោធរង្សី · ${getActiveDate()}</div>
+            </div>`;
+        wrap.appendChild(header);
+
+        const clone = canvas.cloneNode(true);
+        clone.removeAttribute('hidden');
+        clone.style.width = '100%';
+        clone.style.maxWidth = 'none';
+        clone.style.overflow = 'visible';
+        clone.querySelectorAll('.cl-row-actions, .cl-table-controls').forEach((el) => {
+            el.style.display = 'none';
+        });
+        clone.querySelectorAll('.cl-tables-scroll').forEach((el) => {
+            Object.assign(el.style, {
+                overflow: 'visible',
+                maxWidth: 'none',
+                width: 'max-content',
+            });
+        });
+        clone.querySelectorAll('.cl-row-block').forEach((el) => {
+            el.style.overflow = 'visible';
+        });
+        // html2canvas breaks vertical-rl Khmer — force left/right names horizontal like DOM text
+        clone.querySelectorAll('.cl-group-side').forEach((el) => {
+            Object.assign(el.style, {
+                writingMode: 'horizontal-tb',
+                minWidth: '68px',
+                maxWidth: '100px',
+                width: 'auto',
+                padding: '8px 6px',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-evenly',
+                alignItems: 'center',
+            });
+        });
+        clone.querySelectorAll('.cl-name-side, .cl-name-vert-side, .cl-name-left, .cl-name-right').forEach((el) => {
+            Object.assign(el.style, {
+                writingMode: 'horizontal-tb',
+                textOrientation: 'mixed',
+                transform: 'none',
+                whiteSpace: 'normal',
+                wordBreak: 'break-word',
+                overflowWrap: 'anywhere',
+                lineHeight: '1.35',
+                width: '100%',
+                maxWidth: '100%',
+                height: 'auto',
+                minHeight: '28px',
+                textAlign: 'center',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                letterSpacing: '0',
+            });
+        });
+        clone.querySelectorAll('.cl-name-sep-v').forEach((el) => {
+            Object.assign(el.style, { transform: 'none', opacity: '0.45' });
+        });
+        wrap.appendChild(clone);
+        document.body.appendChild(wrap);
+
+        try {
+            return await html2canvas(wrap, {
+                scale: 2,
+                useCORS: true,
+                backgroundColor: '#ffffff',
+                logging: false,
+                width: wrap.scrollWidth,
+                height: wrap.scrollHeight,
+                windowWidth: wrap.scrollWidth,
+            });
+        } finally {
+            document.body.removeChild(wrap);
+        }
+    }
+
+    function downloadBlob(blob, filename) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1500);
+    }
+
+    async function exportClassroomImage() {
+        const canvasImg = await captureClassroomLayout();
+        const blob = await new Promise((resolve) => canvasImg.toBlob(resolve, 'image/png'));
+        if (!blob) throw new Error('មិនអាចបង្កើតរូបភាព');
+        downloadBlob(blob, `ប្លង់តុឆាន់_${getActiveDate()}.png`);
+    }
+
+    async function exportClassroomPdf() {
+        if (!window.jspdf?.jsPDF) throw new Error('មិនអាចផ្ទុក PDF');
+        const canvasImg = await captureClassroomLayout();
+        const { jsPDF } = window.jspdf;
+        const orient = canvasImg.width >= canvasImg.height ? 'landscape' : 'portrait';
+        const pdf = new jsPDF({ orientation: orient, unit: 'mm', format: 'a4' });
+        const pageW = pdf.internal.pageSize.getWidth();
+        const pageH = pdf.internal.pageSize.getHeight();
+        const margin = 8;
+        const maxW = pageW - margin * 2;
+        const maxH = pageH - margin * 2;
+        const ratio = Math.min(maxW / canvasImg.width, maxH / canvasImg.height);
+        const imgW = canvasImg.width * ratio;
+        const imgH = canvasImg.height * ratio;
+        const imgData = canvasImg.toDataURL('image/jpeg', 0.92);
+
+        if (imgH <= maxH) {
+            const x = margin + (maxW - imgW) / 2;
+            const y = margin + (maxH - imgH) / 2;
+            pdf.addImage(imgData, 'JPEG', x, y, imgW, imgH);
+        } else {
+            // Multi-page: slice by page height in source pixels
+            const pageSrcH = Math.floor(maxH / ratio);
+            let srcY = 0;
+            let page = 0;
+            while (srcY < canvasImg.height) {
+                const sliceH = Math.min(pageSrcH, canvasImg.height - srcY);
+                const sliceCanvas = document.createElement('canvas');
+                sliceCanvas.width = canvasImg.width;
+                sliceCanvas.height = sliceH;
+                const ctx = sliceCanvas.getContext('2d');
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+                ctx.drawImage(canvasImg, 0, srcY, canvasImg.width, sliceH, 0, 0, canvasImg.width, sliceH);
+                if (page > 0) pdf.addPage();
+                const sliceData = sliceCanvas.toDataURL('image/jpeg', 0.92);
+                const drawH = sliceH * ratio;
+                const x = margin + (maxW - imgW) / 2;
+                pdf.addImage(sliceData, 'JPEG', x, margin, imgW, drawH);
+                srcY += sliceH;
+                page += 1;
+            }
+        }
+        pdf.save(`ប្លង់តុឆាន់_${getActiveDate()}.pdf`);
+    }
+
+    async function runClassroomExport(kind) {
+        const btn = document.getElementById(kind === 'pdf' ? 'btn-cl-export-pdf' : 'btn-cl-export-image');
+        const trigger = document.getElementById('btn-cl-export-trigger');
+        const dd = document.getElementById('cl-export-dd');
+        dd?.classList.remove('open');
+        if (trigger) trigger.setAttribute('aria-expanded', 'false');
+        const prev = btn?.innerHTML;
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'កំពុងបង្កើត...';
+        }
+        if (trigger) trigger.disabled = true;
+        try {
+            if (kind === 'pdf') await exportClassroomPdf();
+            else await exportClassroomImage();
+            toast(kind === 'pdf' ? 'បានទាញយក PDF ✓' : 'បានទាញយករូបភាព ✓');
+        } catch (err) {
+            toast(err.message || 'មានបញ្ហា', false);
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                if (prev) btn.innerHTML = prev;
+            }
+            if (trigger) trigger.disabled = false;
+        }
+    }
+
+    const clExportDd = document.getElementById('cl-export-dd');
+    document.getElementById('btn-cl-export-trigger')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const open = clExportDd?.classList.toggle('open');
+        e.currentTarget.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+    document.getElementById('btn-cl-export-pdf')?.addEventListener('click', () => runClassroomExport('pdf'));
+    document.getElementById('btn-cl-export-image')?.addEventListener('click', () => runClassroomExport('image'));
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('#cl-export-dd')) {
+            clExportDd?.classList.remove('open');
+            document.getElementById('btn-cl-export-trigger')?.setAttribute('aria-expanded', 'false');
+        }
+    });
+
     window.addEventListener('beforeunload', (e) => {
         if (dirty) e.preventDefault();
     });

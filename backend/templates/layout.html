@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ប្លង់អាសនៈ — វត្តនិរោធរង្សី</title>
+    <title>{% if alt_layout_id %}ប្លង់អាសនៈផ្សេង — {{ alt_layout_name }}{% else %}ប្លង់អាសនៈ — វត្តនិរោធរង្សី{% endif %}</title>
     <link rel="icon" type="image/jpeg" href="/static/logo.jpg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -38,14 +38,14 @@
 
         <!-- Page Header -->
         <div class="page-header no-print">
-            <a href="/" class="btn-back">
+            <a href="{% if alt_layout_id %}/alt-layout{% else %}/{% endif %}" class="btn-back">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
                     stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                     <polyline points="15 18 9 12 15 6"></polyline>
                 </svg>
-                ផ្ទាំងគ្រប់គ្រង
+                {% if alt_layout_id %}ប្លង់អាសនៈផ្សេង{% else %}ផ្ទាំងគ្រប់គ្រង{% endif %}
             </a>
-            <h1 class="page-title">ប្លង់អាសនៈព្រះសង្ឃ</h1>
+            <h1 class="page-title">{% if alt_layout_id %}{{ alt_layout_name }}{% else %}ប្លង់អាសនៈព្រះសង្ឃ{% endif %}</h1>
             <a href="/view" class="btn-report">
                 <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
                     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -54,7 +54,7 @@
                 </svg>
                 មើលទិន្នន័យ
             </a>
-            <a href="/report" class="btn-report">
+            <a href="/report" class="btn-report" {% if alt_layout_id %}style="display:none"{% endif %}>
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
                     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
@@ -104,7 +104,7 @@
                     </button>
                 </div>
             </div>
-            <button class="btn-submit-att" id="btn-submit-att" type="button">
+            <button class="btn-submit-att" id="btn-submit-att" type="button" {% if alt_layout_id %}style="display:none"{% endif %}>
                 <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M11.944 0A12 12 0 1 0 24 12 12 12 0 0 0 11.944 0zm5.992 8.194-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.94z"/>
                 </svg>
@@ -131,7 +131,7 @@
             <input type="text" id="search-name" placeholder="ស្វែងរកឈ្មោះ...">
             <button id="btn-clear-search" class="btn-clear-search" style="display:none" title="លុបការស្វែងរក">✕</button>
 
-            {% if role == 'admin' %}
+            {% if role == 'admin' and not alt_layout_id %}
             <div class="test-date-wrap" title="ថ្ងៃសម្រាប់ Testing">
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
                     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -429,9 +429,9 @@
 <div id="toast" class="toast"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <script>const PAGE_ROLE = "{{ role }}";</script>
+    <script>const PAGE_ROLE = "{{ role }}";{% if alt_layout_id %} const ALT_LAYOUT_ID = {{ alt_layout_id }};{% endif %}</script>
     <script src="/static/js/export_preview.js?v=6"></script>
-    <script src="/static/js/layout.js?v=33"></script>
+    <script src="/static/js/layout.js?v=34"></script>
 </body>
 
 </html>

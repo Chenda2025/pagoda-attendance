@@ -1,5 +1,13 @@
 'use strict';
 
+const IS_ALT_LAYOUT = typeof ALT_LAYOUT_ID !== 'undefined' && ALT_LAYOUT_ID;
+
+function seatOrderApiUrl() {
+    return IS_ALT_LAYOUT
+        ? `/api/alt-assemblies/${ALT_LAYOUT_ID}/seats`
+        : '/api/seat-order';
+}
+
 // Mirrors sorting.py ROLE_RANK — rank 1 = highest (first row / seat 1)
 const BHIKKHU_RANK = {
     'ព្រះអធិការ':                 1,
@@ -121,7 +129,7 @@ async function persistSeatOrder(type, grid) {
     if (typeof PAGE_ROLE === 'undefined' || PAGE_ROLE !== 'admin') return;
     const ids = grid.map(m => m ? m.id : null);
     try {
-        const res = await fetch('/api/seat-order', {
+        const res = await fetch(seatOrderApiUrl(), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ type, ids }),
@@ -157,7 +165,7 @@ async function swapMonks(type, posA, posB) {
     else samaneraOrder = ids;
 
     try {
-        const res  = await fetch('/api/seat-order', {
+        const res  = await fetch(seatOrderApiUrl(), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ type, ids })
@@ -213,8 +221,8 @@ async function loadData() {
         const today = getActiveDate();
         const [monkRes, attRes, orderRes] = await Promise.all([
             fetch('/api/monks?residing=1'),
-            fetch(`/api/attendance?date=${today}&source=layout`),
-            fetch('/api/seat-order')
+            IS_ALT_LAYOUT ? Promise.resolve({ json: async () => ({ success: true }) }) : fetch(`/api/attendance?date=${today}&source=layout`),
+            fetch(seatOrderApiUrl())
         ]);
 
         const monkJson = await monkRes.json();
@@ -222,7 +230,7 @@ async function loadData() {
         allMonks = monkJson.monks;
 
         const attJson = await attRes.json();
-        if (attJson.success) {
+        if (!IS_ALT_LAYOUT && attJson.success) {
             attendanceMap.clear();
             permissionsMap.clear();
             attJson.records.forEach(r => attendanceMap.set(r.monk_id, r.status));
@@ -777,7 +785,7 @@ async function saveGridConfig() {
         sc: parseInt(document.getElementById('samanera-cols')?.value || 10),
     };
     try {
-        const res  = await fetch('/api/seat-order', {
+        const res  = await fetch(seatOrderApiUrl(), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ type: 'grid_config', ids: cfg })
@@ -793,7 +801,7 @@ async function pollSeatOrder() {
     // Skip while admin is mid-swap (avoids clearing the selected-cell highlight)
     if (moveState.bhikkhu.active || moveState.samanera.active) return;
     try {
-        const res  = await fetch('/api/seat-order');
+        const res  = await fetch(seatOrderApiUrl());
         const json = await res.json();
         if (!json.success) return;
 
@@ -952,7 +960,9 @@ function initPopover() {
                 return;
             }
 
-            // Popover mode (only on filled seats)
+            // Popover mode (only on filled seats) — not for alt assembly layouts
+            if (IS_ALT_LAYOUT) return;
+
             if (!cell.classList.contains('seat-filled') || !cell.dataset.monkId) return;
 
             e.stopPropagation();
@@ -1404,7 +1414,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('btn-gen-bhikkhu')?.addEventListener('click', () => { generateBhikkhuAndSave(); saveGridConfig(); });
     document.getElementById('btn-gen-samanera')?.addEventListener('click', () => { generateSamaneraAndSave(); saveGridConfig(); });
-    document.getElementById('btn-submit-att').addEventListener('click', submitAttendance);
+    document.getElementById('btn-submit-att')?.addEventListener('click', submitAttendance);
     // Export dropdown
     const _layDd = document.getElementById('lay-export-dd');
     document.getElementById('btn-lay-export-trigger').addEventListener('click', (e) => {
