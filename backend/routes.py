@@ -5419,14 +5419,15 @@ def _tg_stat_count(n, placeholder='.......'):
 
 def _build_daily_attendance_message(
     rows, report_day, session, total_seated=0, home_count=0, sick_count=0,
+    present_count=None,
 ):
     """Telegram daily report for absent / permission / late monks."""
-    absent_count     = sum(1 for r in rows if r[5] == 'absent')
-    permission_count = sum(1 for r in rows if r[5] == 'permission')
+    absent_count     = sum(1 for r in rows if r[6] == 'absent')
+    permission_count = sum(1 for r in rows if r[6] == 'permission')
 
     def fmt_group(monks, show_position=True):
         lines = []
-        for i, (name, _, position, vassa, kuti, status, reason) in enumerate(monks, 1):
+        for i, (mid, name, _, position, vassa, kuti, status, reason) in enumerate(monks, 1):
             if status == 'absent':
                 icon, label = '❌', 'អវត្តមាន'
             elif status == 'late':
@@ -5450,7 +5451,15 @@ def _build_daily_attendance_message(
     home_count   = int(home_count or 0)
     sick_count   = int(sick_count or 0)
     total_txt = _to_khmer_digits(total_seated) if total_seated else '……'
-    present_n = max(0, total_seated - absent_count - permission_count) if total_seated else 0
+    if present_count is not None:
+        present_n = max(0, int(present_count))
+    elif total_seated:
+        present_n = max(
+            0,
+            total_seated - permission_count - sick_count - home_count - absent_count,
+        )
+    else:
+        present_n = 0
     present_txt = _to_khmer_digits(present_n) if total_seated else '……'
     d_fmt = _to_khmer_digits(report_day.strftime('%d/%m/%Y'))
 
@@ -5461,8 +5470,8 @@ def _build_daily_attendance_message(
         '                                             ',
     ]
 
-    bhikkhus  = [r for r in rows if r[1] == 'ភិក្ខុ']
-    samaneras = [r for r in rows if r[1] == 'សាមណេរ']
+    bhikkhus  = [r for r in rows if r[2] == 'ភិក្ខុ']
+    samaneras = [r for r in rows if r[2] == 'សាមណេរ']
 
     if bhikkhus:
         parts += [
@@ -5526,7 +5535,7 @@ def submit_attendance():
         cursor = conn.cursor()
         if seated_ids:
             cursor.execute("""
-                SELECT m.fullname, m.monk_type, m.position, m.vassa_years, m.residence,
+                SELECT m.id, m.fullname, m.monk_type, m.position, m.vassa_years, m.residence,
                        a.status, p.reason
                 FROM attendance_tbl a
                 JOIN monk_tbl m ON m.id = a.monk_id
@@ -5541,7 +5550,7 @@ def submit_attendance():
             """, (date_str, source, list(seated_ids)))
         else:
             cursor.execute("""
-                SELECT m.fullname, m.monk_type, m.position, m.vassa_years, m.residence,
+                SELECT m.id, m.fullname, m.monk_type, m.position, m.vassa_years, m.residence,
                        a.status, p.reason
                 FROM attendance_tbl a
                 JOIN monk_tbl m ON m.id = a.monk_id
@@ -5554,6 +5563,16 @@ def submit_attendance():
                 ORDER BY m.monk_type, a.status, m.fullname;
             """, (date_str, source))
         rows = cursor.fetchall()
+
+        # Permission join can return duplicate rows per monk — keep one row each.
+        seen_ids = set()
+        unique_rows = []
+        for row in rows:
+            if row[0] in seen_ids:
+                continue
+            seen_ids.add(row[0])
+            unique_rows.append(row)
+        rows = unique_rows
 
         home_count = 0
         sick_count = 0
@@ -5569,6 +5588,13 @@ def submit_attendance():
             if stat_row:
                 home_count = int(stat_row[0] or 0)
                 sick_count = int(stat_row[1] or 0)
+
+        absent_count     = sum(1 for r in rows if r[6] == 'absent')
+        permission_count = sum(1 for r in rows if r[6] == 'permission')
+        present_count = max(
+            0,
+            len(seated_ids) - permission_count - sick_count - home_count - absent_count,
+        ) if seated_ids else 0
 
         cursor.close(); conn.close()
 
@@ -5586,6 +5612,7 @@ def submit_attendance():
             total_seated=len(seated_ids),
             home_count=home_count,
             sick_count=sick_count,
+            present_count=present_count,
         )
 
         tg = _tg_send_message(TELEGRAM_TOKEN, TELEGRAM_CHAT_ID, message, req)
