@@ -10,7 +10,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&family=Kantumruy+Pro:wght@400;500;600;700&family=Moul&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/gov-shell.css?v=2">
-    <link rel="stylesheet" href="/static/css/classroom_layout.css?v=72">
+    <link rel="stylesheet" href="/static/css/classroom_layout.css?v=101">
+    <link rel="stylesheet" href="/static/css/export_preview.css?v=6">
 </head>
 
 <body class="gov-page-body{% if role != 'admin' %} cl-use-only{% endif %}">
@@ -183,22 +184,33 @@
                                 </svg>
                             </button>
                             <div class="cl-export-menu" id="cl-export-menu" role="menu">
-                                <button type="button" class="cl-export-item" id="btn-cl-export-pdf" role="menuitem">
-                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#c53030" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                                        <polyline points="14 2 14 8 20 8"></polyline>
-                                        <line x1="12" y1="18" x2="12" y2="12"></line>
-                                        <line x1="9" y1="15" x2="15" y2="15"></line>
-                                    </svg>
-                                    PDF
+                                <p class="cl-export-menu-hint">មើលមុន មុនទាញយក</p>
+                                <button type="button" class="cl-export-item cl-export-item-pdf" id="btn-cl-export-pdf" role="menuitem">
+                                    <span class="cl-export-ico" aria-hidden="true">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                            <polyline points="14 2 14 8 20 8"></polyline>
+                                            <line x1="12" y1="18" x2="12" y2="12"></line>
+                                            <line x1="9" y1="15" x2="15" y2="15"></line>
+                                        </svg>
+                                    </span>
+                                    <span class="cl-export-copy">
+                                        <span class="cl-export-title">PDF</span>
+                                        <span class="cl-export-sub">មើលមុន · A4</span>
+                                    </span>
                                 </button>
-                                <button type="button" class="cl-export-item" id="btn-cl-export-image" role="menuitem">
-                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#2b6cb0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                        <rect x="3" y="3" width="18" height="18" rx="2"></rect>
-                                        <circle cx="8.5" cy="8.5" r="1.5"></circle>
-                                        <polyline points="21 15 16 10 5 21"></polyline>
-                                    </svg>
-                                    រូបភាព (PNG)
+                                <button type="button" class="cl-export-item cl-export-item-png" id="btn-cl-export-image" role="menuitem">
+                                    <span class="cl-export-ico" aria-hidden="true">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+                                            <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                                            <polyline points="21 15 16 10 5 21"></polyline>
+                                        </svg>
+                                    </span>
+                                    <span class="cl-export-copy">
+                                        <span class="cl-export-title">PNG</span>
+                                        <span class="cl-export-sub">មើលមុន · រូបភាព</span>
+                                    </span>
                                 </button>
                             </div>
                         </div>
@@ -404,6 +416,18 @@
                     <input type="number" id="add-row-total" min="1" max="20" value="1" required>
                 </div>
                 <div class="form-field">
+                    <label for="add-row-flow">ទិសដៅតម្រៀបតុ</label>
+                    <select id="add-row-flow">
+                        <option value="row">ផ្តេក — ពីឆ្វេងទៅស្តាំ</option>
+                        <option value="column">ឈរ — ពីលើចុះក្រោម (ជាប់គ្នា)</option>
+                    </select>
+                </div>
+                <div class="form-field" id="add-row-colrows-field" hidden>
+                    <label for="add-row-colrows">ចំនួនតុក្នុងមួយជួរឈរ</label>
+                    <input type="number" id="add-row-colrows" min="0" max="30" value="0">
+                    <p class="cl-st-help">ទុក ០ = តម្រៀបចុះក្រោមទាំងអស់ក្នុងជួរឈរតែមួយ</p>
+                </div>
+                <div class="form-field">
                     <label for="add-row-priority">លំដាប់</label>
                     <input type="number" id="add-row-priority" min="1" value="1" required>
                 </div>
@@ -430,10 +454,19 @@
                     <input type="number" id="add-table-total" min="1" max="20" value="1" required>
                 </div>
                 <div class="form-field">
-                    <label for="add-table-orient">ទិសដៅ</label>
+                    <label for="add-table-flow">តម្រៀបក្នុងជួរ</label>
+                    <select id="add-table-flow">
+                        <option value="row">ផ្តេក — ពីឆ្វេងទៅស្តាំ</option>
+                        <option value="column" selected>ឈរ — ពីលើចុះក្រោម (ជាប់គ្នា)</option>
+                    </select>
+                    <p class="cl-st-help">តុថ្មីនឹងត្រូវបានដាក់ជាប់គ្នាពីលើចុះក្រោមក្នុងជួរនេះ</p>
+                </div>
+                <div class="form-field">
+                    <label for="add-table-orient">ទម្រង់តុ</label>
                     <select id="add-table-orient">
-                        <option value="horizontal">ផ្តេក (៦កន្លែង)</option>
-                        <option value="vertical">បញ្ឈរ (៨កន្លែង)</option>
+                        <option value="horizontal">ផ្តេក — ៦ កន្លែង (ស្តង់ដារ)</option>
+                        <option value="vertical">បញ្ឈរ — ៨ កន្លែង</option>
+                        <option value="column">ឈរ — តុបញ្ឈរ ឈ្មោះឆ្វេង/ស្តាំ (ពីលើចុះក្រោម)</option>
                     </select>
                 </div>
                 <div class="form-field">
@@ -468,6 +501,18 @@
                     <input type="text" id="row-edit-name" required>
                 </div>
                 <div class="form-field">
+                    <label for="row-edit-flow">ទិសដៅតម្រៀបតុ</label>
+                    <select id="row-edit-flow">
+                        <option value="row">ផ្តេក — ពីឆ្វេងទៅស្តាំ</option>
+                        <option value="column">ឈរ — ពីលើចុះក្រោម (ជាប់គ្នា)</option>
+                    </select>
+                </div>
+                <div class="form-field" id="row-edit-colrows-field" hidden>
+                    <label for="row-edit-colrows">ចំនួនតុក្នុងមួយជួរឈរ</label>
+                    <input type="number" id="row-edit-colrows" min="0" max="30" value="0">
+                    <p class="cl-st-help">ទុក ០ = តម្រៀបចុះក្រោមទាំងអស់ក្នុងជួរឈរតែមួយ</p>
+                </div>
+                <div class="form-field">
                     <label for="row-edit-priority">លំដាប់</label>
                     <input type="number" id="row-edit-priority" min="1" required>
                 </div>
@@ -496,8 +541,9 @@
                 <div class="form-field">
                     <label for="table-edit-orient">ទិសដៅ</label>
                     <select id="table-edit-orient">
-                        <option value="horizontal">ផ្តេក (៦កន្លែង)</option>
-                        <option value="vertical">បញ្ឈរ (៨កន្លែង)</option>
+                        <option value="horizontal">ផ្តេក — ៦ កន្លែង (ស្តង់ដារ)</option>
+                        <option value="vertical">បញ្ឈរ — ៨ កន្លែង</option>
+                        <option value="column">ឈរ — តុបញ្ឈរ ឈ្មោះឆ្វេង/ស្តាំ (ពីលើចុះក្រោម)</option>
                     </select>
                 </div>
                 <div class="form-field">
@@ -759,7 +805,8 @@
     <script>const PAGE_ROLE = {{ role|tojson }};</script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="/static/js/classroom_layout.js?v=84"></script>
+    <script src="/static/js/export_preview.js?v=6"></script>
+    <script src="/static/js/classroom_layout.js?v=100"></script>
 </body>
 
 </html>

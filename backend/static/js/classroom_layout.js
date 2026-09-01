@@ -160,7 +160,7 @@
             return `
                 <div class="cl-row-actions" data-mode="add">
                     <button type="button" class="cl-icon-btn cl-icon-add" data-row-action="add-row" data-row="${row.id}" title="បន្ថែមជួរ" aria-label="បន្ថែមជួរ">${ICON_ADD}<span>ជួរ</span></button>
-                    <button type="button" class="cl-icon-btn cl-icon-add" data-row-action="add-table" data-row="${row.id}" title="បន្ថែមតុ · ទីតាំងកន្លែង" aria-label="បន្ថែមតុ">${ICON_ADD}<span>តុ</span></button>
+                    <button type="button" class="cl-icon-btn cl-icon-add" data-row-action="add-table" data-row="${row.id}" title="បន្ថែមតុ · ពីលើចុះក្រោម ជាប់គ្នា" aria-label="បន្ថែមតុ">${ICON_ADD}<span>តុ</span></button>
                 </div>`;
         }
         if (editMode === 'update') {
@@ -233,10 +233,11 @@
     }
 
     function normalizeSeatSlots(orientation, seatCount, seatSlots) {
+        const isCol = orientation === 'column';
         const vertical = orientation === 'vertical';
-        const all = vertical ? V_SLOTS : H_SLOTS;
-        const fill = vertical ? V_FILL : H_FILL;
-        const max = vertical ? MAX_V : MAX_H;
+        const all = isCol ? C_SLOTS : (vertical ? V_SLOTS : H_SLOTS);
+        const fill = isCol ? C_FILL : (vertical ? V_FILL : H_FILL);
+        const max = isCol ? MAX_C : (vertical ? MAX_V : MAX_H);
         const count = Math.min(max, Math.max(0, Number(seatCount) || 0));
         let slots = Array.isArray(seatSlots)
             ? seatSlots.filter((s) => all.includes(s))
@@ -253,7 +254,7 @@
     }
 
     function seatCountFor(table) {
-        const max = table.orientation === 'vertical' ? MAX_V : MAX_H;
+        const max = table.orientation === 'vertical' ? MAX_V : (table.orientation === 'column' ? MAX_C : MAX_H);
         if (Array.isArray(table.seat_slots) && table.seat_slots.length) {
             return Math.min(max, table.seat_slots.length);
         }
@@ -261,9 +262,10 @@
     }
 
     function getSeatLayout(table) {
+        const isCol = table.orientation === 'column';
         const vertical = table.orientation === 'vertical';
-        const sideOrder = vertical ? V_SIDE_ORDER : H_SIDE_ORDER;
-        const posMap = vertical ? V_POS : H_POS;
+        const sideOrder = isCol ? C_SIDE_ORDER : (vertical ? V_SIDE_ORDER : H_SIDE_ORDER);
+        const posMap = isCol ? C_POS : (vertical ? V_POS : H_POS);
         const count = seatCountFor(table);
         const active = normalizeSeatSlots(table.orientation, count, table.seat_slots);
         const activeSet = new Set(active);
@@ -279,7 +281,7 @@
     }
 
     function emptySeats(orientation, seatCount, seatSlots) {
-        const all = orientation === 'vertical' ? V_SLOTS : H_SLOTS;
+        const all = orientation === 'column' ? C_SLOTS : (orientation === 'vertical' ? V_SLOTS : H_SLOTS);
         const active = new Set(normalizeSeatSlots(orientation, seatCount, seatSlots));
         const seats = {};
         all.forEach((s) => { seats[s] = active.has(s) ? null : undefined; });
@@ -288,7 +290,8 @@
 
     function makeTable(label, orientation, seatCount, seatSlots) {
         const orient = orientation || 'horizontal';
-        const count = seatCount != null ? seatCount : (orient === 'vertical' ? 8 : 6);
+        const defaultCount = orient === 'vertical' ? 8 : (orient === 'column' ? 4 : 6);
+        const count = seatCount != null ? seatCount : defaultCount;
         const slots = normalizeSeatSlots(orient, count, seatSlots);
         return {
             id: uid('t'),
@@ -300,13 +303,23 @@
         };
     }
 
-    function makeRow(name, priority) {
+    function makeRow(name, priority, flow, colRows) {
         return {
             id: uid('r'),
             name: name || 'ជួរ',
             priority: priority || 1,
+            flow: flow === 'column' ? 'column' : 'row',
+            col_rows: Math.max(0, Number(colRows) || 0),
             tables: [makeTable('តុ ១', 'horizontal', 6)],
         };
+    }
+
+    /* Row flow: 'column' stacks tables top-to-bottom, joined together.
+       Legacy rows built from 'column'-shaped tables keep working. */
+    function rowFlow(row) {
+        if (row.flow === 'column') return 'column';
+        if (row.flow === 'row') return 'row';
+        return row.tables && row.tables[0] && row.tables[0].orientation === 'column' ? 'column' : 'row';
     }
 
     function sortRows(rows) {
@@ -329,6 +342,8 @@
         const out = data && typeof data === 'object' ? data : { rows: [] };
         if (!Array.isArray(out.rows)) out.rows = [];
         out.rows.forEach((row) => {
+            row.flow = rowFlow(row);
+            row.col_rows = Math.max(0, Number(row.col_rows) || 0);
             (row.tables || []).forEach((table) => {
                 if (!table.seats || typeof table.seats !== 'object') {
                     table.seats = emptySeats(
@@ -365,10 +380,11 @@
 
     /* Old builds used name1..nameN; remap to balanced fill positions */
     function migrateOldSeatOrder(table) {
+        const isCol = table.orientation === 'column';
         const vertical = table.orientation === 'vertical';
-        const all = vertical ? V_SLOTS : H_SLOTS;
-        const fill = vertical ? V_FILL : H_FILL;
-        const max = vertical ? MAX_V : MAX_H;
+        const all = isCol ? C_SLOTS : (vertical ? V_SLOTS : H_SLOTS);
+        const fill = isCol ? C_FILL : (vertical ? V_FILL : H_FILL);
+        const max = isCol ? MAX_C : (vertical ? MAX_V : MAX_H);
         const count = seatCountFor(table);
         if (count <= 0 || count >= max) return;
         const active = fill.slice(0, count);
@@ -417,10 +433,12 @@
         if (orient === 'horizontal') {
             if (isSide) extra.push('cl-name-side', `cl-name-${group}`);
             else extra.push('cl-name-edge');
-        } else if (isSide) {
-            extra.push('cl-name-vert-side', `cl-name-${group}`);
-        } else {
-            extra.push('cl-name-vert-edge');
+        } else if (orient === 'vertical') {
+            if (isSide) extra.push('cl-name-vert-side', `cl-name-${group}`);
+            else extra.push('cl-name-vert-edge');
+        } else if (orient === 'column') {
+            if (isSide) extra.push('cl-name-col-side', `cl-name-${group}`);
+            else extra.push('cl-name-col-edge');
         }
         if (fullName) extra.push(nameLengthClass(fullName, isSide));
         const cls = [
@@ -453,34 +471,50 @@
         const isHorizontal = groupClass.includes('cl-group-h');
         const isSide = groupClass.includes('cl-group-side');
         const sepCls = isSide ? 'cl-name-sep cl-name-sep-v' : 'cl-name-sep';
-        const sep = (isHorizontal || isSide) && parts.length > 1
+        /* Column tables list names plainly, with no divider */
+        const sep = orient !== 'column' && (isHorizontal || isSide) && parts.length > 1
             ? `<span class="${sepCls}" aria-hidden="true">|</span>`
             : '';
         const inner = sep ? parts.join(sep) : parts.join('');
         return `<div class="cl-seat-group ${groupClass}">${inner}</div>`;
     }
 
-    function tableControls(table, row, ti, rowTableCount) {
+    function tableControls(table, row, ti, rowTableCount, orient) {
         if (!CAN_EDIT_LAYOUT) return '';
+        /* Column rows stack top-to-bottom — no per-table move buttons */
+        if (rowFlow(row) === 'column') return '';
+        const isCol = orient === 'column';
+        const prev = isCol ? 'up' : 'left';
+        const next = isCol ? 'down' : 'right';
+        const prevLabel = isCol ? 'ឡើងលើ' : 'ទៅឆ្វេង';
+        const nextLabel = isCol ? 'ចុះក្រោម' : 'ទៅស្តាំ';
+        const prevArrow = isCol ? '&#8593;' : '&#8592;';
+        const nextArrow = isCol ? '&#8595;' : '&#8594;';
         return `
             <div class="cl-table-controls">
-                <button type="button" title="ទៅឆ្វេង" data-move="left" data-row="${row.id}" data-table="${table.id}" ${ti === 0 ? 'disabled' : ''} aria-label="ទៅឆ្វេង">&#8592;</button>
-                <button type="button" title="ទៅស្តាំ" data-move="right" data-row="${row.id}" data-table="${table.id}" ${ti === rowTableCount - 1 ? 'disabled' : ''} aria-label="ទៅស្តាំ">&#8594;</button>
+                <button type="button" title="${prevLabel}" data-move="${prev}" data-row="${row.id}" data-table="${table.id}" ${ti === 0 ? 'disabled' : ''} aria-label="${prevLabel}">${prevArrow}</button>
+                <button type="button" title="${nextLabel}" data-move="${next}" data-row="${row.id}" data-table="${table.id}" ${ti === rowTableCount - 1 ? 'disabled' : ''} aria-label="${nextLabel}">${nextArrow}</button>
             </div>`;
     }
 
     function renderTableGrid(table, row, ti, activeSlots, rowTableCount, orient, topSlots, leftSlots, rightSlots, botSlots, typeLabel) {
         const gh = (slots, key) => renderSeatGroup(slots, table, row, activeSlots, orient, 'cl-group-h', key);
         const gv = (slots, key) => renderSeatGroup(slots, table, row, activeSlots, orient, 'cl-group-v cl-group-side', key);
-        const surfaceCls = orient === 'vertical' ? 'cl-table-surface cl-surface-vert' : 'cl-table-surface';
-        const tableCls = orient === 'vertical' ? 'cl-vertical' : 'cl-horizontal';
+        const surfaceCls = orient === 'vertical' ? 'cl-table-surface cl-surface-vert'
+            : orient === 'column' ? 'cl-table-surface cl-surface-col'
+            : 'cl-table-surface';
+        const tableCls = orient === 'vertical' ? 'cl-vertical'
+            : orient === 'column' ? 'cl-column'
+            : 'cl-horizontal';
+        const hideColSurfaceLabel = orient === 'column' && rowFlow(row) === 'column';
+        const surfaceText = hideColSurfaceLabel ? '' : escapeHtml(table.label);
         return `
             <div class="cl-table-wrap" data-row="${row.id}" data-table="${table.id}">
-                ${tableControls(table, row, ti, rowTableCount)}
+                ${tableControls(table, row, ti, rowTableCount, orient)}
                 <div class="cl-table cl-table-grid ${tableCls}">
                     <div class="cl-grid-top">${gh(topSlots, 'top')}</div>
                     <div class="cl-grid-left">${gv(leftSlots, 'left')}</div>
-                    <div class="cl-grid-center ${surfaceCls}">${escapeHtml(table.label)}</div>
+                    <div class="cl-grid-center ${surfaceCls}">${surfaceText}</div>
                     <div class="cl-grid-right">${gv(rightSlots, 'right')}</div>
                     <div class="cl-grid-bot">${gh(botSlots, 'bot')}</div>
                 </div>
@@ -502,6 +536,62 @@
             table, row, ti, activeSlots, rowTableCount, 'vertical',
             L.top, L.left, L.right, L.bot, 'បញ្ឈរ',
         );
+    }
+
+    function renderColumnTable(table, row, ti, activeSlots, rowTableCount) {
+        const L = getSeatLayout(table);
+        /* Tall narrow surface with names down the left and right edges. */
+        return renderTableGrid(
+            table, row, ti, activeSlots, rowTableCount, 'column',
+            [], L.left, L.right, [], 'ឈរ',
+        );
+    }
+
+    function renderColumnSideGroup(table, row, side) {
+        const L = getSeatLayout(table);
+        const activeSlots = slotsForTable(table);
+        const slots = side === 'left' ? L.left : L.right;
+        const parts = slots
+            .map((slot) => renderSeatBtn(table, row, slot, activeSlots, 'column', side))
+            .filter(Boolean);
+        if (!parts.length) return '';
+        return `<div class="cl-seat-group cl-group-v cl-group-side">${parts.join('')}</div>`;
+    }
+
+    /* One center label (តុ ១, ២, ៣…) + separate left/right name box per table */
+    function renderColumnStack(chunk, row, stackIdx) {
+        if (!chunk.length) return '';
+        const tableIds = chunk.map((t) => t.id).join(' ');
+        const stackRows = chunk.length;
+
+        const leftCells = chunk.map((table, i) => {
+            const group = renderColumnSideGroup(table, row, 'left');
+            const rowNum = i + 1;
+            const edgeCls = i === 0 ? ' cl-col-side-first' : '';
+            const edgeClsEnd = i === chunk.length - 1 ? ' cl-col-side-last' : '';
+            return group
+                ? `<div class="cl-col-side-cell cl-col-side-left${edgeCls}${edgeClsEnd}" style="grid-column:1;grid-row:${rowNum}" data-table="${table.id}">${group}</div>`
+                : '';
+        }).join('');
+
+        const rightCells = chunk.map((table, i) => {
+            const group = renderColumnSideGroup(table, row, 'right');
+            const rowNum = i + 1;
+            const edgeCls = i === 0 ? ' cl-col-side-first' : '';
+            const edgeClsEnd = i === chunk.length - 1 ? ' cl-col-side-last' : '';
+            return group
+                ? `<div class="cl-col-side-cell cl-col-side-right${edgeCls}${edgeClsEnd}" style="grid-column:3;grid-row:${rowNum}" data-table="${table.id}">${group}</div>`
+                : '';
+        }).join('');
+
+        return `
+            <div class="cl-table-wrap cl-col-stack-unified" data-row="${row.id}" data-table-ids="${tableIds}" data-stack="${stackIdx}">
+                <div class="cl-col-unified-grid" style="--cl-stack-rows: ${stackRows}">
+                    ${leftCells}
+                    <div class="cl-surface-col-stack" style="grid-column:2;grid-row:1 / span ${stackRows}"></div>
+                    ${rightCells}
+                </div>
+            </div>`;
     }
 
     function usedMonkIds(exclude) {
@@ -630,18 +720,44 @@
             const tableCount = row.tables.length;
             let seatCount = 0;
             row.tables.forEach((t) => { seatCount += slotsForTable(t).length; });
-            const tablesHtml = row.tables.map((table, ti) => {
-                const orient = table.orientation === 'vertical' ? 'vertical' : 'horizontal';
-                const activeSlots = slotsForTable(table);
+            const isColumnRow = rowFlow(row) === 'column';
 
+            function renderOneTable(table, ti) {
+                const orient = table.orientation === 'vertical' ? 'vertical'
+                    : table.orientation === 'column' ? 'column'
+                    : 'horizontal';
+                const activeSlots = slotsForTable(table);
+                if (orient === 'column') return renderColumnTable(table, row, ti, activeSlots, row.tables.length);
                 if (orient === 'horizontal') {
                     return renderHorizontalTable(table, row, ti, activeSlots, row.tables.length);
                 }
                 return renderVerticalTable(table, row, ti, activeSlots, row.tables.length);
-            }).join('');
+            }
+
+            let innerContainer;
+            if (isColumnRow) {
+                /* Group into vertical stacks so tables join flush (no grid row gaps) */
+                const colRows = Number(row.col_rows) || 0;
+                const chunkSize = colRows > 0 ? colRows : row.tables.length;
+                const stacks = [];
+                for (let i = 0; i < row.tables.length; i += chunkSize) {
+                    stacks.push(row.tables.slice(i, i + chunkSize));
+                }
+                const stacksHtml = stacks.map((chunk, stackIdx) => {
+                    const unifiedHtml = renderColumnStack(chunk, row, stackIdx);
+                    return `<div class="cl-col-stack">
+                        <div class="cl-col-stack-label"><span>ជួរតុទី${toKhmer(stackIdx + 1)}</span></div>
+                        ${unifiedHtml}
+                    </div>`;
+                }).join('');
+                innerContainer = `<div class="cl-tables-column">${stacksHtml}</div>`;
+            } else {
+                const tablesHtml = row.tables.map((table, ti) => renderOneTable(table, ti)).join('');
+                innerContainer = `<div class="cl-tables-row">${tablesHtml}</div>`;
+            }
 
             return `
-                <div class="cl-row-block" data-row="${row.id}">
+                <div class="cl-row-block${isColumnRow ? ' cl-row-block-column' : ''}" data-row="${row.id}">
                     <header class="cl-row-head">
                         <span class="cl-row-priority">${toKhmer(row.priority)}</span>
                         <h3 class="cl-row-name">${escapeHtml(row.name)}</h3>
@@ -652,7 +768,7 @@
                         ${renderRowActions(row)}
                     </header>
                     <div class="cl-tables-scroll">
-                        <div class="cl-tables-row">${tablesHtml}</div>
+                        ${innerContainer}
                     </div>
                 </div>`;
         }).join('');
@@ -773,7 +889,9 @@
         scrollFocus = null;
         requestAnimationFrame(() => {
             if (focus?.tableId) {
-                const el = canvas.querySelector(`.cl-table-wrap[data-table="${focus.tableId}"]`);
+                const el = canvas.querySelector(
+                    `.cl-table-wrap[data-table="${focus.tableId}"], .cl-col-stack-unified[data-table-ids~="${focus.tableId}"]`
+                );
                 if (el) {
                     el.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' });
                     el.classList.add('cl-table-focus');
@@ -792,7 +910,8 @@
     }
 
     function syncSeatMax(orientEl, seatsEl) {
-        const max = orientEl.value === 'vertical' ? MAX_V : MAX_H;
+        const o = orientEl.value;
+        const max = o === 'vertical' ? MAX_V : (o === 'column' ? MAX_C : MAX_H);
         seatsEl.max = max;
         if (parseInt(seatsEl.value, 10) > max) seatsEl.value = String(max);
         return max;
@@ -819,15 +938,37 @@
         name5: 'ស្តាំ១', name6: 'ស្តាំ២', name7: 'ក្រោម២', name8: 'ក្រោម១',
     };
 
+    /* ── Column (ឈរ) layout ──
+       Tall narrow table; names run down the LEFT and RIGHT edges. */
+    const C_SLOTS = ['name1', 'name2', 'name3', 'name4', 'name5', 'name6'];
+    const MAX_C = 6;
+    /* fill pairs across: left1 right1 left2 right2 left3 right3 */
+    const C_FILL = ['name1', 'name4', 'name2', 'name5', 'name3', 'name6'];
+    const C_POS = {
+        name1: 'left', name2: 'left', name3: 'left',
+        name4: 'right', name5: 'right', name6: 'right',
+    };
+    const C_SIDE_ORDER = {
+        top: [],
+        left: ['name1', 'name2', 'name3'],
+        right: ['name4', 'name5', 'name6'],
+        bot: [],
+    };
+    const SLOT_LABEL_C = {
+        name1: 'ឆ្វេង១', name2: 'ឆ្វេង២', name3: 'ឆ្វេង៣',
+        name4: 'ស្តាំ១', name5: 'ស្តាំ២', name6: 'ស្តាំ៣',
+    };
+
     function renderSeatTemplate(rootId, countId, orientation, needed, selected, onToggle) {
         const root = document.getElementById(rootId);
         const countEl = document.getElementById(countId);
         if (!root) return;
+        const isCol = orientation === 'column';
         const vertical = orientation === 'vertical';
-        const sideOrder = vertical ? V_SIDE_ORDER : H_SIDE_ORDER;
-        const labels = vertical ? SLOT_LABEL_V : SLOT_LABEL;
+        const sideOrder = isCol ? C_SIDE_ORDER : (vertical ? V_SIDE_ORDER : H_SIDE_ORDER);
+        const labels = isCol ? SLOT_LABEL_C : (vertical ? SLOT_LABEL_V : SLOT_LABEL);
         const selectedSet = new Set(selected);
-        const max = vertical ? MAX_V : MAX_H;
+        const max = isCol ? MAX_C : (vertical ? MAX_V : MAX_H);
         if (countEl) countEl.textContent = `(${toKhmer(selected.length)} / ${toKhmer(needed)} · អតិបរមា ${toKhmer(max)})`;
 
         const slotBtn = (slot, side) => {
@@ -873,8 +1014,9 @@
     }
 
     function refreshAddTableTemplate(autoFill) {
-        const orient = document.getElementById('add-table-orient').value === 'vertical' ? 'vertical' : 'horizontal';
-        const max = orient === 'vertical' ? MAX_V : MAX_H;
+        const v = document.getElementById('add-table-orient').value;
+        const orient = v === 'vertical' ? 'vertical' : (v === 'column' ? 'column' : 'horizontal');
+        const max = orient === 'vertical' ? MAX_V : (orient === 'column' ? MAX_C : MAX_H);
         let needed = parseInt(document.getElementById('add-table-seats').value, 10);
         if (!Number.isFinite(needed)) needed = max;
         needed = Math.max(0, Math.min(max, needed));
@@ -887,8 +1029,9 @@
     }
 
     function refreshEditTableTemplate(autoFill) {
-        const orient = document.getElementById('table-edit-orient').value === 'vertical' ? 'vertical' : 'horizontal';
-        const max = orient === 'vertical' ? MAX_V : MAX_H;
+        const v = document.getElementById('table-edit-orient').value;
+        const orient = v === 'vertical' ? 'vertical' : (v === 'column' ? 'column' : 'horizontal');
+        const max = orient === 'vertical' ? MAX_V : (orient === 'column' ? MAX_C : MAX_H);
         let needed = parseInt(document.getElementById('table-edit-seats').value, 10);
         if (!Number.isFinite(needed)) needed = max;
         needed = Math.max(0, Math.min(max, needed));
@@ -906,11 +1049,22 @@
         });
     }
 
+    /* Show the "tables per column" field only when the row stacks vertically */
+    function syncFlowFields(flowId, fieldId) {
+        const sel = document.getElementById(flowId);
+        const field = document.getElementById(fieldId);
+        if (!sel || !field) return;
+        field.hidden = sel.value !== 'column';
+    }
+
     function openAddRow(fromRowId) {
         const from = layout.rows.find((r) => r.id === fromRowId);
         const nextPri = Math.max(0, ...layout.rows.map((r) => r.priority || 0)) + 1;
         document.getElementById('add-row-name').value = `ជួរទី${toKhmer(layout.rows.length + 1)}`;
         document.getElementById('add-row-total').value = '1';
+        document.getElementById('add-row-flow').value = from ? rowFlow(from) : 'row';
+        document.getElementById('add-row-colrows').value = String(from?.col_rows || 0);
+        syncFlowFields('add-row-flow', 'add-row-colrows-field');
         document.getElementById('add-row-priority').value = String(from ? (from.priority || 1) + 1 : nextPri);
         addRowModal.hidden = false;
         document.getElementById('add-row-name').focus();
@@ -925,9 +1079,11 @@
         if (!row) return;
         const last = row.tables[row.tables.length - 1];
         const orient = last?.orientation || 'horizontal';
-        const seats = last?.seat_count || (orient === 'vertical' ? 8 : 6);
+        const seats = last?.seat_count || (orient === 'vertical' ? 8 : (orient === 'column' ? 4 : 6));
         document.getElementById('add-table-row-id').value = rowId;
         document.getElementById('add-table-total').value = '1';
+        const flowEl = document.getElementById('add-table-flow');
+        if (flowEl) flowEl.value = 'column';
         document.getElementById('add-table-orient').value = orient;
         document.getElementById('add-table-seats').value = String(seats);
         syncSeatMax(document.getElementById('add-table-orient'), document.getElementById('add-table-seats'));
@@ -945,6 +1101,9 @@
         if (!row) return;
         document.getElementById('row-edit-id').value = row.id;
         document.getElementById('row-edit-name').value = row.name || '';
+        document.getElementById('row-edit-flow').value = rowFlow(row);
+        document.getElementById('row-edit-colrows').value = String(row.col_rows || 0);
+        syncFlowFields('row-edit-flow', 'row-edit-colrows-field');
         document.getElementById('row-edit-priority').value = String(row.priority || 1);
         rowEditModal.hidden = false;
         document.getElementById('row-edit-name').focus();
@@ -964,11 +1123,11 @@
         const sel = document.getElementById('table-edit-select');
         fillTableSelect(sel, row, row.tables[0].id);
         const table = row.tables[0];
-        document.getElementById('table-edit-orient').value = table.orientation === 'vertical' ? 'vertical' : 'horizontal';
+        document.getElementById('table-edit-orient').value = table.orientation === 'vertical' ? 'vertical' : (table.orientation === 'column' ? 'column' : 'horizontal');
         document.getElementById('table-edit-seats').value = String(table.seat_count || (table.orientation === 'vertical' ? 8 : 6));
         syncSeatMax(document.getElementById('table-edit-orient'), document.getElementById('table-edit-seats'));
         draftEditSlots = normalizeSeatSlots(
-            table.orientation === 'vertical' ? 'vertical' : 'horizontal',
+            table.orientation === 'vertical' ? 'vertical' : (table.orientation === 'column' ? 'column' : 'horizontal'),
             table.seat_count || (table.orientation === 'vertical' ? 8 : 6),
             table.seat_slots || slotsForTable(table),
         );
@@ -1058,7 +1217,7 @@
         if (!row) return;
         const idx = row.tables.findIndex((t) => t.id === tableId);
         if (idx < 0) return;
-        const swap = dir === 'left' ? idx - 1 : idx + 1;
+        const swap = (dir === 'left' || dir === 'up') ? idx - 1 : idx + 1;
         if (swap < 0 || swap >= row.tables.length) return;
         [row.tables[idx], row.tables[swap]] = [row.tables[swap], row.tables[idx]];
         scrollFocus = { rowId, tableId };
@@ -1144,7 +1303,7 @@
                 let n = Math.max(1, Math.min(20, parseInt(input.value, 10) || 1));
                 input.value = n;
                 const orient = row.tables[0]?.orientation || 'horizontal';
-                const seatDefault = orient === 'vertical' ? 8 : 6;
+                const seatDefault = orient === 'vertical' ? 8 : (orient === 'column' ? 4 : 6);
                 while (row.tables.length < n) {
                     row.tables.push(makeTable(`តុ ${toKhmer(row.tables.length + 1)}`, orient, seatDefault));
                 }
@@ -1161,7 +1320,7 @@
                 const row = draftRows.find((r) => r.id === sel.dataset.row);
                 if (!row) return;
                 const orient = sel.value;
-                const seatDefault = orient === 'vertical' ? 8 : 6;
+                const seatDefault = orient === 'vertical' ? 8 : (orient === 'column' ? 4 : 6);
                 row.tables.forEach((t, i) => {
                     applyTableOrientation(t, orient, seatDefault, null);
                     t.label = `តុ ${toKhmer(i + 1)}`;
@@ -2044,17 +2203,24 @@
         const row = layout.rows.find((r) => r.id === rowId);
         const table = row?.tables.find((t) => t.id === document.getElementById('table-edit-select').value);
         if (!table) return;
-        document.getElementById('table-edit-orient').value = table.orientation === 'vertical' ? 'vertical' : 'horizontal';
+        document.getElementById('table-edit-orient').value = table.orientation === 'vertical' ? 'vertical' : (table.orientation === 'column' ? 'column' : 'horizontal');
         document.getElementById('table-edit-seats').value = String(
             table.seat_count || (table.orientation === 'vertical' ? 8 : 6),
         );
         syncSeatMax(document.getElementById('table-edit-orient'), document.getElementById('table-edit-seats'));
         draftEditSlots = normalizeSeatSlots(
-            table.orientation === 'vertical' ? 'vertical' : 'horizontal',
+            table.orientation === 'vertical' ? 'vertical' : (table.orientation === 'column' ? 'column' : 'horizontal'),
             table.seat_count || (table.orientation === 'vertical' ? 8 : 6),
             table.seat_slots || slotsForTable(table),
         );
         refreshEditTableTemplate(true);
+    });
+
+    document.getElementById('add-row-flow')?.addEventListener('change', () => {
+        syncFlowFields('add-row-flow', 'add-row-colrows-field');
+    });
+    document.getElementById('row-edit-flow')?.addEventListener('change', () => {
+        syncFlowFields('row-edit-flow', 'row-edit-colrows-field');
     });
 
     document.getElementById('add-row-form').addEventListener('submit', (e) => {
@@ -2064,10 +2230,15 @@
         total = Math.max(1, Math.min(20, total));
         const priority = Math.max(1, parseInt(document.getElementById('add-row-priority').value, 10) || 1);
         if (!name) return;
-        const row = makeRow(name, priority);
+        const flow = document.getElementById('add-row-flow').value === 'column' ? 'column' : 'row';
+        const colRows = Math.max(0, parseInt(document.getElementById('add-row-colrows').value, 10) || 0);
+        const row = makeRow(name, priority, flow, colRows);
         row.tables = [];
+        /* Vertically stacked rows default to the tall narrow ឈរ table shape */
+        const shape = flow === 'column' ? 'column' : 'horizontal';
+        const shapeSeats = flow === 'column' ? 4 : 6;
         for (let i = 0; i < total; i += 1) {
-            row.tables.push(makeTable(`តុ ${toKhmer(i + 1)}`, 'horizontal', 6));
+            row.tables.push(makeTable(`តុ ${toKhmer(i + 1)}`, shape, shapeSeats));
         }
         layout.rows.push(row);
         markDirty();
@@ -2083,8 +2254,9 @@
         if (!row) return;
         let total = parseInt(document.getElementById('add-table-total').value, 10) || 1;
         total = Math.max(1, Math.min(20, total));
-        const orient = document.getElementById('add-table-orient').value === 'vertical' ? 'vertical' : 'horizontal';
-        const max = orient === 'vertical' ? MAX_V : MAX_H;
+        const orientRaw = document.getElementById('add-table-orient').value;
+        const orient = orientRaw === 'vertical' ? 'vertical' : (orientRaw === 'column' ? 'column' : 'horizontal');
+        const max = orient === 'vertical' ? MAX_V : (orient === 'column' ? MAX_C : MAX_H);
         let seats = parseInt(document.getElementById('add-table-seats').value, 10);
         if (!Number.isFinite(seats)) seats = max;
         seats = Math.max(0, Math.min(max, seats));
@@ -2094,6 +2266,9 @@
             refreshAddTableTemplate(true);
             return;
         }
+        const stackFlow = document.getElementById('add-table-flow')?.value === 'row' ? 'row' : 'column';
+        row.flow = stackFlow;
+        if (stackFlow === 'column' && !row.col_rows) row.col_rows = 0;
         for (let i = 0; i < total; i += 1) {
             row.tables.push(makeTable(`តុ ${toKhmer(row.tables.length + 1)}`, orient, seats, slots));
         }
@@ -2116,6 +2291,8 @@
         if (!name) return;
         row.name = name;
         row.priority = Math.max(1, priority);
+        row.flow = document.getElementById('row-edit-flow').value === 'column' ? 'column' : 'row';
+        row.col_rows = Math.max(0, parseInt(document.getElementById('row-edit-colrows').value, 10) || 0);
         markDirty();
         closeEditRow();
         renderCanvas();
@@ -2128,8 +2305,9 @@
         const row = layout.rows.find((r) => r.id === rowId);
         const table = row?.tables.find((t) => t.id === document.getElementById('table-edit-select').value);
         if (!table) return;
-        const orient = document.getElementById('table-edit-orient').value === 'vertical' ? 'vertical' : 'horizontal';
-        const max = orient === 'vertical' ? MAX_V : MAX_H;
+        const orientRaw = document.getElementById('table-edit-orient').value;
+        const orient = orientRaw === 'vertical' ? 'vertical' : (orientRaw === 'column' ? 'column' : 'horizontal');
+        const max = orient === 'vertical' ? MAX_V : (orient === 'column' ? MAX_C : MAX_H);
         let seats = parseInt(document.getElementById('table-edit-seats').value, 10);
         if (!Number.isFinite(seats)) seats = max;
         seats = Math.max(0, Math.min(max, seats));
@@ -2322,7 +2500,7 @@
         document.body.appendChild(wrap);
 
         try {
-            return await html2canvas(wrap, {
+            const shot = await html2canvas(wrap, {
                 scale: 2,
                 useCORS: true,
                 backgroundColor: '#ffffff',
@@ -2331,72 +2509,110 @@
                 height: wrap.scrollHeight,
                 windowWidth: wrap.scrollWidth,
             });
+            const wrapBox = wrap.getBoundingClientRect();
+            const scaleY = shot.height / Math.max(wrap.scrollHeight, 1);
+            const rowBounds = Array.from(wrap.querySelectorAll('.cl-row-block')).map((el) => {
+                const r = el.getBoundingClientRect();
+                return {
+                    top: Math.max(0, Math.round((r.top - wrapBox.top) * scaleY)),
+                    bottom: Math.min(shot.height, Math.round((r.bottom - wrapBox.top) * scaleY)),
+                };
+            }).filter((b) => b.bottom > b.top);
+            return { canvas: shot, rowBounds };
         } finally {
             document.body.removeChild(wrap);
         }
     }
 
-    function downloadBlob(blob, filename) {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 1500);
+    function classroomPdfOrientation(src) {
+        return src.width >= src.height ? 'landscape' : 'portrait';
     }
 
-    async function exportClassroomImage() {
-        const canvasImg = await captureClassroomLayout();
-        const blob = await new Promise((resolve) => canvasImg.toBlob(resolve, 'image/png'));
-        if (!blob) throw new Error('មិនអាចបង្កើតរូបភាព');
-        downloadBlob(blob, `ប្លង់តុឆាន់_${getActiveDate()}.png`);
+    function classroomPdfPageHeight(src, orientation) {
+        const dims = typeof ExportPreview?.a4PageSize === 'function'
+            ? ExportPreview.a4PageSize(orientation)
+            : (orientation === 'landscape' ? { w: 1123, h: 794 } : { w: 794, h: 1123 });
+        return Math.max(1, Math.round(src.width * (dims.h / dims.w)));
     }
 
-    async function exportClassroomPdf() {
+    function drawClassroomPdfSlice(src, startY, endY, pageH) {
+        const sliceH = Math.max(1, endY - startY);
+        const page = document.createElement('canvas');
+        page.width = src.width;
+        page.height = pageH;
+        const ctx = page.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, page.width, page.height);
+        const fit = Math.min(1, pageH / sliceH);
+        const drawW = src.width * fit;
+        const drawH = sliceH * fit;
+        const dx = Math.round((src.width - drawW) / 2);
+        ctx.drawImage(src, 0, startY, src.width, sliceH, dx, 0, drawW, drawH);
+        return page;
+    }
+
+    /* Split at whole row-blocks so stacked tables are never cut mid-box. */
+    function paginateClassroomCanvas(src, rowBounds, orientation) {
+        const pageH = classroomPdfPageHeight(src, orientation);
+        const totalH = src.height;
+        if (!rowBounds.length || totalH <= pageH + 8) {
+            return [drawClassroomPdfSlice(src, 0, totalH, pageH)];
+        }
+
+        const rows = rowBounds.slice().sort((a, b) => a.top - b.top);
+        const pages = [];
+        let pageStart = 0;
+        let idx = 0;
+
+        while (pageStart < totalH - 4) {
+            const limit = pageStart + pageH;
+            let lastFit = -1;
+            for (let i = idx; i < rows.length; i++) {
+                if (rows[i].top < pageStart - 2) continue;
+                if (rows[i].bottom <= limit) lastFit = i;
+                else break;
+            }
+
+            let pageEnd;
+            if (lastFit >= idx) {
+                pageEnd = rows[lastFit].bottom;
+                const nextTop = rows[lastFit + 1] ? rows[lastFit + 1].top : totalH;
+                pageEnd = Math.min(totalH, Math.max(pageEnd, Math.min(pageEnd + 12, nextTop)));
+                idx = lastFit + 1;
+            } else if (idx < rows.length && rows[idx].top < limit) {
+                pageEnd = Math.min(totalH, rows[idx].bottom);
+                idx += 1;
+            } else {
+                pageEnd = totalH;
+            }
+
+            if (pageEnd <= pageStart) pageEnd = Math.min(totalH, pageStart + pageH);
+            pages.push(drawClassroomPdfSlice(src, pageStart, pageEnd, pageH));
+            pageStart = pageEnd;
+            if (pages.length > 30) break;
+        }
+        return pages.length ? pages : [drawClassroomPdfSlice(src, 0, totalH, pageH)];
+    }
+
+    function saveClassroomPdfPages(pages, orientation) {
         if (!window.jspdf?.jsPDF) throw new Error('មិនអាចផ្ទុក PDF');
-        const canvasImg = await captureClassroomLayout();
         const { jsPDF } = window.jspdf;
-        const orient = canvasImg.width >= canvasImg.height ? 'landscape' : 'portrait';
-        const pdf = new jsPDF({ orientation: orient, unit: 'mm', format: 'a4' });
+        const pdf = new jsPDF({ orientation, unit: 'mm', format: 'a4' });
         const pageW = pdf.internal.pageSize.getWidth();
         const pageH = pdf.internal.pageSize.getHeight();
         const margin = 8;
         const maxW = pageW - margin * 2;
         const maxH = pageH - margin * 2;
-        const ratio = Math.min(maxW / canvasImg.width, maxH / canvasImg.height);
-        const imgW = canvasImg.width * ratio;
-        const imgH = canvasImg.height * ratio;
-        const imgData = canvasImg.toDataURL('image/jpeg', 0.92);
 
-        if (imgH <= maxH) {
-            const x = margin + (maxW - imgW) / 2;
-            const y = margin + (maxH - imgH) / 2;
-            pdf.addImage(imgData, 'JPEG', x, y, imgW, imgH);
-        } else {
-            // Multi-page: slice by page height in source pixels
-            const pageSrcH = Math.floor(maxH / ratio);
-            let srcY = 0;
-            let page = 0;
-            while (srcY < canvasImg.height) {
-                const sliceH = Math.min(pageSrcH, canvasImg.height - srcY);
-                const sliceCanvas = document.createElement('canvas');
-                sliceCanvas.width = canvasImg.width;
-                sliceCanvas.height = sliceH;
-                const ctx = sliceCanvas.getContext('2d');
-                ctx.fillStyle = '#ffffff';
-                ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
-                ctx.drawImage(canvasImg, 0, srcY, canvasImg.width, sliceH, 0, 0, canvasImg.width, sliceH);
-                if (page > 0) pdf.addPage();
-                const sliceData = sliceCanvas.toDataURL('image/jpeg', 0.92);
-                const drawH = sliceH * ratio;
-                const x = margin + (maxW - imgW) / 2;
-                pdf.addImage(sliceData, 'JPEG', x, margin, imgW, drawH);
-                srcY += sliceH;
-                page += 1;
-            }
-        }
+        pages.forEach((page, i) => {
+            if (i > 0) pdf.addPage();
+            const ratio = Math.min(maxW / page.width, maxH / page.height);
+            const w = page.width * ratio;
+            const h = page.height * ratio;
+            const x = margin + (maxW - w) / 2;
+            const y = margin + (maxH - h) / 2;
+            pdf.addImage(page.toDataURL('image/jpeg', 0.92), 'JPEG', x, y, w, h);
+        });
         pdf.save(`ប្លង់តុឆាន់_${getActiveDate()}.pdf`);
     }
 
@@ -2413,9 +2629,38 @@
         }
         if (trigger) trigger.disabled = true;
         try {
-            if (kind === 'pdf') await exportClassroomPdf();
-            else await exportClassroomImage();
-            toast(kind === 'pdf' ? 'បានទាញយក PDF ✓' : 'បានទាញយករូបភាព ✓');
+            if (typeof ExportPreview?.open !== 'function') {
+                throw new Error('មិនអាចផ្ទុកមើលមុន');
+            }
+            const captured = await captureClassroomLayout();
+            const canvasImg = captured.canvas;
+            const date = getActiveDate();
+            const isPdf = kind === 'pdf';
+            const orient = classroomPdfOrientation(canvasImg);
+            const pages = isPdf
+                ? paginateClassroomCanvas(canvasImg, captured.rowBounds || [], orient)
+                : [canvasImg];
+            await ExportPreview.open({
+                title: 'ប្លង់តុឆាន់',
+                subtitle: `វត្តនិរោធរង្សី · ${date}`,
+                formatLabel: isPdf
+                    ? (orient === 'landscape' ? 'PDF · A4 ផ្តេក' : 'PDF · A4 បញ្ឈរ')
+                    : 'រូបភាព PNG',
+                hint: 'ពិនិត្យប្លង់មុនទាញយក',
+                preview: isPdf
+                    ? { type: 'canvases', canvases: pages }
+                    : { type: 'canvas', canvas: canvasImg },
+                onDownload: async () => {
+                    if (isPdf) {
+                        saveClassroomPdfPages(pages, orient);
+                    } else {
+                        const blob = await new Promise((resolve) => canvasImg.toBlob(resolve, 'image/png'));
+                        if (!blob) throw new Error('មិនអាចបង្កើតរូបភាព');
+                        ExportPreview.downloadBlob(blob, `ប្លង់តុឆាន់_${date}.png`);
+                    }
+                    toast(isPdf ? 'បានទាញយក PDF ✓' : 'បានទាញយករូបភាព ✓');
+                },
+            });
         } catch (err) {
             toast(err.message || 'មានបញ្ហា', false);
         } finally {
