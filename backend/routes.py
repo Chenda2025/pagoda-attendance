@@ -4233,7 +4233,7 @@ def _fest_normalize_shifts(raw):
         return [dict(s) for s in _FEST_DEFAULT_SHIFTS]
     out = []
     seen_session = set()
-    for i, item in enumerate(raw[:8]):
+    for i, item in enumerate(raw[:20]):
         if not isinstance(item, dict):
             continue
         label = str(item.get('label') or f'វេនទី {i + 1}').strip()[:80]

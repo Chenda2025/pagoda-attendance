@@ -4,6 +4,7 @@
     const CAN_EDIT = PAGE_ROLE === 'admin';
     const PAGE_SIZE = 50;
     const SHIFTS_PER_PAGE = 2;
+    const MAX_SHIFTS = 20;
     const KHMER = '\u17e0\u17e1\u17e2\u17e3\u17e4\u17e5\u17e6\u17e7\u17e8\u17e9';
     const toKhmer = (n) => String(n).replace(/\d/g, (d) => KHMER[d]);
     const T = {"title": "\u1780\u1798\u17d2\u1798\u179c\u17b7\u1792\u17b8\u1794\u17bb\u178e\u17d2\u1799\u1795\u17d2\u179f\u17c1\u1784", "pagoda": "\u179c\u178f\u17d2\u178f\u1793\u17b7\u179a\u17c4\u1792\u179a\u1784\u17d2\u179f\u17b8", "morning": "\u1796\u17d2\u179a\u17b9\u1780", "evening": "\u179b\u17d2\u1784\u17b6\u1785", "shift": "\u179c\u17c1\u1793\u1791\u17b8", "preview": "\u1798\u17be\u179b\u1798\u17bb\u1793", "export": "\u1793\u17b6\u17c6\u1785\u17c1\u1789", "image": "\u179a\u17bc\u1794\u1797\u17b6\u1796", "save": "\u1794\u17b6\u1793\u179a\u1780\u17d2\u179f\u17b6\u1791\u17bb\u1780", "saving_word": "\u1780\u17c6\u1796\u17bb\u1784\u1795\u17d2\u1791\u17bb\u1780", "auto": "\u179f\u17d2\u179c\u17d0\u1799\u1794\u17d2\u179a\u179c\u178f\u17d2\u178f\u17b7", "all": "\u1791\u17b6\u17c6\u1784\u17a2\u179f\u17cb", "delete": "\u179b\u17bb\u1794", "dup": "\u1785\u1798\u17d2\u179b\u1784", "search": "\u179f\u17d2\u179c\u17c2\u1784\u179a\u1780\u1788\u17d2\u1798\u17c4\u17c7\u2026", "bhikkhu": "\u1797\u17b7\u1780\u17d2\u1781\u17bb", "samanera": "\u179f\u17b6\u1798\u178e\u17c1\u179a", "year": "\u1786\u17d2\u1793\u17b6\u17c6", "hour": "\u1798\u17c9\u17c4\u1784", "day": "\u1790\u17d2\u1784\u17c3", "not_yet": "\u1798\u17b7\u1793\u1791\u17b6\u1793\u17cb", "create": "\u1794\u1784\u17d2\u1780\u17be\u178f", "official": "\u1795\u17d2\u179b\u17bc\u179c\u1780\u17b6\u179a", "report": "\u179a\u1794\u17b6\u1799\u1780\u17b6\u179a\u178e\u17cd", "name": "\u1788\u17d2\u1798\u17c4\u17c7", "new": "\u1790\u17d2\u1798\u17b8", "choose": "\u1787\u17d2\u179a\u17be\u179f", "count_unit": "\u1793\u17b6\u1780\u17cb", "be": "\u1796.\u179f.", "need_name": "\u179f\u17bc\u1798\u1794\u1789\u17d2\u1785\u17bc\u179b\u1788\u17d2\u1798\u17c4\u17c7\u1780\u1798\u17d2\u1798\u179c\u17b7\u1792\u17b8", "not_found": "\u179a\u1780\u1798\u17b7\u1793\u1783\u17be\u1789 \u1780\u1798\u17d2\u1798\u179c\u17b7\u1792\u17b8\u1794\u17bb\u178e\u17d2\u1799\u1795\u17d2\u179f\u17c1\u1784", "notes_label": "\u1780\u17c6\u178e\u178f\u17cb", "page_sub": "\u179c\u17c1\u1793\u1791\u17b8\u1796\u17d2\u179a\u17b9\u1780 \u00b7 \u179c\u17c1\u1793\u1791\u17b8\u179b\u17d2\u1784\u17b6\u1785 \u00b7 \u1798\u17be\u179b\u1798\u17bb\u1793\u179a\u1794\u17b6\u1799\u1780\u17b6\u179a\u178e\u17cd\u1795\u17d2\u179b\u17bc\u179c\u1780\u17b6\u179a", "save_hint": "\u1794\u17b6\u1793\u179a\u1780\u17d2\u179f\u17b6\u1791\u17bb\u1780 \u00b7 \u179f\u17d2\u179c\u17d0\u1799\u1794\u17d2\u179a\u179c\u178f\u17d2\u178f\u17b7", "saving": "\u1780\u17c6\u1796\u17bb\u1784\u1795\u17d2\u1791\u17bb\u1780...", "year_label": "\u1786\u17d2\u1793\u17b6\u17c6 \u1796.\u179f.", "empty_title": "\u1798\u17b7\u1793\u1791\u17b6\u1793\u17cb \u1780\u1798\u17d2\u1798\u179c\u17b7\u1792\u17b8\u1794\u17bb\u178e\u17d2\u1799\u1795\u17d2\u179f\u17c1\u1784", "empty_text": "+ \u1794\u1784\u17d2\u1780\u17be\u178f\u1780\u1798\u17d2\u1798\u179c\u17b7\u1792\u17b8\u1794\u17bb\u178e\u17d2\u1799\u1795\u17d2\u179f\u17c1\u1784\u1790\u17d2\u1798\u17b8", "unassigned": "\u1798\u17b7\u1793\u1791\u17b6\u1793\u17cb", "assigned": "\u1794\u17b6\u1793\u1785\u17b6\u178f\u17cb", "hint": "\u1787\u17d2\u179a\u17be\u179f\u179c\u17c1\u1793\u1791\u17b8 \u00b7 \u1788\u17d2\u1798\u17c4\u17c7", "name_label": "\u1788\u17d2\u1798\u17c4\u17c7\u1780\u1798\u17d2\u1798\u179c\u17b7\u1792\u17b8\u1794\u17bb\u178e\u17d2\u1799\u1795\u17d2\u179f\u17c1\u1784", "date_label": "\u1790\u17d2\u1784\u17c3", "morning_label": "\u1798\u17c9\u17c4\u1784\u1796\u17d2\u179a\u17b9\u1780", "evening_label": "\u1798\u17c9\u17c4\u1784\u179b\u17d2\u1784\u17b6\u1785", "preview_title": "\u1798\u17be\u179b\u1798\u17bb\u1793\u179a\u1794\u17b6\u1799\u1780\u17b6\u179a\u178e\u17cd", "dup_btn": "\u1785\u1798\u17d2\u179b\u1784 \u1780\u1798\u17d2\u1798\u179c\u17b7\u1792\u17b8\u1794\u17bb\u178e\u17d2\u1799\u1795\u17d2\u179f\u17c1\u1784", "del_btn": "\u179b\u17bb\u1794 \u1780\u1798\u17d2\u1798\u179c\u17b7\u1792\u17b8\u1794\u17bb\u178e\u17d2\u1799\u1795\u17d2\u179f\u17c1\u1784", "create_btn": "\u1794\u1784\u17d2\u1780\u17be\u178f \u1780\u1798\u17d2\u1798\u179c\u17b7\u1792\u17b8\u1794\u17bb\u178e\u17d2\u1799\u1795\u17d2\u179f\u17c1\u1784", "export_label": "\u1793\u17b6\u17c6\u1785\u17c1\u1789", "search_ph": "\u179f\u17d2\u179c\u17c2\u1784\u179a\u1780\u1788\u17d2\u1798\u17c4\u17c7\u2026", "program_prefix": "\u1780\u1798\u17d2\u1798\u179c\u17b7\u1792\u17b8\u1794\u17bb\u178e\u17d2\u1799\u1795\u17d2\u179f\u17c1\u1784", "confirm_del": "\u179b\u17bb\u1794?"};
@@ -13,6 +14,9 @@
     T.afternoon = '\u179a\u179f\u17c0\u179b';
     T.morning_label = T.chant;
     T.evening_label = T.alms;
+    T.tg_ok = '\u1794\u17b6\u1793\u1795\u17d2\u1789\u17be\u179a\u17bc\u1794\u1797\u17b6\u1796\u1791\u17c5 Telegram';
+    T.add_shift = '\u1794\u1793\u17d2\u1790\u17c3\u1798\u17a0\u17d2\u1793\u17b6\u179c\u17c1\u1793\u1791\u17b8';
+    T.max_shifts = '\u179c\u17c1\u1793\u1791\u17b8\u1796\u17c7\u17a2\u179f\u17cb\u1794\u17b6\u1793\u1780\u178f\u17cb\u1780\u17c6\u178e\u178f\u17cb';
     T.kuti = '\u1780\u17bb\u178c\u17b7';
     T.level = '\u1780\u1798\u17d2\u179a\u17b7\u178f';
     T.not_assigned = T.unassigned + '\u1785\u17b6\u178f\u17cb';
@@ -127,8 +131,6 @@
             const el = $(id);
             if (el && text) el[prop || 'textContent'] = text;
         };
-        set('fp-page-sub', T.page_sub);
-        set('fp-save-hint', T.save_hint);
         set('fp-export-label', T.export_label);
         set('fp-empty-title', T.empty_title);
         set('fp-empty-text', T.empty_text);
@@ -150,6 +152,12 @@
         set('btn-dup-tab', T.dup_btn);
         set('btn-del-tab', T.del_btn);
         set('btn-del-shift-text', T.delete);
+        const addShiftBtn = $('btn-add-shift');
+        if (addShiftBtn) {
+            addShiftBtn.textContent = '+';
+            addShiftBtn.title = T.add_shift;
+            addShiftBtn.setAttribute('aria-label', T.add_shift);
+        }
         set('fp-list-edit-label', T.delete + T.name);
         const search = $('fp-search');
         if (search) search.placeholder = T.search_ph;
@@ -496,6 +504,33 @@
         return Math.max(1, Math.ceil(n / SHIFTS_PER_PAGE));
     }
 
+    function pageOfShift(i) {
+        return Math.floor(Math.max(0, Number(i) || 0) / SHIFTS_PER_PAGE);
+    }
+
+    function selectShift(i) {
+        const p = current();
+        const n = ((p && p.morning_shifts) || []).length;
+        if (!n) return;
+        const idx = Math.min(n - 1, Math.max(0, Number(i) || 0));
+        state.selected = { session: 'morning', shift: idx };
+        state.sheetPage = pageOfShift(idx);
+    }
+
+    function syncSelectedToSheetPage() {
+        const p = current();
+        const n = ((p && p.morning_shifts) || []).length;
+        if (!n) return;
+        const pages = sheetPageCount(p);
+        if (state.sheetPage >= pages) state.sheetPage = pages - 1;
+        if (state.sheetPage < 0) state.sheetPage = 0;
+        const from = state.sheetPage * SHIFTS_PER_PAGE;
+        const to = Math.min(n, from + SHIFTS_PER_PAGE);
+        if (state.selected.shift < from || state.selected.shift >= to) {
+            state.selected = { session: 'morning', shift: from };
+        }
+    }
+
     function renderSheet() {
         const p = current();
         const sheet = $('fp-sheet');
@@ -506,9 +541,8 @@
         }
         const morningAll = p.morning_shifts || defaultShifts();
         const eveningAll = p.evening_shifts || defaultShifts();
+        syncSelectedToSheetPage();
         const pages = sheetPageCount(p);
-        if (state.sheetPage >= pages) state.sheetPage = pages - 1;
-        if (state.sheetPage < 0) state.sheetPage = 0;
         const from = state.sheetPage * SHIFTS_PER_PAGE;
         const sessions = [
             { key: 'morning', title: T.morning, time: p.morning_time, shifts: morningAll.slice(from, from + SHIFTS_PER_PAGE) },
@@ -574,19 +608,33 @@
         const next = Math.min(n - 1, Math.max(0, state.sheetPage + dir));
         if (next === state.sheetPage) return;
         state.sheetPage = next;
+        syncSelectedToSheetPage();
         renderSheet();
+        renderPicker();
     }
 
     function renderShiftManage() {
         const wrap = $('fp-shift-manage');
         const pick = $('fp-shift-pick');
+        const addBtn = $('btn-add-shift');
         const p = current();
         if (!wrap || !pick) return;
         const shifts = (p && p.morning_shifts) || [];
-        const show = CAN_EDIT && shifts.length > 2;
+        const show = CAN_EDIT;
         wrap.hidden = !show;
         wrap.classList.toggle('is-on', show);
+        if (addBtn) {
+            addBtn.hidden = !CAN_EDIT;
+            addBtn.disabled = shifts.length >= MAX_SHIFTS;
+        }
         if (!show) {
+            pick.innerHTML = '';
+            return;
+        }
+        const showPick = shifts.length > 2;
+        pick.hidden = !showPick;
+        $('btn-del-shift')?.toggleAttribute('hidden', !showPick);
+        if (!showPick) {
             pick.innerHTML = '';
             return;
         }
@@ -598,6 +646,22 @@
         pick.value = next;
     }
 
+    function addMorningShift() {
+        const p = current();
+        if (!CAN_EDIT || !p) return;
+        if ((p.morning_shifts || []).length >= MAX_SHIFTS) {
+            toast(T.max_shifts, false);
+            return;
+        }
+        const n = (p.morning_shifts || []).length + 1;
+        p.morning_shifts.push({ label: T.shift + ' ' + toKhmer(n), monk_ids: [] });
+        mirrorEveningFromMorning(p);
+        selectShift(p.morning_shifts.length - 1);
+        renderSheet();
+        renderPicker();
+        scheduleSave();
+    }
+
     function deletePickedShift() {
         const p = current();
         if (!CAN_EDIT || !p) return;
@@ -607,7 +671,7 @@
         p.morning_shifts.splice(i, 1);
         p.morning_shifts.forEach((s, idx) => { s.label = T.shift + ' ' + toKhmer(idx + 1); });
         mirrorEveningFromMorning(p);
-        state.selected = { session: 'morning', shift: 0 };
+        selectShift(Math.min(i, p.morning_shifts.length - 1));
         renderSheet();
         renderPicker();
         scheduleSave();
@@ -676,6 +740,8 @@
             if (!data.success) throw new Error(data.message || 'save');
             const idx = state.programs.findIndex((x) => x.id === p.id);
             if (idx >= 0) state.programs[idx] = data.program;
+            renderSheet();
+            renderPicker();
             setSaveHint('saved', T.save);
         } catch (err) {
             setSaveHint('error', err.message || T.not_found);
@@ -691,6 +757,7 @@
     function toggleMonk(id) {
         const p = current();
         if (!CAN_EDIT || !p) return;
+        syncSelectedToSheetPage();
         const shift = state.selected.shift;
         const shifts = p.morning_shifts;
         if (!shifts[shift]) return;
@@ -815,7 +882,7 @@
             const id = Number(btn.dataset.id);
             if (id === state.currentId) return;
             state.currentId = id;
-            state.selected = { session: 'morning', shift: 0 };
+            selectShift(0);
             renderAll();
         });
         $('fp-tabs').addEventListener('dblclick', (e) => {
@@ -831,11 +898,12 @@
         $('fp-shift-pick')?.addEventListener('change', () => {
             const i = Number($('fp-shift-pick').value);
             if (!Number.isFinite(i)) return;
-            state.selected = { session: 'morning', shift: i };
+            selectShift(i);
             renderSheet();
             renderPicker();
         });
         $('btn-del-shift')?.addEventListener('click', deletePickedShift);
+        $('btn-add-shift')?.addEventListener('click', addMorningShift);
         $('fp-list-edit')?.addEventListener('change', () => {
             state.listEdit = !!$('fp-list-edit').checked;
             renderSheet();
@@ -895,16 +963,7 @@
         $('fp-sheet').addEventListener('click', (e) => {
             const add = e.target.closest('[data-add-shift]');
             if (add) {
-                const p = current();
-                if ((p.morning_shifts || []).length >= 6) return;
-                const n = (p.morning_shifts || []).length + 1;
-                p.morning_shifts.push({ label: T.shift + ' ' + toKhmer(n), monk_ids: [] });
-                mirrorEveningFromMorning(p);
-                state.selected = { session: 'morning', shift: p.morning_shifts.length - 1 };
-                state.sheetPage = sheetPageCount(p) - 1;
-                renderSheet();
-                renderPicker();
-                scheduleSave();
+                addMorningShift();
                 return;
             }
             const name = e.target.closest('li[data-id]');
@@ -914,10 +973,7 @@
                 return;
             }
             if (shift) {
-                state.selected = {
-                    session: 'morning',
-                    shift: Number(shift.dataset.shift),
-                };
+                selectShift(Number(shift.dataset.shift));
                 renderSheet();
                 renderPicker();
             }
@@ -1047,6 +1103,20 @@
         }
     }
 
+    async function sendPagesToTelegram(pages, captionBase) {
+        for (let i = 0; i < pages.length; i++) {
+            const blob = await new Promise((resolve) => pages[i].toBlob(resolve, 'image/png'));
+            if (!blob) throw new Error('png');
+            const form = new FormData();
+            const pageNote = pages.length > 1 ? ` — ${i + 1}/${pages.length}` : '';
+            form.append('image', blob, pages.length === 1 ? 'festival.png' : `festival_p${i + 1}.png`);
+            form.append('caption', `${captionBase}${pageNote}`);
+            const res = await fetch('/api/reports/submit-image', { method: 'POST', body: form });
+            const json = await res.json();
+            if (!json.success) throw new Error(json.message || 'Telegram');
+        }
+    }
+
     async function runExport(kind) {
         const p = current();
         if (!p) {
@@ -1059,6 +1129,7 @@
             if (!pages.length) throw new Error(T.not_found);
             const name = (p.name || T.title).replace(/\s+/g, '_');
             const isPdf = kind === 'pdf';
+            const caption = `${T.pagoda} · ${p.name || T.title} · ${T.be}${toKhmer(p.program_year)}`;
             if (typeof ExportPreview?.open !== 'function') throw new Error('preview');
             await ExportPreview.open({
                 title: p.name || T.title,
@@ -1079,6 +1150,10 @@
                     } else {
                         await ExportPreview.downloadA4PngPages(pages, name);
                     }
+                },
+                onTelegram: async () => {
+                    await sendPagesToTelegram(pages, caption);
+                    toast(T.tg_ok, true);
                 },
             });
         } catch (err) {

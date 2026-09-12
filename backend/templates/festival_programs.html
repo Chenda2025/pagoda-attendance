@@ -10,7 +10,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&family=Kantumruy+Pro:wght@300;400;500;600;700&family=Moul&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/gov-shell.css?v=3">
-    <link rel="stylesheet" href="/static/css/festival_programs.css?v=23">
+    <link rel="stylesheet" href="/static/css/festival_programs.css?v=25">
     <link rel="stylesheet" href="/static/css/export_preview.css?v=6">
 </head>
 
@@ -44,11 +44,9 @@
                 </a>
                 <div class="gov-topbar-titles">
                     <h1 class="gov-page-title">កម្មវិធីបុណ្យផ្សេង</h1>
-                    <p class="gov-page-sub" id="fp-page-sub"></p>
                 </div>
             </div>
             <div class="gov-topbar-actions">
-                <span class="fp-save-hint" id="fp-save-hint"></span>
                 <div class="fp-export-dd" id="fp-export-dd">
                     <button type="button" class="gov-btn gov-btn-primary" id="btn-fp-export-trigger" aria-expanded="false">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
@@ -139,6 +137,7 @@
                             <span id="fp-list-edit-label"></span>
                         </label>
                         <label class="fp-shift-manage" id="fp-shift-manage"{% if role != 'admin' %} hidden{% endif %}>
+                            <button type="button" id="btn-add-shift" class="fp-add-shift-btn">+</button>
                             <select id="fp-shift-pick"></select>
                             <button type="button" id="btn-del-shift" class="fp-icon-del">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -172,7 +171,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="/static/js/export_preview.js?v=7"></script>
-    <script src="/static/js/festival_programs.js?v=26"></script>
+    <script src="/static/js/festival_programs.js?v=30"></script>
 </body>
 
 </html>
