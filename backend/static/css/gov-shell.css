@@ -25,7 +25,7 @@
         radial-gradient(ellipse 60% 40% at 100% 0%, rgba(22, 63, 115, 0.18), transparent 45%),
         linear-gradient(180deg, #e8eef6 0%, var(--ivory) 40%, #e6ebe4 100%);
     min-height: 100vh;
-    min-height: 100dvh;
+    min-height: max(100vh, 100dvh);
     overflow-x: hidden;
     -webkit-text-size-adjust: 100%;
 }
@@ -42,7 +42,7 @@
     flex-direction: column;
     gap: 14px;
     min-height: 100vh;
-    min-height: 100dvh;
+    min-height: max(100vh, 100dvh);
     width: 100%;
     box-sizing: border-box;
 }

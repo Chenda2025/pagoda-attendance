@@ -221,7 +221,7 @@
                     const landscape = (canvas.width || 0) > (canvas.height || 0);
                     wrap.className = 'exp-preview-paper exp-preview-paper-a4' +
                         (landscape ? ' exp-preview-paper-landscape' : '');
-                    if (pages.length > 1) {
+                    if (pages.length > 1 && !preview.hidePageLabels) {
                         const label = document.createElement('div');
                         label.className = 'exp-preview-page-label';
                         label.textContent = `ទំព័រ ${i + 1} / ${pages.length}`;

@@ -13,6 +13,7 @@ MODULE_PATHS = {
     'classroom_layout': ('/classroom-layout', '/api/classroom-layout', '/report/sala-chan',
                          '/api/attendance', '/api/permissions', '/api/monks',
                          '/api/reports'),
+    'festival_programs': ('/festival-programs', '/api/festival-programs', '/api/monks'),
     'approve':     ('/approve', '/api/submissions'),
     'report':      ('/report', '/api/reports', '/api/attendance/export-report',
                     '/api/attendance/report', '/api/attendance/daily-report'),
@@ -29,6 +30,7 @@ MODULE_LABELS = {
     'view':        'មើលទិន្នន័យ',
     'layout':      'ប្លង់អាសនៈ',
     'classroom_layout': 'ប្លងសាលាឆាន់',
+    'festival_programs': 'កម្មវិធីបុណ្យផ្សេង',
     'approve':     'អនុម័ត',
     'report':      'របាយការណ៍',
     'report_book': 'សៀវភៅរបាយការណ៍',
@@ -477,6 +479,8 @@ def user_home(user_or_role, permissions=None):
         return '/layout'
     if 'classroom_layout' in perms:
         return '/classroom-layout'
+    if 'festival_programs' in perms:
+        return '/festival-programs'
     if 'report' in perms:
         return '/report'
     if 'view' in perms:

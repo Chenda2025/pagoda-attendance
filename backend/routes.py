@@ -4174,6 +4174,365 @@ def classroom_layout_page():
     )
 
 
+@main_bp.route('/festival-programs')
+def festival_programs_page():
+    return render_template(
+        'festival_programs.html',
+        username=session.get('username', ''),
+        role=session.get('role', ''),
+    )
+
+
+_FEST_DEFAULT_SHIFTS = (
+    {'label': 'វេនទី ១', 'monk_ids': []},
+    {'label': 'វេនទី ២', 'monk_ids': []},
+)
+_FEST_MORNING_CEREMONY = '\u179f\u17bc\u178f\u17d2\u179a\u1798\u1793\u17d2\u178f'
+_FEST_MORNING_PERIOD = '\u179a\u179f\u17c0\u179b'
+_FEST_EVENING_CEREMONY = '\u1791\u1791\u17bd\u179b\u1794\u17b6\u1799\u1794\u17b7\u178e\u17d2\u178c'
+_FEST_EVENING_PERIOD = '\u1796\u17d2\u179a\u17b9\u1780'
+_FEST_SELECT = """
+    id, name, program_year, sort_order, morning_time, evening_time,
+    morning_shifts, evening_shifts, notes, ceremony_date,
+    created_at, updated_at,
+    morning_ceremony, morning_period, evening_ceremony, evening_period
+"""
+
+
+def _fest_label(value, default, limit=80):
+    text = str(value or '').strip()[:limit]
+    return text or default
+
+
+def _fest_heading_fields(data):
+    return {
+        'morning_ceremony': _fest_label(data.get('morning_ceremony'), _FEST_MORNING_CEREMONY, 80),
+        'morning_period': _fest_label(data.get('morning_period'), _FEST_MORNING_PERIOD, 40),
+        'evening_ceremony': _fest_label(data.get('evening_ceremony'), _FEST_EVENING_CEREMONY, 80),
+        'evening_period': _fest_label(data.get('evening_period'), _FEST_EVENING_PERIOD, 40),
+    }
+
+
+def _fest_parse_json(value, fallback):
+    import json as _json
+    if value is None:
+        return fallback
+    if isinstance(value, (list, dict)):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = _json.loads(value)
+            return parsed if isinstance(parsed, type(fallback)) else fallback
+        except Exception:
+            return fallback
+    return fallback
+
+
+def _fest_normalize_shifts(raw):
+    if not isinstance(raw, list) or not raw:
+        return [dict(s) for s in _FEST_DEFAULT_SHIFTS]
+    out = []
+    seen_session = set()
+    for i, item in enumerate(raw[:8]):
+        if not isinstance(item, dict):
+            continue
+        label = str(item.get('label') or f'វេនទី {i + 1}').strip()[:80]
+        ids = []
+        for mid in item.get('monk_ids') or []:
+            try:
+                mid_i = int(mid)
+            except (TypeError, ValueError):
+                continue
+            if mid_i > 0 and mid_i not in seen_session:
+                ids.append(mid_i)
+                seen_session.add(mid_i)
+        out.append({'label': label or f'វេនទី {i + 1}', 'monk_ids': ids})
+    return out or [dict(s) for s in _FEST_DEFAULT_SHIFTS]
+
+
+def _fest_row(row):
+    return {
+        'id': row[0],
+        'name': row[1],
+        'program_year': row[2],
+        'sort_order': row[3],
+        'morning_time': row[4] or '06:00',
+        'evening_time': row[5] or '17:00',
+        'morning_shifts': _fest_normalize_shifts(_fest_parse_json(row[6], [])),
+        'evening_shifts': _fest_normalize_shifts(_fest_parse_json(row[7], [])),
+        'notes': row[8] or '',
+        'ceremony_date': row[9].isoformat() if row[9] else '',
+        'created_at': row[10].isoformat() if row[10] else None,
+        'updated_at': row[11].isoformat() if row[11] else None,
+        'morning_ceremony': _fest_label(row[12] if len(row) > 12 else None, _FEST_MORNING_CEREMONY, 80),
+        'morning_period': _fest_label(row[13] if len(row) > 13 else None, _FEST_MORNING_PERIOD, 40),
+        'evening_ceremony': _fest_label(row[14] if len(row) > 14 else None, _FEST_EVENING_CEREMONY, 80),
+        'evening_period': _fest_label(row[15] if len(row) > 15 else None, _FEST_EVENING_PERIOD, 40),
+    }
+
+
+def _fest_valid_time(value, default):
+    text = str(value or '').strip()
+    if len(text) == 5 and text[2] == ':':
+        try:
+            hour, minute = int(text[:2]), int(text[3:])
+            if 0 <= hour <= 23 and 0 <= minute <= 59:
+                return f'{hour:02d}:{minute:02d}'
+        except ValueError:
+            pass
+    return default
+
+
+def _fest_valid_year(value):
+    try:
+        year = int(value)
+    except (TypeError, ValueError):
+        return None
+    if 2400 <= year <= 2800 or 2020 <= year <= 2100:
+        return year
+    return None
+
+
+def _fest_admin_only():
+    if session.get('role') != 'admin':
+        abort(403)
+
+
+@main_bp.route('/api/festival-programs', methods=['GET'])
+def list_festival_programs():
+    year = request.args.get('year', '').strip()
+    year_i = None
+    if year:
+        try:
+            year_i = int(year)
+        except (TypeError, ValueError):
+            return jsonify({'success': False, 'message': 'ឆ្នាំមិនត្រឹមត្រូវ'}), 400
+    try:
+        conn = connect_db()
+        cur = conn.cursor()
+        if year_i is not None:
+            cur.execute(f"""
+                SELECT {_FEST_SELECT}
+                FROM festival_program
+                WHERE program_year = %s
+                ORDER BY sort_order ASC, id ASC
+            """, (year_i,))
+        else:
+            cur.execute(f"""
+                SELECT {_FEST_SELECT}
+                FROM festival_program
+                ORDER BY program_year DESC, sort_order ASC, id ASC
+            """)
+        rows = [_fest_row(r) for r in cur.fetchall()]
+        cur.execute("SELECT DISTINCT program_year FROM festival_program ORDER BY program_year DESC")
+        years = [r[0] for r in cur.fetchall()]
+        cur.close()
+        conn.close()
+        return jsonify({'success': True, 'programs': rows, 'years': years})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@main_bp.route('/api/festival-programs', methods=['POST'])
+def create_festival_program():
+    _fest_admin_only()
+    import json as _json
+    data = request.get_json(silent=True) or {}
+    name = str(data.get('name') or '').strip()[:160]
+    year = _fest_valid_year(data.get('program_year'))
+    if not name:
+        return jsonify({'success': False, 'message': 'សូមបញ្ចូលឈ្មោះកម្មវិធី'}), 400
+    if year is None:
+        return jsonify({'success': False, 'message': 'ឆ្នាំមិនត្រឹមត្រូវ'}), 400
+    morning_time = _fest_valid_time(data.get('morning_time'), '06:00')
+    evening_time = _fest_valid_time(data.get('evening_time'), '17:00')
+    morning_shifts = _fest_normalize_shifts(data.get('morning_shifts'))
+    evening_shifts = _fest_normalize_shifts(data.get('evening_shifts'))
+    notes = str(data.get('notes') or '').strip()[:2000]
+    ceremony_date = str(data.get('ceremony_date') or '').strip() or None
+    headings = _fest_heading_fields(data)
+    try:
+        conn = connect_db()
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT COALESCE(MAX(sort_order), -1) + 1 FROM festival_program WHERE program_year = %s",
+            (year,),
+        )
+        sort_order = cur.fetchone()[0]
+        cur.execute(f"""
+            INSERT INTO festival_program
+                (name, program_year, sort_order, morning_time, evening_time,
+                 morning_shifts, evening_shifts, notes, ceremony_date, updated_at,
+                 morning_ceremony, morning_period, evening_ceremony, evening_period)
+            VALUES (%s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s, %s, NOW(), %s, %s, %s, %s)
+            RETURNING {_FEST_SELECT}
+        """, (
+            name, year, sort_order, morning_time, evening_time,
+            _json.dumps(morning_shifts, ensure_ascii=False),
+            _json.dumps(evening_shifts, ensure_ascii=False),
+            notes, ceremony_date,
+            headings['morning_ceremony'], headings['morning_period'],
+            headings['evening_ceremony'], headings['evening_period'],
+        ))
+        row = _fest_row(cur.fetchone())
+        conn.commit()
+        cur.close()
+        conn.close()
+        _log_act('festival_program_create', 'festival_programs', f'{name} ({year})')
+        return jsonify({'success': True, 'program': row})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@main_bp.route('/api/festival-programs/<int:program_id>', methods=['PUT'])
+def update_festival_program(program_id):
+    _fest_admin_only()
+    import json as _json
+    data = request.get_json(silent=True) or {}
+    name = str(data.get('name') or '').strip()[:160]
+    year = _fest_valid_year(data.get('program_year'))
+    if not name:
+        return jsonify({'success': False, 'message': 'សូមបញ្ចូលឈ្មោះកម្មវិធី'}), 400
+    if year is None:
+        return jsonify({'success': False, 'message': 'ឆ្នាំមិនត្រឹមត្រូវ'}), 400
+    morning_time = _fest_valid_time(data.get('morning_time'), '06:00')
+    evening_time = _fest_valid_time(data.get('evening_time'), '17:00')
+    morning_shifts = _fest_normalize_shifts(data.get('morning_shifts'))
+    evening_shifts = _fest_normalize_shifts(data.get('evening_shifts'))
+    notes = str(data.get('notes') or '').strip()[:2000]
+    ceremony_date = str(data.get('ceremony_date') or '').strip() or None
+    headings = _fest_heading_fields(data)
+    try:
+        sort_order = int(data.get('sort_order')) if data.get('sort_order') is not None else None
+    except (TypeError, ValueError):
+        sort_order = None
+    try:
+        conn = connect_db()
+        cur = conn.cursor()
+        if sort_order is None:
+            cur.execute(f"""
+                UPDATE festival_program
+                SET name = %s, program_year = %s, morning_time = %s, evening_time = %s,
+                    morning_shifts = %s::jsonb, evening_shifts = %s::jsonb,
+                    notes = %s, ceremony_date = %s, updated_at = NOW(),
+                    morning_ceremony = %s, morning_period = %s,
+                    evening_ceremony = %s, evening_period = %s
+                WHERE id = %s
+                RETURNING {_FEST_SELECT}
+            """, (
+                name, year, morning_time, evening_time,
+                _json.dumps(morning_shifts, ensure_ascii=False),
+                _json.dumps(evening_shifts, ensure_ascii=False),
+                notes, ceremony_date,
+                headings['morning_ceremony'], headings['morning_period'],
+                headings['evening_ceremony'], headings['evening_period'],
+                program_id,
+            ))
+        else:
+            cur.execute(f"""
+                UPDATE festival_program
+                SET name = %s, program_year = %s, sort_order = %s,
+                    morning_time = %s, evening_time = %s,
+                    morning_shifts = %s::jsonb, evening_shifts = %s::jsonb,
+                    notes = %s, ceremony_date = %s, updated_at = NOW(),
+                    morning_ceremony = %s, morning_period = %s,
+                    evening_ceremony = %s, evening_period = %s
+                WHERE id = %s
+                RETURNING {_FEST_SELECT}
+            """, (
+                name, year, sort_order, morning_time, evening_time,
+                _json.dumps(morning_shifts, ensure_ascii=False),
+                _json.dumps(evening_shifts, ensure_ascii=False),
+                notes, ceremony_date,
+                headings['morning_ceremony'], headings['morning_period'],
+                headings['evening_ceremony'], headings['evening_period'],
+                program_id,
+            ))
+        row = cur.fetchone()
+        if not row:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'រកមិនឃើញកម្មវិធី'}), 404
+        program = _fest_row(row)
+        conn.commit()
+        cur.close()
+        conn.close()
+        _log_act('festival_program_update', 'festival_programs', f'{name} ({year})')
+        return jsonify({'success': True, 'program': program})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@main_bp.route('/api/festival-programs/<int:program_id>', methods=['DELETE'])
+def delete_festival_program(program_id):
+    _fest_admin_only()
+    try:
+        conn = connect_db()
+        cur = conn.cursor()
+        cur.execute("SELECT name, program_year FROM festival_program WHERE id = %s", (program_id,))
+        found = cur.fetchone()
+        if not found:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'រកមិនឃើញកម្មវិធី'}), 404
+        cur.execute("DELETE FROM festival_program WHERE id = %s", (program_id,))
+        conn.commit()
+        cur.close()
+        conn.close()
+        _log_act('festival_program_delete', 'festival_programs', f'{found[0]} ({found[1]})')
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@main_bp.route('/api/festival-programs/<int:program_id>/duplicate', methods=['POST'])
+def duplicate_festival_program(program_id):
+    _fest_admin_only()
+    import json as _json
+    try:
+        conn = connect_db()
+        cur = conn.cursor()
+        cur.execute(f"""
+            SELECT {_FEST_SELECT}
+            FROM festival_program WHERE id = %s
+        """, (program_id,))
+        src_row = cur.fetchone()
+        if not src_row:
+            cur.close()
+            conn.close()
+            return jsonify({'success': False, 'message': 'រកមិនឃើញកម្មវិធី'}), 404
+        src = _fest_row(src_row)
+        name = (src['name'] + ' (ចម្លង)')[:160]
+        cur.execute(
+            "SELECT COALESCE(MAX(sort_order), -1) + 1 FROM festival_program WHERE program_year = %s",
+            (src['program_year'],),
+        )
+        sort_order = cur.fetchone()[0]
+        cur.execute(f"""
+            INSERT INTO festival_program
+                (name, program_year, sort_order, morning_time, evening_time,
+                 morning_shifts, evening_shifts, notes, ceremony_date, updated_at,
+                 morning_ceremony, morning_period, evening_ceremony, evening_period)
+            VALUES (%s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s, %s, NOW(), %s, %s, %s, %s)
+            RETURNING {_FEST_SELECT}
+        """, (
+            name, src['program_year'], sort_order, src['morning_time'], src['evening_time'],
+            _json.dumps(src['morning_shifts'], ensure_ascii=False),
+            _json.dumps(src['evening_shifts'], ensure_ascii=False),
+            src['notes'], src['ceremony_date'] or None,
+            src['morning_ceremony'], src['morning_period'],
+            src['evening_ceremony'], src['evening_period'],
+        ))
+        row = _fest_row(cur.fetchone())
+        conn.commit()
+        cur.close()
+        conn.close()
+        _log_act('festival_program_duplicate', 'festival_programs', f'{src["name"]} → {name}')
+        return jsonify({'success': True, 'program': row})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 @main_bp.route('/api/classroom-layout', methods=['GET'])
 def get_classroom_layout():
     import json as _json

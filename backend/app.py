@@ -1,7 +1,7 @@
 import os
 from flask import Flask
 from routes import main_bp
-from create_table import create_monks_table, create_summaries_tables, create_pending_submissions_table, create_seat_order_table, create_alt_assembly_table, create_classroom_layout_table, create_permission_table, create_kuti_share_table, create_app_users_table, create_telegram_notify_table, create_telegram_contract_table
+from create_table import create_monks_table, create_summaries_tables, create_pending_submissions_table, create_seat_order_table, create_alt_assembly_table, create_classroom_layout_table, create_permission_table, create_kuti_share_table, create_app_users_table, create_telegram_notify_table, create_telegram_contract_table, create_festival_programs_table
 from form_options_service import create_form_options_table, seed_form_options
 from auth_service import seed_default_users, purge_old_activity
 from telegram_config_service import create_telegram_bot_config_table
@@ -52,6 +52,12 @@ def _auto_setup():
         print('[startup] Classroom layout table created / verified.')
     except Exception as e:
         print(f'[startup] classroom-layout warning: {e}')
+
+    try:
+        create_festival_programs_table()
+        print('[startup] Festival programs table created / verified.')
+    except Exception as e:
+        print(f'[startup] festival-programs warning: {e}')
 
     try:
         create_permission_table()
@@ -169,4 +175,4 @@ _auto_setup()
 _run_scheduler()
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, port=5001)

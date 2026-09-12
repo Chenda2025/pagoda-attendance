@@ -3,6 +3,7 @@ const MODULES = {
     view:        'មើលទិន្នន័យ',
     layout:      'ប្លង់អាសនៈ',
     classroom_layout: 'ប្លងសាលាឆាន់',
+    festival_programs: 'កម្មវិធីបុណ្យផ្សេង',
     approve:     'អនុម័ត',
     report:      'របាយការណ៍',
     report_book: 'សៀវភៅរបាយការណ៍',

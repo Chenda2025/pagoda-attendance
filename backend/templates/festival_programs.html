@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="km">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>កម្មវិធីបុណ្យផ្សេង — វត្តនិរោធរង្សី</title>
+    <link rel="icon" type="image/jpeg" href="/static/logo.jpg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Battambang:wght@400;700&family=Kantumruy+Pro:wght@300;400;500;600;700&family=Moul&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/gov-shell.css?v=3">
+    <link rel="stylesheet" href="/static/css/festival_programs.css?v=23">
+    <link rel="stylesheet" href="/static/css/export_preview.css?v=6">
+</head>
+
+<body class="gov-page-body{% if role != 'admin' %} fest-use-only{% endif %}">
+    <div class="gov-shell gov-shell-wide fest-page">
+
+        <header class="gov-masthead">
+            <div class="gov-masthead-inner">
+                <div class="gov-col gov-col-left">
+                    <p>មន្ទីរធម្មការ និងសាសនា រាជធានីភ្នំពេញ</p>
+                    <p>សាលាអនុគណខណ្ឌច្បារអំពៅ</p>
+                    <p class="gov-pagoda">វត្តនិរោធរង្សី</p>
+                </div>
+                <div class="gov-col gov-col-center">
+                    <img src="/static/logo.jpg" alt="វត្តនិរោធរង្សី" class="gov-seal">
+                </div>
+                <div class="gov-col gov-col-right">
+                    <p class="gov-kingdom">ព្រះរាជាណាចក្រកម្ពុជា</p>
+                    <p class="gov-motto">ជាតិ សាសនា ព្រះមហាក្សត្រ</p>
+                </div>
+            </div>
+        </header>
+
+        <div class="gov-topbar">
+            <div class="gov-topbar-left">
+                <a href="/" class="gov-back-link" title="ផ្ទាំងគ្រប់គ្រង">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="15 18 9 12 15 6" />
+                    </svg>
+                    ផ្ទាំងគ្រប់គ្រង
+                </a>
+                <div class="gov-topbar-titles">
+                    <h1 class="gov-page-title">កម្មវិធីបុណ្យផ្សេង</h1>
+                    <p class="gov-page-sub" id="fp-page-sub"></p>
+                </div>
+            </div>
+            <div class="gov-topbar-actions">
+                <span class="fp-save-hint" id="fp-save-hint"></span>
+                <div class="fp-export-dd" id="fp-export-dd">
+                    <button type="button" class="gov-btn gov-btn-primary" id="btn-fp-export-trigger" aria-expanded="false">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                            <polyline points="7 10 12 15 17 10" />
+                            <line x1="12" y1="15" x2="12" y2="3" />
+                        </svg>
+                        <span id="fp-export-label">PDF</span>
+                    </button>
+                    <div class="fp-export-menu" role="menu">
+                        <button type="button" id="btn-fp-export-pdf">PDF A4</button>
+                        <button type="button" id="btn-fp-export-png">PNG</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <section class="fp-workspace" id="fp-workspace">
+            <div class="fp-tabbar">
+                <button type="button" class="fp-add-tab" id="btn-add-tab"{% if role != 'admin' %} hidden{% endif %}>
+                    <span aria-hidden="true">+</span>
+                </button>
+                <div class="fp-tabs" id="fp-tabs" role="tablist"></div>
+            </div>
+
+            <div class="fp-empty" id="fp-empty" hidden>
+                <h2 id="fp-empty-title"></h2>
+                <p id="fp-empty-text"></p>
+                {% if role == 'admin' %}
+                <button type="button" class="gov-btn gov-btn-primary" id="btn-empty-create">+</button>
+                {% endif %}
+            </div>
+
+            <div class="fp-editor" id="fp-editor" hidden>
+                <aside class="fp-picker">
+                    <div class="fp-picker-tools">
+                        <div class="fp-ms" id="fp-filter-kuti"></div>
+                        <div class="fp-ms" id="fp-filter-level"></div>
+                        <div class="fp-assign-filters">
+                            <button type="button" id="fp-filter-assigned" data-assign="assigned"></button>
+                            <button type="button" id="fp-filter-unassigned" data-assign="unassigned"></button>
+                        </div>
+                        <input type="search" id="fp-search" autocomplete="off">
+                    </div>
+                    <p class="fp-picker-hint" id="fp-picker-hint"></p>
+                    <div class="fp-monk-list" id="fp-monk-list"></div>
+                    <div class="fp-monk-page" id="fp-monk-page"></div>
+                    <p class="fp-picker-count" id="fp-picker-count"></p>
+                </aside>
+
+                <div class="fp-preview-col">
+                    <div class="fp-meta"{% if role != 'admin' %} hidden{% endif %}>
+                        <div class="fp-meta-top">
+                            <label class="fp-name-label">
+                                <span id="fp-name-label"></span>
+                                <input type="text" id="fp-name" maxlength="160">
+                            </label>
+                        </div>
+                        <div class="fp-meta-sessions">
+                            <label class="fp-session-edit">
+                                <span id="fp-morning-label"></span>
+                                <input type="text" id="fp-morning-ceremony" class="fp-heading-name" maxlength="80">
+                                <div class="fp-heading-fields">
+                                    <input type="time" id="fp-morning-time" value="06:00">
+                                    <input type="text" id="fp-morning-period" maxlength="40">
+                                </div>
+                            </label>
+                            <label class="fp-session-edit">
+                                <span id="fp-evening-label"></span>
+                                <input type="text" id="fp-evening-ceremony" class="fp-heading-name" maxlength="80">
+                                <div class="fp-heading-fields">
+                                    <input type="time" id="fp-evening-time" value="17:00">
+                                    <input type="text" id="fp-evening-period" maxlength="40">
+                                </div>
+                            </label>
+                        </div>
+                        <label class="fp-notes-label">
+                            <span id="fp-notes-label"></span>
+                            <input type="text" id="fp-notes" maxlength="200">
+                        </label>
+                    </div>
+
+                    <div class="fp-preview-head">
+                        <strong id="fp-preview-title"></strong>
+                        <span id="fp-assign-summary"></span>
+                        <label class="fp-list-edit" id="fp-list-edit-wrap"{% if role != 'admin' %} hidden{% endif %}>
+                            <input type="checkbox" id="fp-list-edit">
+                            <span id="fp-list-edit-label"></span>
+                        </label>
+                        <label class="fp-shift-manage" id="fp-shift-manage"{% if role != 'admin' %} hidden{% endif %}>
+                            <select id="fp-shift-pick"></select>
+                            <button type="button" id="btn-del-shift" class="fp-icon-del">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                    <polyline points="3 6 5 6 21 6" />
+                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                </svg>
+                                <span id="btn-del-shift-text"></span>
+                            </button>
+                        </label>
+                    </div>
+                    <div class="fp-sheet-scroll">
+                        <article class="fp-sheet" id="fp-sheet"></article>
+                        <div class="fp-sheet-nav" id="fp-sheet-nav" hidden>
+                            <button type="button" id="fp-sheet-prev" aria-label="back">‹</button>
+                            <span id="fp-sheet-page-label">A4</span>
+                            <button type="button" id="fp-sheet-next" aria-label="next">›</button>
+                        </div>
+                    </div>
+                    <div class="fp-tab-actions"{% if role != 'admin' %} hidden{% endif %}>
+                        <button type="button" class="gov-btn" id="btn-dup-tab"></button>
+                        <button type="button" class="gov-btn gov-btn-danger" id="btn-del-tab"></button>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <div class="fp-toast" id="fp-toast" hidden></div>
+
+    <script>const PAGE_ROLE = {{ role|tojson }};</script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="/static/js/export_preview.js?v=7"></script>
+    <script src="/static/js/festival_programs.js?v=26"></script>
+</body>
+
+</html>

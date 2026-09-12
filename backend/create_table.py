@@ -815,5 +815,60 @@ def create_telegram_contract_table():
             conn.close()
 
 
+def create_festival_programs_table():
+    """Named festival/ceremony programs with morning/evening duty shifts."""
+    conn = None
+    try:
+        conn = connect_db()
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS festival_program (
+                id             SERIAL PRIMARY KEY,
+                name           VARCHAR(160) NOT NULL,
+                program_year   INTEGER NOT NULL,
+                sort_order     INTEGER NOT NULL DEFAULT 0,
+                morning_time   VARCHAR(8) NOT NULL DEFAULT '06:00',
+                evening_time   VARCHAR(8) NOT NULL DEFAULT '17:00',
+                morning_shifts JSONB NOT NULL DEFAULT '[]'::jsonb,
+                evening_shifts JSONB NOT NULL DEFAULT '[]'::jsonb,
+                ceremony_date  DATE,
+                notes          TEXT,
+                created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+        cursor.execute("""
+            ALTER TABLE festival_program
+            ADD COLUMN IF NOT EXISTS ceremony_date DATE;
+        """)
+        heading_cols = (
+            ('morning_ceremony', 80, '\u179f\u17bc\u178f\u17d2\u179a\u1798\u1793\u17d2\u178f'),
+            ('morning_period', 40, '\u179a\u179f\u17c0\u179b'),
+            ('evening_ceremony', 80, '\u1791\u1791\u17bd\u179b\u1794\u17b6\u1799\u1794\u17b7\u178e\u17d2\u178c'),
+            ('evening_period', 40, '\u1796\u17d2\u179a\u17b9\u1780'),
+        )
+        for col, size, default in heading_cols:
+            cursor.execute(
+                f"ALTER TABLE festival_program "
+                f"ADD COLUMN IF NOT EXISTS {col} VARCHAR({size}) NOT NULL DEFAULT %s",
+                (default,),
+            )
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_festival_program_year
+            ON festival_program(program_year);
+        """)
+        conn.commit()
+        print("Table 'festival_program' created / verified.")
+        cursor.close()
+    except Exception as e:
+        print(f"Database error creating festival_program: {e}")
+        if conn:
+            conn.rollback()
+    finally:
+        if conn:
+            conn.close()
+
+
 if __name__ == "__main__":
     create_monks_table()
+    create_festival_programs_table()
