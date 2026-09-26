@@ -5,35 +5,151 @@
     const toKhmer = (n) => String(n).replace(/\d/g, (d) => KHMER[d]);
     const CAN_EDIT_LAYOUT = typeof PAGE_ROLE !== 'undefined' && PAGE_ROLE === 'admin';
 
-    const H_SLOTS = ['name1', 'name2', 'name3', 'name4', 'name5', 'name6'];
-    const V_SLOTS = ['name1', 'name2', 'name3', 'name4', 'name5', 'name6', 'name7', 'name8'];
-    const MAX_H = 6;
-    const MAX_V = 8;
+    const H_BASE = ['name1', 'name2', 'name3', 'name4', 'name5', 'name6'];
+    const V_BASE = ['name1', 'name2', 'name3', 'name4', 'name5', 'name6', 'name7', 'name8'];
+    const C_BASE = ['name1', 'name2', 'name3', 'name4', 'name5', 'name6'];
+    /* Soft ceiling for UI/forms — effectively unlimited for normal use */
+    const SOFT_MAX_SEATS = 60;
+    const MAX_H = SOFT_MAX_SEATS;
+    const MAX_V = SOFT_MAX_SEATS;
+    const MAX_C = SOFT_MAX_SEATS;
 
-    /* Fill order = balanced around table; each slot stays on a fixed side */
-    const H_FILL = ['name2', 'name6', 'name3', 'name5', 'name1', 'name4'];
-    const V_FILL = ['name3', 'name8', 'name4', 'name7', 'name2', 'name5', 'name1', 'name6'];
+    /* Horizontal: only top + bottom (left→right). No left/right side seats. */
+    const H_FILL_BASE = ['name2', 'name3', 'name6', 'name5'];
+    /* Vertical: top L→R, left T→B, right T→B, bot L→R */
+    const V_FILL_BASE = ['name3', 'name4', 'name2', 'name1', 'name5', 'name6', 'name8', 'name7'];
+    /* Column: left T→B, then right T→B */
+    const C_FILL_BASE = ['name1', 'name2', 'name3', 'name4', 'name5', 'name6'];
 
-    const H_POS = {
-        name1: 'left', name2: 'top', name3: 'top',
-        name4: 'right', name5: 'bot', name6: 'bot',
+    const H_POS_BASE = {
+        name2: 'top', name3: 'top',
+        name6: 'bot', name5: 'bot',
+        /* legacy side slots — kept for old saved data only */
+        name1: 'left', name4: 'right',
     };
-    const V_POS = {
+    const V_POS_BASE = {
         name1: 'left', name2: 'left', name3: 'top', name4: 'top',
         name5: 'right', name6: 'right', name7: 'bot', name8: 'bot',
     };
-    const H_SIDE_ORDER = {
+    const C_POS_BASE = {
+        name1: 'left', name2: 'left', name3: 'left',
+        name4: 'right', name5: 'right', name6: 'right',
+    };
+    const H_SIDE_BASE = {
         top: ['name2', 'name3'],
-        left: ['name1'],
-        right: ['name4'],
+        left: [],
+        right: [],
         bot: ['name6', 'name5'],
     };
-    const V_SIDE_ORDER = {
+    const V_SIDE_BASE = {
         top: ['name3', 'name4'],
         left: ['name2', 'name1'],
         right: ['name5', 'name6'],
         bot: ['name8', 'name7'],
     };
+    const C_SIDE_BASE = {
+        top: [],
+        left: ['name1', 'name2', 'name3'],
+        right: ['name4', 'name5', 'name6'],
+        bot: [],
+    };
+
+    function slotName(i) {
+        return 'name' + i;
+    }
+
+    function slotIndex(slot) {
+        const m = /^name(\d+)$/.exec(String(slot || ''));
+        return m ? parseInt(m[1], 10) : 0;
+    }
+
+    function layoutSpec(orientation) {
+        const isCol = orientation === 'column';
+        const vertical = orientation === 'vertical';
+        const base = isCol ? C_BASE : (vertical ? V_BASE : H_BASE);
+        const fillBase = isCol ? C_FILL_BASE : (vertical ? V_FILL_BASE : H_FILL_BASE);
+        const pos = { ...(isCol ? C_POS_BASE : (vertical ? V_POS_BASE : H_POS_BASE)) };
+        const sideOrder = {
+            top: [...(isCol ? C_SIDE_BASE : (vertical ? V_SIDE_BASE : H_SIDE_BASE)).top],
+            left: [...(isCol ? C_SIDE_BASE : (vertical ? V_SIDE_BASE : H_SIDE_BASE)).left],
+            right: [...(isCol ? C_SIDE_BASE : (vertical ? V_SIDE_BASE : H_SIDE_BASE)).right],
+            bot: [...(isCol ? C_SIDE_BASE : (vertical ? V_SIDE_BASE : H_SIDE_BASE)).bot],
+        };
+        const fill = [...fillBase];
+        const all = [...base];
+        const extraLeft = [];
+        const extraRight = [];
+        const extraTop = [];
+        const extraBot = [];
+
+        for (let i = base.length + 1; i <= SOFT_MAX_SEATS; i++) {
+            const s = slotName(i);
+            all.push(s);
+            if (vertical || isCol) {
+                /* Row-wise: left then right (top→bottom down each column) */
+                if (i % 2 === 1) {
+                    pos[s] = 'left';
+                    extraLeft.push(s);
+                } else {
+                    pos[s] = 'right';
+                    extraRight.push(s);
+                }
+            } else {
+                /* Row-wise: top then bot (left→right along each edge) */
+                if (i % 2 === 1) {
+                    pos[s] = 'top';
+                    extraTop.push(s);
+                } else {
+                    pos[s] = 'bot';
+                    extraBot.push(s);
+                }
+            }
+        }
+
+        if (vertical || isCol) {
+            /* Grow row by row: left then right, then next row down */
+            const n = Math.max(extraLeft.length, extraRight.length);
+            for (let k = 0; k < n; k++) {
+                if (extraLeft[k]) {
+                    sideOrder.left.push(extraLeft[k]);
+                    fill.push(extraLeft[k]);
+                }
+                if (extraRight[k]) {
+                    sideOrder.right.push(extraRight[k]);
+                    fill.push(extraRight[k]);
+                }
+            }
+        } else {
+            /* Grow along top L→R, then bot L→R */
+            const n = Math.max(extraTop.length, extraBot.length);
+            for (let k = 0; k < n; k++) {
+                if (extraTop[k]) {
+                    sideOrder.top.push(extraTop[k]);
+                    fill.push(extraTop[k]);
+                }
+                if (extraBot[k]) {
+                    sideOrder.bot.push(extraBot[k]);
+                    fill.push(extraBot[k]);
+                }
+            }
+        }
+
+        return { all, fill, pos, sideOrder, max: SOFT_MAX_SEATS };
+    }
+
+    /* Back-compat aliases used across the file */
+    const H_SLOTS = layoutSpec('horizontal').all;
+    const V_SLOTS = layoutSpec('vertical').all;
+    const C_SLOTS = layoutSpec('column').all;
+    const H_FILL = layoutSpec('horizontal').fill;
+    const V_FILL = layoutSpec('vertical').fill;
+    const C_FILL = layoutSpec('column').fill;
+    const H_POS = layoutSpec('horizontal').pos;
+    const V_POS = layoutSpec('vertical').pos;
+    const C_POS = layoutSpec('column').pos;
+    const H_SIDE_ORDER = layoutSpec('horizontal').sideOrder;
+    const V_SIDE_ORDER = layoutSpec('vertical').sideOrder;
+    const C_SIDE_ORDER = layoutSpec('column').sideOrder;
 
     let layout = { rows: [] };
     let monks = [];
@@ -62,6 +178,7 @@
     const tableClearModal = document.getElementById('table-clear-modal');
 
     const ICON_ADD = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
+    const ICON_MINUS = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/></svg>';
     const ICON_EDIT = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
     const ICON_DEL = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
     const ICON_CLEAR = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>';
@@ -71,8 +188,8 @@
         add: {
             label: 'បន្ថែម',
             bar: 'របៀប៖ បន្ថែម',
-            hint: 'ប្រើប៊ូតុងខាងស្តាំជួរ — បន្ថែមជួរ ឬ បន្ថែមតុ (កំណត់ទីតាំងកន្លែង)',
-            where: 'ប៊ូតុងសកម្មភាពនៅខាងស្តាំជួរ →',
+            hint: 'បន្ថែមជួរ / តុ · ប្រើ +/− លើតុដើម្បីបន្ថែម ឬ ដកកន្លែង',
+            where: 'ប៊ូតុង +/− លើតុ · សកម្មភាពខាងស្តាំជួរ →',
         },
         update: {
             label: 'កែប្រែ',
@@ -243,6 +360,11 @@
             ? seatSlots.filter((s) => all.includes(s))
             : [];
         slots = [...new Set(slots)];
+        /* Horizontal: never keep left/right side seats */
+        if (!isCol && !vertical) {
+            const pos = layoutSpec('horizontal').pos;
+            slots = slots.filter((s) => pos[s] === 'top' || pos[s] === 'bot');
+        }
         if (slots.length > count) slots = slots.slice(0, count);
         if (slots.length < count) {
             fill.forEach((s) => {
@@ -373,9 +495,39 @@
                     );
                     table.seat_count = table.seat_slots.length;
                 }
+                scrubHorizontalSideSeats(table);
             });
         });
         return out;
+    }
+
+    /* Horizontal tables: drop left/right seats and keep names on top/bot only */
+    function scrubHorizontalSideSeats(table) {
+        if ((table.orientation || 'horizontal') !== 'horizontal') return;
+        const pos = layoutSpec('horizontal').pos;
+        const oldSlots = Array.isArray(table.seat_slots) ? table.seat_slots.slice() : slotsForTable(table);
+        const placed = [];
+        oldSlots.forEach((s) => {
+            const mid = normalizeMonkId(table.seats && table.seats[s]);
+            if (mid != null) placed.push(mid);
+        });
+        ['name1', 'name4'].forEach((s) => {
+            const mid = normalizeMonkId(table.seats && table.seats[s]);
+            if (mid != null && !placed.includes(mid)) placed.push(mid);
+        });
+        const needs = oldSlots.some((s) => pos[s] === 'left' || pos[s] === 'right')
+            || (table.seats && (table.seats.name1 !== undefined || table.seats.name4 !== undefined));
+        if (!needs && oldSlots.every((s) => pos[s] === 'top' || pos[s] === 'bot')) {
+            return;
+        }
+        const count = Math.max(oldSlots.length, placed.length, Number(table.seat_count) || 0);
+        const newSlots = layoutSpec('horizontal').fill.slice(0, Math.min(SOFT_MAX_SEATS, count));
+        table.seat_slots = newSlots;
+        table.seat_count = newSlots.length;
+        table.seats = emptySeats('horizontal', newSlots.length, newSlots);
+        newSlots.forEach((s, i) => {
+            if (i < placed.length) table.seats[s] = placed[i];
+        });
     }
 
     /* Old builds used name1..nameN; remap to balanced fill positions */
@@ -481,20 +633,33 @@
 
     function tableControls(table, row, ti, rowTableCount, orient) {
         if (!CAN_EDIT_LAYOUT) return '';
+        const parts = [];
+        /* Seat +/- only in «បន្ថែម» — not in កែប្រែ / names / delete */
+        if (editMode === 'add') {
+            const n = seatCountFor(table);
+            parts.push(`
+                <div class="cl-seat-adjust">
+                    <button type="button" class="cl-seat-adj-btn" data-seat-adj="-1" data-row="${row.id}" data-table="${table.id}" title="ដកកន្លែង" aria-label="ដកកន្លែង" ${n <= 0 ? 'disabled' : ''}>${ICON_MINUS}</button>
+                    <span class="cl-seat-adjust-count">${toKhmer(n)}</span>
+                    <button type="button" class="cl-seat-adj-btn" data-seat-adj="1" data-row="${row.id}" data-table="${table.id}" title="បន្ថែមកន្លែង" aria-label="បន្ថែមកន្លែង" ${n >= SOFT_MAX_SEATS ? 'disabled' : ''}>${ICON_ADD}</button>
+                </div>`);
+        }
         /* Column rows stack top-to-bottom — no per-table move buttons */
-        if (rowFlow(row) === 'column') return '';
-        const isCol = orient === 'column';
-        const prev = isCol ? 'up' : 'left';
-        const next = isCol ? 'down' : 'right';
-        const prevLabel = isCol ? 'ឡើងលើ' : 'ទៅឆ្វេង';
-        const nextLabel = isCol ? 'ចុះក្រោម' : 'ទៅស្តាំ';
-        const prevArrow = isCol ? '&#8593;' : '&#8592;';
-        const nextArrow = isCol ? '&#8595;' : '&#8594;';
-        return `
-            <div class="cl-table-controls">
-                <button type="button" title="${prevLabel}" data-move="${prev}" data-row="${row.id}" data-table="${table.id}" ${ti === 0 ? 'disabled' : ''} aria-label="${prevLabel}">${prevArrow}</button>
-                <button type="button" title="${nextLabel}" data-move="${next}" data-row="${row.id}" data-table="${table.id}" ${ti === rowTableCount - 1 ? 'disabled' : ''} aria-label="${nextLabel}">${nextArrow}</button>
-            </div>`;
+        if (rowFlow(row) !== 'column') {
+            const isCol = orient === 'column';
+            const prev = isCol ? 'up' : 'left';
+            const next = isCol ? 'down' : 'right';
+            const prevLabel = isCol ? 'ឡើងលើ' : 'ទៅឆ្វេង';
+            const nextLabel = isCol ? 'ចុះក្រោម' : 'ទៅស្តាំ';
+            const prevArrow = isCol ? '&#8593;' : '&#8592;';
+            const nextArrow = isCol ? '&#8595;' : '&#8594;';
+            parts.push(`
+                <div class="cl-table-controls">
+                    <button type="button" title="${prevLabel}" data-move="${prev}" data-row="${row.id}" data-table="${table.id}" ${ti === 0 ? 'disabled' : ''} aria-label="${prevLabel}">${prevArrow}</button>
+                    <button type="button" title="${nextLabel}" data-move="${next}" data-row="${row.id}" data-table="${table.id}" ${ti === rowTableCount - 1 ? 'disabled' : ''} aria-label="${nextLabel}">${nextArrow}</button>
+                </div>`);
+        }
+        return parts.join('');
     }
 
     function renderTableGrid(table, row, ti, activeSlots, rowTableCount, orient, topSlots, leftSlots, rightSlots, botSlots, typeLabel) {
@@ -508,15 +673,21 @@
             : 'cl-horizontal';
         const hideColSurfaceLabel = orient === 'column' && rowFlow(row) === 'column';
         const surfaceText = hideColSurfaceLabel ? '' : escapeHtml(table.label);
+        const sideN = Math.max(leftSlots.length, rightSlots.length, 1);
+        const edgeN = Math.max(topSlots.length, botSlots.length, 1);
+        const leftHtml = gv(leftSlots, 'left');
+        const rightHtml = gv(rightSlots, 'right');
+        const topHtml = gh(topSlots, 'top');
+        const botHtml = gh(botSlots, 'bot');
         return `
             <div class="cl-table-wrap" data-row="${row.id}" data-table="${table.id}">
                 ${tableControls(table, row, ti, rowTableCount, orient)}
-                <div class="cl-table cl-table-grid ${tableCls}">
-                    <div class="cl-grid-top">${gh(topSlots, 'top')}</div>
-                    <div class="cl-grid-left">${gv(leftSlots, 'left')}</div>
+                <div class="cl-table cl-table-grid ${tableCls}" style="--cl-side-n:${sideN};--cl-edge-n:${edgeN}">
+                    <div class="cl-grid-top${topSlots.length ? '' : ' is-empty'}">${topHtml}</div>
+                    <div class="cl-grid-left${leftSlots.length ? '' : ' is-empty'}">${leftHtml}</div>
                     <div class="cl-grid-center ${surfaceCls}">${surfaceText}</div>
-                    <div class="cl-grid-right">${gv(rightSlots, 'right')}</div>
-                    <div class="cl-grid-bot">${gh(botSlots, 'bot')}</div>
+                    <div class="cl-grid-right${rightSlots.length ? '' : ' is-empty'}">${rightHtml}</div>
+                    <div class="cl-grid-bot${botSlots.length ? '' : ' is-empty'}">${botHtml}</div>
                 </div>
                 <span class="cl-table-label">${typeLabel} · ${toKhmer(activeSlots.length)}</span>
             </div>`;
@@ -855,6 +1026,14 @@
             });
         });
 
+        canvas.querySelectorAll('[data-seat-adj]').forEach((btn) => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                adjustTableSeats(btn.dataset.row, btn.dataset.table, Number(btn.dataset.seatAdj));
+            });
+        });
+
         canvas.querySelectorAll('[data-menu-toggle]').forEach((btn) => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -910,11 +1089,9 @@
     }
 
     function syncSeatMax(orientEl, seatsEl) {
-        const o = orientEl.value;
-        const max = o === 'vertical' ? MAX_V : (o === 'column' ? MAX_C : MAX_H);
-        seatsEl.max = max;
-        if (parseInt(seatsEl.value, 10) > max) seatsEl.value = String(max);
-        return max;
+        seatsEl.max = String(SOFT_MAX_SEATS);
+        if (parseInt(seatsEl.value, 10) > SOFT_MAX_SEATS) seatsEl.value = String(SOFT_MAX_SEATS);
+        return SOFT_MAX_SEATS;
     }
 
     function applyTableOrientation(table, orient, seatCount, seatSlots) {
@@ -929,6 +1106,45 @@
         });
     }
 
+    function adjustTableSeats(rowId, tableId, delta) {
+        if (!CAN_EDIT_LAYOUT) return;
+        const row = layout.rows.find((r) => r.id === rowId);
+        const table = row && row.tables.find((t) => t.id === tableId);
+        if (!table) return;
+        const cur = seatCountFor(table);
+        const next = Math.min(SOFT_MAX_SEATS, Math.max(0, cur + Number(delta || 0)));
+        if (next === cur) return;
+        const orient = table.orientation || 'horizontal';
+        /* Always rebuild in direct fill order (top→bottom / left→right).
+           Keep monk names by seat sequence so layout stays linear. */
+        const oldSlots = slotsForTable(table);
+        const placed = oldSlots.map((s) => normalizeMonkId(table.seats && table.seats[s]));
+        let newSlots = layoutSpec(orient).fill.slice(0, next);
+        /* Horizontal tables never keep left/right side seats */
+        if (orient === 'horizontal') {
+            newSlots = newSlots.filter((s) => {
+                const side = layoutSpec(orient).pos[s];
+                return side === 'top' || side === 'bot';
+            });
+            while (newSlots.length < next) {
+                const fill = layoutSpec(orient).fill;
+                const add = fill.find((s) => !newSlots.includes(s));
+                if (!add) break;
+                newSlots.push(add);
+            }
+            newSlots = newSlots.slice(0, next);
+        }
+        table.orientation = orient;
+        table.seat_count = newSlots.length;
+        table.seat_slots = newSlots;
+        table.seats = emptySeats(orient, next, newSlots);
+        newSlots.forEach((s, i) => {
+            if (i < placed.length && placed[i] != null) table.seats[s] = placed[i];
+        });
+        markDirty();
+        renderCanvas();
+    }
+
     const SLOT_LABEL = {
         name1: 'ឆ្វេង', name2: 'លើ១', name3: 'លើ២', name4: 'ស្តាំ',
         name5: 'ក្រោម២', name6: 'ក្រោម១', name7: 'ក្រោម២', name8: 'ក្រោម១',
@@ -938,22 +1154,7 @@
         name5: 'ស្តាំ១', name6: 'ស្តាំ២', name7: 'ក្រោម២', name8: 'ក្រោម១',
     };
 
-    /* ── Column (ឈរ) layout ──
-       Tall narrow table; names run down the LEFT and RIGHT edges. */
-    const C_SLOTS = ['name1', 'name2', 'name3', 'name4', 'name5', 'name6'];
-    const MAX_C = 6;
-    /* fill pairs across: left1 right1 left2 right2 left3 right3 */
-    const C_FILL = ['name1', 'name4', 'name2', 'name5', 'name3', 'name6'];
-    const C_POS = {
-        name1: 'left', name2: 'left', name3: 'left',
-        name4: 'right', name5: 'right', name6: 'right',
-    };
-    const C_SIDE_ORDER = {
-        top: [],
-        left: ['name1', 'name2', 'name3'],
-        right: ['name4', 'name5', 'name6'],
-        bot: [],
-    };
+    /* ── Column (ឈរ) layout labels ── */
     const SLOT_LABEL_C = {
         name1: 'ឆ្វេង១', name2: 'ឆ្វេង២', name3: 'ឆ្វេង៣',
         name4: 'ស្តាំ១', name5: 'ស្តាំ២', name6: 'ស្តាំ៣',
@@ -974,9 +1175,15 @@
         const slotBtn = (slot, side) => {
             const on = selectedSet.has(slot);
             const sideCls = side === 'left' || side === 'right' ? ' is-side' : '';
-            return `<button type="button" class="cl-st-slot${sideCls}${on ? ' on' : ''}" data-slot="${slot}" title="${labels[slot] || slot}">${labels[slot] || slot}</button>`;
+            const label = labels[slot] || (slotIndex(slot) ? toKhmer(slotIndex(slot)) : slot);
+            return `<button type="button" class="cl-st-slot${sideCls}${on ? ' on' : ''}" data-slot="${slot}" title="${label}">${label}</button>`;
         };
-        const group = (side) => sideOrder[side].map((s) => slotBtn(s, side)).join('');
+        const fillNeeded = new Set(layoutSpec(orientation).fill.slice(0, Math.max(needed, 1)));
+        selected.forEach((s) => fillNeeded.add(s));
+        const group = (side) => (sideOrder[side] || [])
+            .filter((s) => fillNeeded.has(s))
+            .map((s) => slotBtn(s, side))
+            .join('');
 
         root.innerHTML = `
             <div class="cl-st-top">${group('top')}</div>
@@ -991,7 +1198,7 @@
     }
 
     function toggleDraftSlot(list, slot, needed, orientation) {
-        const all = orientation === 'vertical' ? V_SLOTS : H_SLOTS;
+        const all = layoutSpec(orientation).all;
         if (!all.includes(slot)) return list;
         const next = [...list];
         const idx = next.indexOf(slot);
@@ -1006,7 +1213,7 @@
     }
 
     function clampDraftSlots(list, orientation, needed) {
-        const all = orientation === 'vertical' ? V_SLOTS : H_SLOTS;
+        const all = layoutSpec(orientation).all;
         let slots = (list || []).filter((s) => all.includes(s));
         slots = [...new Set(slots)];
         if (slots.length > needed) slots = slots.slice(0, needed);
@@ -2445,7 +2652,7 @@
         clone.style.width = '100%';
         clone.style.maxWidth = 'none';
         clone.style.overflow = 'visible';
-        clone.querySelectorAll('.cl-row-actions, .cl-table-controls').forEach((el) => {
+        clone.querySelectorAll('.cl-row-actions, .cl-table-controls, .cl-seat-adjust').forEach((el) => {
             el.style.display = 'none';
         });
         clone.querySelectorAll('.cl-tables-scroll').forEach((el) => {

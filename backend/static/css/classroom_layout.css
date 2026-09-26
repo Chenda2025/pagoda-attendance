@@ -1612,6 +1612,49 @@
     gap: 4px;
 }
 
+.cl-seat-adjust {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 4px;
+    border-radius: 8px;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+}
+
+.cl-seat-adjust-count {
+    min-width: 1.6em;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: #1d4ed8;
+}
+
+.cl-seat-adj-btn {
+    width: 26px;
+    height: 26px;
+    border: 1px solid #93c5fd;
+    border-radius: 6px;
+    background: #fff;
+    color: #1d4ed8;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.cl-seat-adj-btn:hover:not(:disabled) {
+    background: #dbeafe;
+    border-color: #2563eb;
+}
+
+.cl-seat-adj-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
 .cl-table-controls button {
     width: 24px;
     height: 24px;
@@ -1658,8 +1701,8 @@
 
 .cl-table.cl-horizontal .cl-table-surface {
     width: 100%;
-    min-width: 148px;
-    height: 48px;
+    min-width: max(148px, calc(var(--cl-edge-n, 2) * 70px));
+    height: max(48px, calc(var(--cl-side-n, 1) * 28px));
     min-height: 48px;
     flex-shrink: 0;
 }
@@ -1676,6 +1719,13 @@
     gap: 4px;
     align-items: stretch;
     width: fit-content;
+}
+
+.cl-grid-left.is-empty,
+.cl-grid-right.is-empty,
+.cl-grid-top.is-empty,
+.cl-grid-bot.is-empty {
+    display: none;
 }
 
 .cl-grid-left {
@@ -1921,11 +1971,11 @@
 .cl-name-edge.cl-name-len-xl,
 .cl-name-vert-edge.cl-name-len-xl { font-size: 11px; }
 
-/* ── Vertical table surface ── */
+/* ── Vertical table surface — grows with side/edge seat counts ── */
 .cl-surface-vert {
     width: 100%;
-    min-width: 148px;
-    height: 56px;
+    min-width: max(148px, calc(var(--cl-edge-n, 2) * 70px));
+    height: max(56px, calc(var(--cl-side-n, 2) * 28px));
     min-height: 56px;
     flex-shrink: 0;
 }
